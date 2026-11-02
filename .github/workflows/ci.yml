@@ -8,6 +8,11 @@ name: CI
 # - The only third party actions used are actions/checkout (MIT) and actions/setup-java (MIT).
 #   `gradle/actions/setup-gradle` is deliberately not used because that repository also bundles a
 #   proprietary component under a separate licence.
+#
+# Scope of this workflow:
+# It builds the mod and runs the JUnit test suite on Windows, Linux and macOS.
+# It never launches the Minecraft client or the dedicated server, so it says nothing about
+# whether the game runs on a platform. The game runs are validated manually.
 on:
   push:
     branches:
@@ -24,9 +29,27 @@ concurrency:
 
 jobs:
   build:
-    name: Build and test (Java 21)
-    runs-on: ubuntu-latest
+    name: Build and test (${{ matrix.os }}, Java 21)
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    strategy:
+      # Report the result of every operating system, even when another one fails.
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+        # The Gradle project configuration is operating system neutral. Only the invocation of
+        # the wrapper differs: Windows uses the batch script, Linux and macOS the shell script.
+        # Each entry matches one `os` value above, so every job gets exactly one command.
+        include:
+          - os: ubuntu-latest
+            gradle_command: './gradlew --no-daemon build'
+          - os: windows-latest
+            gradle_command: '.\gradlew.bat --no-daemon build'
+          - os: macos-latest
+            gradle_command: './gradlew --no-daemon build'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -38,7 +61,7 @@ jobs:
           distribution: 'temurin'
 
       # `build` compiles the mod and runs the JUnit test suite in `src/test/java`.
-      # ModDevGradle skips the Minecraft decompilation step when the CI environment variable is
-      # set, which keeps the job within the timeout.
+      # GitHub Actions sets the CI environment variable, which makes ModDevGradle use its binary
+      # artifact pipeline instead of decompiling Minecraft; that keeps the job within the timeout.
       - name: Build and test with Gradle
-        run: ./gradlew --no-daemon build
+        run: ${{ matrix.gradle_command }}

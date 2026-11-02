@@ -28,7 +28,7 @@ rac-mc-mod/
 ├── gradle.properties                # Single source of truth for the mod identity and versions
 ├── gradlew / gradlew.bat            # Committed Gradle wrapper
 ├── gradle/wrapper/                  # Committed wrapper jar and pinned distribution
-├── .github/workflows/ci.yml         # CI foundation (build + test on Java 21)
+├── .github/workflows/ci.yml         # CI foundation (build + test on Java 21, Linux/Windows/macOS)
 ├── docs/development.md              # This file
 ├── src/main/java/com/github/giannigr/racmc/
 │   ├── RacMcConstants.java          # Mod id / mod name, free of Minecraft imports
@@ -142,6 +142,12 @@ Java 21 installation for the Gradle process only.
 | `gradlew.bat test` | `BUILD SUCCESSFUL`, 9 of 9 tests passed (7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`). |
 | `gradlew.bat runClient` | The client window opened (title `Minecraft NeoForge* 1.21.1`), OpenGL 4.6 on the RTX 5090, the mod list contained `Ratchet & Clank Mod 0.1.0 (racmc)` and the resource manager reloaded `mod/racmc`. The mod logged `RaC Mod initialised: id=racmc, name=Ratchet & Clank Mod, version=0.1.0`. The client was closed from its own window, which logged `Stopping!` and ended the Gradle task with `BUILD SUCCESSFUL`. |
 | `gradlew.bat runServer` | The dedicated server started Minecraft 1.21.1 / NeoForge 21.1.265, loaded `racmc`, listened on `*:25565` and reported `Done (2.670s)! For help, type "help"`. It was then stopped with the server console command `stop`, which saved the worlds and ended the Gradle task with `BUILD SUCCESSFUL`. |
+| `CI=true gradlew.bat --no-daemon clean build` | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. The first cold run took about 40 s; a run with a warm Gradle build cache took 5 s. |
+| `CI=true gradlew.bat --no-daemon test --rerun` | `BUILD SUCCESSFUL`, 9 of 9 tests passed with the test task forced to re-execute. |
+
+All of the measurements above were taken on Windows. The Linux and macOS build and test runs are
+covered by the CI matrix but have not been executed yet, and the client and dedicated server
+launches have only ever been verified on Windows.
 
 Notes on the run observations:
 
@@ -157,22 +163,60 @@ Notes on the run observations:
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs `./gradlew --no-daemon build` on `ubuntu-latest` with a Java 21
-Temurin JDK for pushes to `main` and for pull requests.
+`.github/workflows/ci.yml` builds the mod and runs the JUnit test suite on three operating
+systems: `ubuntu-latest`, `windows-latest` and `macos-latest`. It runs for pushes to `main`, for
+pull requests and on manual dispatch.
+
+The Gradle project configuration is operating system neutral. Only the invocation of the wrapper
+differs, because Windows uses the batch script and Linux and macOS use the shell script:
+
+| Runner | Job | Gradle command |
+| --- | --- | --- |
+| Linux | `Build and test (ubuntu-latest, Java 21)` | `./gradlew --no-daemon build` |
+| Windows | `Build and test (windows-latest, Java 21)` | `.\gradlew.bat --no-daemon build` |
+| macOS | `Build and test (macos-latest, Java 21)` | `./gradlew --no-daemon build` |
+
+All three jobs use the same Java 21 Temurin JDK from `actions/setup-java`, run with a 60 minute
+timeout, and `fail-fast` is disabled so that every operating system reports its own result even
+when another one fails.
 
 Security properties of the workflow:
 
 - `permissions: contents: read` and no repository secrets.
 - `pull_request` is used, never `pull_request_target`, so untrusted pull request code never runs
   with a privileged token.
-- No publishing or deployment step.
+- No publishing or deployment step, and no `id-token` permission.
 - Only `actions/checkout` (MIT) and `actions/setup-java` (MIT) are used.
+  `gradle/actions/setup-gradle` is deliberately not used because that repository also bundles a
+  proprietary component under a separate licence.
+
+### What CI does and does not prove
+
+CI is **build and test only**. The `build` task compiles the mod and runs the JUnit test suite.
+The workflow never launches the Minecraft client or the dedicated server, so a green CI run says
+nothing about whether the game starts.
+
+Runtime validation is a separate, manual activity:
+
+| Validation | Status |
+| --- | --- |
+| Build and unit tests on Windows | Verified locally (`gradlew.bat build`, `gradlew.bat test`) |
+| Build and unit tests on Linux | **Not verified.** No Linux runner has executed this workflow yet |
+| Build and unit tests on macOS | **Not verified.** No macOS runner has executed this workflow yet |
+| Client launch (`runClient`) | Verified locally on **Windows only** |
+| Dedicated server launch (`runServer`) | Verified locally on **Windows only** |
+
+The Linux and macOS game launches are **unverified**: this project has only ever started the
+client and the dedicated server on Windows. The CI matrix covers compilation and tests only and
+must not be read as evidence of runtime support on those platforms.
 
 The build command of the workflow was verified locally with the same environment that GitHub
 Actions sets: `CI=true` and `--no-daemon` make ModDevGradle use its binary artifact pipeline
-instead of decompiling Minecraft, and the build and all nine tests passed in about 40 seconds.
-The workflow itself has not been executed by GitHub Actions yet; the first run on the
-repository is still pending.
+instead of decompiling Minecraft, and the build and all nine tests passed. The Windows form of
+the command is the one that was executed; the Linux and macOS forms are the shell script variant
+of the same task and have not been run.
+**GitHub Actions itself has not executed this workflow yet.** The matrix, and in particular the
+Linux and macOS jobs, are only truly validated after the first run on the repository.
 
 ## Dependency licences
 
