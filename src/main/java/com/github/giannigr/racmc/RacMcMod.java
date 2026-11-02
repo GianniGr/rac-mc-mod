@@ -13,8 +13,10 @@ import org.slf4j.Logger;
  * {@code META-INF/neoforge.mods.toml} and the {@code MOD_ID} constant in {@link RacMcConstants}.
  * The focused tests in {@code src/test/java} verify that wiring.
  *
- * <p>This class currently only establishes the mod and logs its start-up. Gameplay content,
- * asset importing and rendering are tracked in separate issues and are intentionally not
+ * <p>This class currently only establishes the mod and logs its start-up. The selection and the
+ * validation of a local disc image live in {@code com.github.giannigr.racmc.iso}, the client side
+ * of the importer lives in {@code com.github.giannigr.racmc.client}. Gameplay content, the
+ * extraction of the assets and their rendering are tracked in separate issues and are not
  * implemented here.
  */
 @Mod(RacMcConstants.MOD_ID)

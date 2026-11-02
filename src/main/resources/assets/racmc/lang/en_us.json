@@ -1,0 +1,13 @@
+{
+  "key.categories.racmc": "Ratchet & Clank: Getting Wood",
+  "key.racmc.open_iso_selection": "Select disc image",
+  "screen.racmc.iso_selection.title": "Select a Ratchet & Clank disc image",
+  "screen.racmc.iso_selection.path": "Disc image file",
+  "screen.racmc.iso_selection.path_hint": "Path to the ISO file of your own disc",
+  "screen.racmc.iso_selection.check": "Check image",
+  "screen.racmc.iso_selection.hint": "Only PAL v2.00 and NTSC-U v1.00 disc images are supported.",
+  "screen.racmc.iso_selection.status.no_path": "Enter the path of a disc image first.",
+  "screen.racmc.iso_selection.status.invalid_path": "The path is not a valid file system path.",
+  "screen.racmc.iso_selection.status.checking": "Checking the disc image...",
+  "screen.racmc.iso_selection.status.io_error": "The disc image could not be read."
+}
