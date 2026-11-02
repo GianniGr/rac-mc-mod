@@ -39,15 +39,18 @@ A Java 21 JDK is required; the Gradle wrapper downloads the pinned Gradle distri
 ./gradlew runServer      # launch the development dedicated server
 ```
 
-The dedicated server run needs the Minecraft EULA accepted once, in the generated
-`run/eula.txt` file (`eula=true`). The development run directories are ignored by Git.
+The ModDevGradle development `runServer` task does not require the Minecraft EULA: the verified
+development launch started, ran and shut down again without a `run/eula.txt` file. That applies to
+this development task only; a standalone Minecraft dedicated server distribution is a different
+case and still requires the EULA to be accepted before it starts. The development run directories
+are ignored by Git.
 
 See [`docs/development.md`](docs/development.md) for the full task list, the project layout and
 the details of every verified command.
 
 ## Workflow
 
-Development coordination and AI worker procedures are maintained separately in [`GianniGr/gianni-multi-ai-workflows`](https://github.com/GianniGr/gianni-multi-ai-workflows), under `rac-mc-mod/` once the setup PR has been merged.
+Development coordination and AI worker procedures are maintained separately in [`GianniGr/gianni-multi-ai-workflows`](https://github.com/GianniGr/gianni-multi-ai-workflows), under `projects/rac-mc-mod/`. The setup PR is merged and workflow PR #18 moved the project workflow into that directory.
 
 ## Legal
 
