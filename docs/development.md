@@ -168,6 +168,12 @@ Security properties of the workflow:
 - No publishing or deployment step.
 - Only `actions/checkout` (MIT) and `actions/setup-java` (MIT) are used.
 
+The build command of the workflow was verified locally with the same environment that GitHub
+Actions sets: `CI=true` and `--no-daemon` make ModDevGradle use its binary artifact pipeline
+instead of decompiling Minecraft, and the build and all nine tests passed in about 40 seconds.
+The workflow itself has not been executed by GitHub Actions yet; the first run on the
+repository is still pending.
+
 ## Dependency licences
 
 | Dependency | Version | Licence |
