@@ -37,6 +37,7 @@ rac-mc-mod/
 │   └── neoforge.mods.toml           # Mod metadata template, expanded at build time
 └── src/test/java/com/github/giannigr/racmc/
     ├── ModBootstrapMetadataTest.java # Focused checks for the metadata wiring
+    ├── ModDescriptionTest.java        # Focused checks for the mod description
     └── ModNamespaceTest.java          # Focused checks for the mod namespace
 ```
 
@@ -94,14 +95,13 @@ error, because no game test is registered yet; it becomes usable with the first 
 ./gradlew runServer
 ```
 
-The dedicated server stops immediately on the first start because the Minecraft EULA has not been
-accepted. Accept it once by editing `run/eula.txt`:
+The ModDevGradle development task does not enforce the Minecraft EULA: the verified `runServer`
+launch started, ran and stopped again without a `run/eula.txt` file in `run/`. That observation is
+limited to this development task. A standalone dedicated server distribution is a different case
+and still requires the EULA to be accepted before it starts.
 
-```
-eula=true
-```
-
-`run/` is ignored by Git, so the acceptance is a local development state and is never committed.
+`run/` is ignored by Git, so the generated run directories and their local state are never
+committed.
 
 The server run uses `--nogui`. The development client runs as the offline `Dev` player and the
 development server runs in offline mode. To connect the client to the local server, set
@@ -119,7 +119,7 @@ ModDevGradle's NeoForge aware unit test support is enabled (`neoForge { unitTest
 so the test source set has the mod and the Minecraft classes on its classpath and tests can use
 Minecraft types directly.
 
-Two focused test classes exist today:
+Three focused test classes exist today:
 
 - `ModBootstrapMetadataTest` verifies that the mod id, mod name and mod version are identical in
   `gradle.properties`, in the generated `META-INF/neoforge.mods.toml` and in `RacMcConstants`, and
@@ -127,23 +127,33 @@ Two focused test classes exist today:
   runs on a plain JVM.
 - `ModNamespaceTest` verifies that the mod id is a valid Minecraft resource namespace, because
   every future block, item, data file and translation key is addressed with it.
+- `ModDescriptionTest` verifies that the multi line `description` of the generated
+  `META-INF/neoforge.mods.toml` is not blank and that it matches the description in the metadata
+  template. It reads the raw metadata text, because the minimal TOML reader of the metadata test
+  always yields an empty string for a multi line `'''` value and therefore cannot detect an
+  emptied description.
+
+The suite currently contains 11 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`
+and 2 in `ModDescriptionTest`.
 
 ## Verified commands and results
 
 Measured on the development machine (Windows 11, AMD Ryzen 9 9950X3D, NVIDIA GeForce RTX 5090,
 Amazon Corretto OpenJDK 21.0.4 at `C:\Users\giann\.jdks\corretto-21.0.4`, Gradle 8.14.5 from the
 committed wrapper). The machine wide default Java was not changed; `JAVA_HOME` was pointed at the
-Java 21 installation for the Gradle process only.
+Java 21 installation for the Gradle process only. The build, the test suite, the CI command and
+both game launches were additionally reproduced by an independent verification worker on the same
+tree.
 
 | Command | Result |
 | --- | --- |
 | `gradlew.bat tasks` | Listed the task groups reproduced above; the configuration succeeded with ModDevGradle 2.0.148 and NeoForge 21.1.265. |
 | `gradlew.bat build` | `BUILD SUCCESSFUL`. Produced `build/libs/racmc-0.1.0.jar` containing `META-INF/neoforge.mods.toml` and the two mod classes. The first run downloaded and decompiled the Minecraft 1.21.1 artifacts (about 83 s of tool time, plus the 787 MiB asset download for the run configurations). |
-| `gradlew.bat test` | `BUILD SUCCESSFUL`, 9 of 9 tests passed (7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`). |
-| `gradlew.bat runClient` | The client window opened (title `Minecraft NeoForge* 1.21.1`), OpenGL 4.6 on the RTX 5090, the mod list contained `Ratchet & Clank Mod 0.1.0 (racmc)` and the resource manager reloaded `mod/racmc`. The mod logged `RaC Mod initialised: id=racmc, name=Ratchet & Clank Mod, version=0.1.0`. The client was closed from its own window, which logged `Stopping!` and ended the Gradle task with `BUILD SUCCESSFUL`. |
-| `gradlew.bat runServer` | The dedicated server started Minecraft 1.21.1 / NeoForge 21.1.265, loaded `racmc`, listened on `*:25565` and reported `Done (2.670s)! For help, type "help"`. It was then stopped with the server console command `stop`, which saved the worlds and ended the Gradle task with `BUILD SUCCESSFUL`. |
+| `gradlew.bat test` | `BUILD SUCCESSFUL`, 11 of 11 tests passed (7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`, 2 in `ModDescriptionTest`). |
+| `gradlew.bat runClient` | The client window opened (title `Minecraft NeoForge* 1.21.1`), OpenGL 4.6 on the RTX 5090, the mod list contained `Ratchet & Clank Mod 0.1.0 (racmc)` and the resource manager reloaded `mod/racmc`. The mod logged `RaC Mod initialised: id=racmc, name=Ratchet & Clank Mod, version=0.1.0`. The client was closed from its own window, which logged `Stopping!` and ended the Gradle task with `BUILD SUCCESSFUL`. The independent verification worker repeated the launch on the same tree and its second run also closed cleanly through the client window, with no error or exception in the log. |
+| `gradlew.bat runServer` | The dedicated server started Minecraft 1.21.1 / NeoForge 21.1.265, loaded `racmc` (the mod list showed `Ratchet & Clank Mod 0.1.0 (racmc)`), listened on `*:25565` and reported `Done (0.720s)! For help, type "help"`. It was then stopped with the server console command `stop`, which saved the players and the world of every dimension (`Saving chunks for level .../minecraft:overworld`, `.../minecraft:the_nether`, `.../minecraft:the_end`, `All dimensions are saved`) and ended the Gradle task with `BUILD SUCCESSFUL` (exit code 0, 18 s). The final harness that delivered the `stop` input ran with `--no-configuration-cache`; see the note on the server console below. |
 | `CI=true gradlew.bat --no-daemon clean build` | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. The first cold run took about 40 s; a run with a warm Gradle build cache took 5 s. |
-| `CI=true gradlew.bat --no-daemon test --rerun` | `BUILD SUCCESSFUL`, 9 of 9 tests passed with the test task forced to re-execute. |
+| `CI=true gradlew.bat --no-daemon test --rerun` | `BUILD SUCCESSFUL`, 11 of 11 tests passed with the test task forced to re-execute. |
 
 All of the measurements above were taken on Windows. The Linux and macOS build and test runs are
 covered by the CI matrix but have not been executed yet, and the client and dedicated server
@@ -157,9 +167,14 @@ Notes on the run observations:
   the default file.
 - The development server runs in offline mode and warns about it. Set `online-mode=false` in
   `run/server.properties` to connect a local client to it.
-- The dedicated server console is not attached to the Gradle console by default. To stop it from
-  the console, feed it the `stop` command, for example by attaching the `standardInput` of the
-  `runServer` task to a stream that contains `stop`.
+- The dedicated server console is not attached to the Gradle console by default, and the standard
+  Gradle console does not control the server automatically. In the verified run the server was
+  stopped by delivering the `stop` command through a custom input stream attached to the
+  `standardInput` of the `runServer` task. Two Gradle limitations were observed with that
+  harness: Gradle did not forward the custom standard input to the `JavaExec` task, and a custom
+  `PipedInputStream` failed while the configuration cache was enabled, because the configuration
+  cache supports only `System.in` as the task input stream. The same harness completed when the
+  run was repeated with `--no-configuration-cache`.
 
 ## Continuous integration
 
@@ -212,7 +227,7 @@ must not be read as evidence of runtime support on those platforms.
 
 The build command of the workflow was verified locally with the same environment that GitHub
 Actions sets: `CI=true` and `--no-daemon` make ModDevGradle use its binary artifact pipeline
-instead of decompiling Minecraft, and the build and all nine tests passed. The Windows form of
+instead of decompiling Minecraft, and the build and all eleven tests passed. The Windows form of
 the command is the one that was executed; the Linux and macOS forms are the shell script variant
 of the same task and have not been run.
 **GitHub Actions itself has not executed this workflow yet.** The matrix, and in particular the
