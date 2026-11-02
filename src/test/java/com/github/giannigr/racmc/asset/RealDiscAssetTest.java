@@ -108,6 +108,110 @@ class RealDiscAssetTest {
     }
 
     @Test
+    @DisplayName("Every vertex of the hero is used by a triangle of the hero")
+    void everyVertexOfTheHeroIsUsed() throws Exception {
+        Rac1AnimatedAsset asset = Rac1AssetExtractor.readAnimatedAsset(level(), MOBY_CLASS);
+
+        int[] indices = asset.mesh().indices();
+        assertEquals(asset.mesh().triangleCount() * 3, indices.length,
+                "Every triangle has three indices");
+        boolean[] used = new boolean[asset.mesh().vertexCount()];
+        for (int index : indices) {
+            assertTrue(index >= 0 && index < asset.mesh().vertexCount(),
+                    "The index " + index + " names no vertex of the hero");
+            used[index] = true;
+        }
+        int unused = 0;
+        for (boolean vertex : used) {
+            if (!vertex) {
+                unused++;
+            }
+        }
+        assertEquals(0, unused,
+                "The vertices of the hero that no triangle uses are the vertices of a packet "
+                        + "whose indices were not moved onto the vertices of the class");
+    }
+
+    @Test
+    @DisplayName("The triangles of the hero cover the whole model of the hero")
+    void theTrianglesOfTheHeroCoverTheModel() throws Exception {
+        Rac1AnimatedAsset asset = Rac1AssetExtractor.readAnimatedAsset(level(), MOBY_CLASS);
+
+        float[] places = asset.mesh().positions();
+        int[] indices = asset.mesh().indices();
+        float minX = Float.MAX_VALUE;
+        float maxX = -Float.MAX_VALUE;
+        float minY = Float.MAX_VALUE;
+        float maxY = -Float.MAX_VALUE;
+        float minZ = Float.MAX_VALUE;
+        float maxZ = -Float.MAX_VALUE;
+        for (int index : indices) {
+            minX = Math.min(minX, places[index * 3]);
+            maxX = Math.max(maxX, places[index * 3]);
+            minY = Math.min(minY, places[index * 3 + 1]);
+            maxY = Math.max(maxY, places[index * 3 + 1]);
+            minZ = Math.min(minZ, places[index * 3 + 2]);
+            maxZ = Math.max(maxZ, places[index * 3 + 2]);
+        }
+        // The hero is 1.42 units tall and stands on the ground of the model. The arms of the
+        // model of the disc are spread out, so the model is wider than it is deep.
+        assertEquals(1.4159f, maxY - minY, 0.02f, "The triangles do not cover the hero");
+        assertTrue(minY > -0.02f && maxY < 1.45f,
+                "The hero is not where the model of the disc has him: " + minY + " to " + maxY);
+        assertEquals(1.1037f, maxX - minX, 0.03f, "The triangles do not cover the hero");
+        assertEquals(1.8121f, maxZ - minZ, 0.03f, "The triangles do not cover the hero");
+    }
+
+    @Test
+    @DisplayName("Every vertex of the Blaster is used by a triangle of the Blaster")
+    void everyVertexOfTheBlasterIsUsed() throws Exception {
+        Rac1AnimatedAsset asset = Rac1AssetExtractor.readGadgetAsset(level(), BLASTER_CLASS);
+
+        int[] indices = asset.mesh().indices();
+        assertEquals(asset.mesh().triangleCount() * 3, indices.length);
+        boolean[] used = new boolean[asset.mesh().vertexCount()];
+        for (int index : indices) {
+            assertTrue(index >= 0 && index < asset.mesh().vertexCount(),
+                    "The index " + index + " names no vertex of the Blaster");
+            used[index] = true;
+        }
+        int unused = 0;
+        for (boolean vertex : used) {
+            if (!vertex) {
+                unused++;
+            }
+        }
+        assertEquals(0, unused, "The Blaster has vertices that no triangle uses");
+    }
+
+    @Test
+    @DisplayName("The triangles of the Blaster cover the whole weapon")
+    void theTrianglesOfTheBlasterCoverTheWeapon() throws Exception {
+        Rac1AnimatedAsset asset = Rac1AssetExtractor.readGadgetAsset(level(), BLASTER_CLASS);
+
+        float[] places = asset.mesh().positions();
+        int[] indices = asset.mesh().indices();
+        float minX = Float.MAX_VALUE;
+        float maxX = -Float.MAX_VALUE;
+        float minY = Float.MAX_VALUE;
+        float maxY = -Float.MAX_VALUE;
+        float minZ = Float.MAX_VALUE;
+        float maxZ = -Float.MAX_VALUE;
+        for (int index : indices) {
+            minX = Math.min(minX, places[index * 3]);
+            maxX = Math.max(maxX, places[index * 3]);
+            minY = Math.min(minY, places[index * 3 + 1]);
+            maxY = Math.max(maxY, places[index * 3 + 1]);
+            minZ = Math.min(minZ, places[index * 3 + 2]);
+            maxZ = Math.max(maxZ, places[index * 3 + 2]);
+        }
+        // The weapon is 0.8 units long, 0.7 units wide and 0.3 units high.
+        assertEquals(0.71f, maxX - minX, 0.02f, "The triangles do not cover the Blaster");
+        assertEquals(0.73f, maxZ - minZ, 0.02f, "The triangles do not cover the Blaster");
+        assertEquals(0.31f, maxY - minY, 0.02f, "The triangles do not cover the Blaster");
+    }
+
+    @Test
     @DisplayName("The chain of the hand of the hero is read out of the class of the hero")
     void theChainOfTheHandIsRead() throws Exception {
         int[] chain = Rac1AssetExtractor.readHandChain(level());

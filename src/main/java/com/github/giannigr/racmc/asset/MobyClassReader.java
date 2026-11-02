@@ -415,7 +415,17 @@ public final class MobyClassReader {
         List<Float> weights = new ArrayList<>();
         readList(0, highLodCount, false, positions, normals, uvs, triangles, materials, joints,
                 weights);
-        return new Mesh(toArray(positions), toArray(normals), toArray(uvs), toInts(triangles),
+        int[] indices = toInts(triangles);
+        int vertices = positions.size() / 3;
+        // Every triangle has to name three vertices of the mesh. The check catches a packet whose
+        // indices were not moved onto the vertices of the packets that came before it.
+        for (int index : indices) {
+            if (index < 0 || index >= vertices) {
+                throw new AssetFormatException("A triangle of the moby class names a vertex that "
+                        + "does not exist.");
+            }
+        }
+        return new Mesh(toArray(positions), toArray(normals), toArray(uvs), indices,
                 toInts(materials), toInts(joints), toArray(weights));
     }
 
@@ -696,13 +706,17 @@ public final class MobyClassReader {
                         + "indices.");
             }
             int usable = pushed.size() - 3;
+            // The vertices of the packets of a class are collected in one list, but the indices
+            // of a packet name the vertices of that packet alone. The indices are therefore moved
+            // by the number of the vertices of the packets that came before it.
+            int base = positions.size() / 3;
             for (int index = 2; index < usable; index++) {
                 if (pushed.get(index)[1] != 0) {
                     continue;
                 }
-                triangles.add(pushed.get(index - 2)[0]);
-                triangles.add(pushed.get(index - 1)[0]);
-                triangles.add(pushed.get(index)[0]);
+                triangles.add(base + pushed.get(index - 2)[0]);
+                triangles.add(base + pushed.get(index - 1)[0]);
+                triangles.add(base + pushed.get(index)[0]);
                 materials.add(pushed.get(index)[2]);
             }
 

@@ -10,6 +10,7 @@ import java.util.Optional;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 
@@ -24,6 +25,9 @@ import net.minecraft.util.FormattedCharSequence;
  * <p>The screen is opened with the key of the mod and with the button of the main menu.
  */
 public class BlasterTestScreen extends Screen {
+
+    /** The number of the lines of the text under the model. */
+    private static final int TEXT_LINES = 3;
 
     /** The pose of the demo. */
     private final Rac1BlasterDemo demo = new Rac1BlasterDemo();
@@ -49,7 +53,7 @@ public class BlasterTestScreen extends Screen {
         int left = this.width / 2 - 100;
         addRenderableWidget(Button.builder(Component.translatable("gui.back"),
                         button -> onClose())
-                .bounds(left, this.height - 40, 200, 20)
+                .bounds(left, this.height - 28, 200, 20)
                 .build());
     }
 
@@ -71,28 +75,28 @@ public class BlasterTestScreen extends Screen {
         renderBackground(graphics, mouseX, mouseY, partialTick);
         super.render(graphics, mouseX, mouseY, partialTick);
 
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
-        if (this.content != null) {
-            graphics.pose().pushPose();
-            try {
-                graphics.pose().translate(this.width / 2.0f, this.height / 2.0f + 40.0f, 0.0f);
-                graphics.pose().scale(90.0f, 90.0f, 90.0f);
-                this.preview.draw(graphics, this.content, this.demo, (this.time * 20.0f) % 360.0f);
-            } finally {
-                graphics.pose().popPose();
-            }
-            if (this.preview.failure() != null) {
-                graphics.drawCenteredString(this.font,
-                        Component.translatable("screen.racmc.blaster_test.failed"), this.width / 2,
-                        this.height / 2 + 80, 0xFF5555);
-            }
-        } else {
+        graphics.drawCenteredString(this.font, this.title, this.width / 2, 16, 0xFFFFFF);
+        if (this.content == null) {
             graphics.drawCenteredString(this.font,
                     Component.translatable("screen.racmc.blaster_test.waiting"), this.width / 2,
                     this.height / 2, 0xFFAA00);
+            return;
+        }
+
+        // The model is drawn in the area above the text, so that the text never covers it and
+        // never covers the button under it.
+        int textHeight = TEXT_LINES * 10 + 8;
+        int areaTop = 34;
+        int areaBottom = this.height - textHeight - 44;
+        this.preview.draw(graphics, this.content, this.demo, (this.time * 20.0f) % 360.0f, 20,
+                areaTop, this.width - 40, Math.max(40, areaBottom - areaTop));
+        if (this.preview.failure() != null) {
+            graphics.drawCenteredString(this.font,
+                    Component.translatable("screen.racmc.blaster_test.failed"), this.width / 2,
+                    areaTop + 10, 0xFF5555);
         }
         drawWrapped(graphics, Component.translatable("screen.racmc.blaster_test.hint"), 20,
-                this.height - 70, this.width - 40, 0xA0A0A0);
+                this.height - textHeight - 34, this.width - 40, 0xA0A0A0);
     }
 
     @Override
@@ -111,10 +115,16 @@ public class BlasterTestScreen extends Screen {
     @Override
     public void onClose() {
         RacMcMod.LOGGER.info("The demo of the Blaster was closed.");
-        // The screen is left for the main menu, so that the game is never left without a screen.
-        if (this.minecraft != null) {
-            this.minecraft.setScreen(new net.minecraft.client.gui.screens.TitleScreen());
+        if (this.minecraft == null) {
+            return;
         }
+        if (this.minecraft.level != null) {
+            // The screen was opened while a world was played, so the game takes the player back.
+            this.minecraft.setScreen(null);
+            return;
+        }
+        // The screen is left for the main menu, so that the game is never left without a screen.
+        this.minecraft.setScreen(new TitleScreen());
     }
 
     /**
@@ -127,6 +137,9 @@ public class BlasterTestScreen extends Screen {
         List<FormattedCharSequence> lines = this.font.split(text, width);
         int line = 0;
         for (FormattedCharSequence sequence : lines) {
+            if (line >= TEXT_LINES) {
+                break;
+            }
             graphics.drawString(this.font, sequence, x, y + line * 10, color);
             line++;
         }

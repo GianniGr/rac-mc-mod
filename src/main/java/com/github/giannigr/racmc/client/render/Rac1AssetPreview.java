@@ -17,6 +17,9 @@ import net.minecraft.resources.ResourceLocation;
  * <p>The class puts the textures of the assets into the texture manager of the game and draws the
  * meshes of the assets with the renderer of the game.
  *
+ * <p>The drawing is framed: the model is measured and turned so that it stands in the middle of
+ * the area it is drawn in, whatever its size is.
+ *
  * <p>A failure of the drawing is reported once and remembered: the screen stays usable and the
  * failure is not hidden, but it is not written into the log again and again either.
  */
@@ -35,15 +38,19 @@ public final class Rac1AssetPreview {
     private String failure;
 
     /**
-     * Draws the hero with the Blaster in his hand and the piece of scenery next to them.
+     * Draws the hero with the Blaster in his hand.
      *
      * @param graphics the graphics of the screen
      * @param content the content of the cache of the assets
      * @param demo the pose of the demo
      * @param angle the turn of the view in degrees
+     * @param areaX the left edge of the area the model is drawn in
+     * @param areaY the upper edge of the area the model is drawn in
+     * @param areaWidth the width of the area the model is drawn in
+     * @param areaHeight the height of the area the model is drawn in
      */
     public void draw(GuiGraphics graphics, Rac1CacheContent content, Rac1BlasterDemo demo,
-                     float angle) {
+                     float angle, int areaX, int areaY, int areaWidth, int areaHeight) {
         if (this.failure != null || content == null || demo == null) {
             return;
         }
@@ -53,29 +60,33 @@ public final class Rac1AssetPreview {
                 this.blasterTextures = register(content.blaster());
                 this.staticTextures = registerStatic(content.staticAsset());
             }
+            float[] bounds = demo.bounds();
+            if (bounds == null) {
+                return;
+            }
+            // The model is measured and turned so that it stands in the middle of the area and
+            // fills it as far as the room allows.
+            float width = Math.max(0.001f, bounds[3] - bounds[0]);
+            float height = Math.max(0.001f, bounds[4] - bounds[1]);
+            float depth = Math.max(0.001f, bounds[5] - bounds[2]);
+            float scale = Math.min(areaWidth / Math.max(width, depth), areaHeight / height) * 0.85f;
+            float centreX = (bounds[0] + bounds[3]) * 0.5f;
+            float centreY = (bounds[1] + bounds[4]) * 0.5f;
+            float centreZ = (bounds[2] + bounds[5]) * 0.5f;
+
             MultiBufferSource.BufferSource buffers =
                     Minecraft.getInstance().renderBuffers().bufferSource();
             PoseStack pose = graphics.pose();
             pose.pushPose();
             try {
+                pose.translate(areaX + areaWidth * 0.5f, areaY + areaHeight * 0.5f, 0.0f);
+                pose.scale(scale, scale, scale);
                 pose.mulPose(com.mojang.math.Axis.YP.rotationDegrees(angle));
-                pose.mulPose(com.mojang.math.Axis.XP.rotationDegrees(-8.0f));
+                pose.translate(-centreX, -centreY, -centreZ);
                 Rac1MeshRenderer.render(pose, buffers, content.animatedAsset().mesh(),
                         demo.ratchetPositions(), demo.ratchetNormals(), this.heroTextures);
                 Rac1MeshRenderer.render(pose, buffers, content.blaster().mesh(),
                         demo.blasterPositions(), demo.blasterNormals(), this.blasterTextures);
-            } finally {
-                pose.popPose();
-            }
-
-            // The piece of scenery of the level stands next to them.
-            pose.pushPose();
-            try {
-                pose.translate(1.6f, 0.0f, 0.0f);
-                pose.scale(0.35f, 0.35f, 0.35f);
-                pose.mulPose(com.mojang.math.Axis.YP.rotationDegrees(angle));
-                Rac1MeshRenderer.render(pose, buffers, content.staticAsset().mesh(),
-                        this.staticTextures);
             } finally {
                 pose.popPose();
             }

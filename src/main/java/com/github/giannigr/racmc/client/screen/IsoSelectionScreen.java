@@ -383,14 +383,11 @@ public class IsoSelectionScreen extends Screen {
         }
         this.previewTime += partialTick / 20.0f;
         this.demo.update(content.get(), this.previewTime);
-        graphics.pose().pushPose();
-        try {
-            graphics.pose().translate(this.width / 2.0f, this.height - 80.0f, 0.0f);
-            graphics.pose().scale(45.0f, 45.0f, 45.0f);
-            this.preview.draw(graphics, content.get(), this.demo, (this.previewTime * 20.0f) % 360.0f);
-        } finally {
-            graphics.pose().popPose();
-        }
+        // The model is drawn in the area under the text of the screen, so that the text never
+        // covers it.
+        int areaTop = this.height - 150;
+        this.preview.draw(graphics, content.get(), this.demo, (this.previewTime * 20.0f) % 360.0f,
+                20, areaTop, this.width - 40, 120);
     }
 
     /**

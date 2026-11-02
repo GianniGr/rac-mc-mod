@@ -67,6 +67,11 @@ they name the places of the memory of the vector unit in which the matrices of t
 stored, so the reader replays the machine of the console to find out which joints a vertex follows
 and how much they weigh.
 
+The vertices of the packets of a class are collected in one list, but the indices of a packet name
+the vertices of that packet alone. The reader therefore moves the indices of every packet by the
+number of the vertices of the packets that came before it, and it refuses a mesh whose triangles
+name a vertex that does not exist.
+
 The Blaster is a gadget of the game. The gadgets - the weapons and the tools of the hero - are
 not part of the core data like the other classes: every gadget is a compressed stream of its own
 and the table of the gadgets of the level (the core index at `+0x80` and `+0x84`) names the stream
@@ -183,15 +188,21 @@ The mod shows the imported assets in the game: the hero holds his Blaster and fi
 
 The game places the items of the hand with the pose of that joint **and** with a matrix of its own
 for every item, which holds the grip of the item. That matrix lives in the code of the game and
-not in the data of the disc, so the demo uses the pose of the joint alone. The Blaster therefore
-sits in the hand of the hero with its own origin at the joint, without the grip of the game.
+not in the data of the disc, so the demo uses the place of the joint of the hand and turns the
+weapon into the frame of the model of the hero: the weapons of the game are modelled with their
+barrel along the way the hero faces and their back is up, so the weapon points the way the hero
+faces and follows the hand of the hero while the animation runs. The Blaster therefore sits in the
+hand of the hero without the grip of the game.
 
 The demo is reachable in three ways:
 
 * the setup screen, which the client shows when it starts, draws the hero with the Blaster as long
   as the cache holds the assets;
 * the main menu has a **Blaster test** button that opens the demo screen;
-* the key **B** opens the demo screen from anywhere in the game.
+* the key **B** opens the demo screen while a world is played.
+
+The screen measures the model and draws it in the middle of the area above the text, so that the
+whole hero and the whole weapon are visible and the text never covers them.
 
 ## The preview
 
@@ -213,7 +224,8 @@ writes every kind of triangle in one run.
 * The animation of the hero is evaluated on the processor of the game, without the pose layers and
   the joint modifiers that the game builds while it runs. The pose of the hero is therefore the
   pose of the disc and not the pose the game builds out of it.
-* The items of the hand are placed with the pose of the joint of the hand only. The grip of every
-  item is in the code of the game and not in the data of the disc.
+* The items of the hand are placed at the place of the joint of the hand and turned into the frame
+  of the model of the hero. The grip of every item is in the code of the game and not in the data
+  of the disc, so the demo does not use it.
 * The cache holds the assets of the first level only. A cache of another level would need another
   schema version.

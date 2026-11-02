@@ -471,6 +471,12 @@ Nine focused test classes exist today:
   built by hand: the joint lists of the class, which name the chain of joints the items of the hero
   hang on, a class without joint lists, a joint list that lies outside of the class, a joint list
   with an implausible size, and the recognition of a joint whose bind pose collapsed to a point.
+- `MobyMeshTest` verifies the reader of the mesh of a class with more than one packet: the indices
+  of the second packet name the vertices of the second packet and not the vertices of the first
+  one, every index of the mesh names a vertex of the mesh, the triangles of the two packets are two
+  different triangles that stand above each other, and an index that names a vertex that does not
+  exist is refused. The check fails when the indices of the packets are not moved onto the
+  vertices of the class, which is what the reader had to be fixed for.
 - `MobySequenceReaderTest` verifies the reader of the animation sequences with a sequence that was
   built by hand: the times of the keys, the quaternions of the joints, the records of the
   translations and of the scales, the key that is dropped when it has the time of the key before it
@@ -503,9 +509,10 @@ Nine focused test classes exist today:
   is out of range does not make the renderer read outside of the array of the textures.
 - `RealDiscAssetTest` is the opt-in check of the conversion of the assets of a real disc image: the
   scenery, the hero and the Blaster are converted with the numbers of the vertices, of the
-  triangles, of the joints, of the sequences and of the textures that were measured on the disc, the
-  chain of the hand of the hero ends at the joint 56 and the skinning does not tear the model of the
-  hero apart.
+  triangles, of the joints, of the sequences and of the textures that were measured on the disc,
+  every vertex of the hero and of the Blaster is used by a triangle of it, the triangles of the
+  hero and of the Blaster cover the whole model, the chain of the hand of the hero ends at the
+  joint 56 and the skinning does not tear the model of the hero apart.
 
 The suite currently contains 188 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in
@@ -537,9 +544,9 @@ tree.
 | --- | --- |
 | `gradlew.bat tasks` | Listed the task groups reproduced above; the configuration succeeded with ModDevGradle 2.0.148 and NeoForge 21.1.265. |
 | `gradlew.bat build` | `BUILD SUCCESSFUL`. Produced `build/libs/racmc-0.1.0.jar` containing `META-INF/neoforge.mods.toml` and the mod classes. The first run of the foundation downloaded and decompiled the Minecraft 1.21.1 artifacts (about 83 s of tool time, plus the 787 MiB asset download for the run configurations). |
-| `gradlew.bat test` | `BUILD SUCCESSFUL`, 180 of 180 tests passed, the eight opt-in checks of a real disc image were skipped. |
-| `gradlew.bat test --rerun` | `BUILD SUCCESSFUL`, 180 of 180 tests passed with the test task forced to re-execute. |
-| `gradlew.bat clean build` | `BUILD SUCCESSFUL`, the same 180 of 180 tests passed after a clean. |
+| `gradlew.bat test` | `BUILD SUCCESSFUL`, 185 of 185 tests passed, the twelve opt-in checks of a real disc image were skipped. |
+| `gradlew.bat test --rerun` | `BUILD SUCCESSFUL`, 185 of 185 tests passed with the test task forced to re-execute. |
+| `gradlew.bat clean build` | `BUILD SUCCESSFUL`, the same 185 of 185 tests passed after a clean. |
 | `CI=true .\gradlew.bat --no-daemon build` | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. |
 | `gradlew.bat runClient` | The client window opened (title `Minecraft NeoForge* 1.21.1`). With no disc image configured the main menu did not open: the log shows `The disc image gate keeps the main menu closed until a disc image is configured.` and `The disc image picker was opened and cannot be dismissed.`, and the screen shows the selection screen with the button *Pick disc image* and without a back button. The escape key was sent to the window and the log shows `The disc image picker ignored the escape key.`; the screen stayed open and no world was prepared. The client was closed through its own window, which logged `Stopping!` and ended the Gradle task with `BUILD SUCCESSFUL`. |
 | `gradlew.bat runClient` and the *Pick disc image* button | The file chooser of the system opened in its own window (`The file chooser of the system is opened.`, `headless=false`). A retail disc image was picked in it, the check of the whole image ran on a worker thread and the log shows `The disc image was verified: PAL v2.00.`. The path of the image and the facts about it were written to `run/config/racmc/racmc-media.properties` with the keys `path`, `revision`, `imageSize`, `imageSha1` and `modifiedTime`; the file holds no part of the image. |
@@ -550,8 +557,8 @@ tree.
 | `CI=true gradlew.bat --no-daemon clean build` | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. The first cold run took about 40 s; a run with a warm Gradle build cache took 5 s. |
 | `CI=true gradlew.bat --no-daemon test --rerun` | `BUILD SUCCESSFUL`, 11 of 11 tests passed with the test task forced to re-execute on the foundation, before the importer was added. |
 | `gradlew.bat test --rerun -Dracmc.isoImage=<path> -Dracmc.isoExpectedRevision=<revision>` | `BUILD SUCCESSFUL`, the opt-in check of the real disc image passed for the European PAL v2.00 release and for the North American NTSC-U v1.00 release. Both images were read in place, were accepted and were identified with the expected revision. The size and the SHA-1 digest of each image matched the values of the Redump record of the disc. The images were not copied into the repository and are not part of it. |
-| `gradlew.bat test --rerun -Dracmc.isoImage=<NTSC-U v1.00> -Dracmc.isoExpectedRevision="NTSC-U v1.00"` | `BUILD SUCCESSFUL`, 188 of 188 tests passed, the eight opt-in checks of the real disc image included: the scenery, the hero and the Blaster are converted with the numbers of the vertices, of the triangles, of the joints, of the sequences and of the textures that were measured on the disc, the chain of the hand of the hero ends at the joint 56 and the skinning holds the size of the model. |
-| `gradlew.bat runClient` with the disc image of the NTSC-U v1.00 release configured | The client window opened (GL 4.6, NVIDIA GeForce RTX 5090). The log shows `The disc image gate keeps the main menu closed until the disc image is verified and the assets are in the cache.`, `The disc image picker was opened and cannot be dismissed.`, `The disc image was verified: NTSC-U v1.00.` and `The cache of the assets is started for the disc image.`. The cache was written (`racm-4fe30dba….racm`, 5,653,069 bytes) and the main menu opened with the button *Blaster test* on it. The screen of the demo of the Blaster was opened and left open for two minutes: the log holds no error and no warning of the mod, so the renderer of the meshes wrote the triangles of the hero, of the Blaster and of the scenery in every frame without the failure of the buffer of the renderer of the game of blocks. The mouse and the keyboard of the session of the agent do not reach the window of the game, so the picture of the screen was not taken here; the worker that verifies the tree can take it. |
+| `gradlew.bat test --rerun -Dracmc.isoImage=<NTSC-U v1.00> -Dracmc.isoExpectedRevision="NTSC-U v1.00"` | `BUILD SUCCESSFUL`, 197 of 197 tests passed, the twelve opt-in checks of the real disc image included: the scenery, the hero and the Blaster are converted with the numbers of the vertices, of the triangles, of the joints, of the sequences and of the textures that were measured on the disc, every vertex of the hero and of the Blaster is used by a triangle, the triangles cover the whole model, the chain of the hand of the hero ends at the joint 56 and the skinning holds the size of the model. |
+| `gradlew.bat runClient` with the disc image of the NTSC-U v1.00 release configured | The client window opened (GL 4.6, NVIDIA GeForce RTX 5090). The log shows `The disc image gate keeps the main menu closed until the disc image is verified and the assets are in the cache.`, `The disc image picker was opened and cannot be dismissed.`, `The disc image was verified: NTSC-U v1.00.` and `The cache of the assets is started for the disc image.`. The cache was written (`racm-4fe30dba….racm`, 5,653,069 bytes) and the main menu opened with the button *Blaster test* on it. The screen of the demo of the Blaster was opened and left open for two minutes: the log holds no error and no warning of the mod, so the renderer of the meshes wrote the triangles of the hero, of the Blaster and of the scenery in every frame without the failure of the buffer of the renderer of the game of blocks. A picture of the screen was taken by the game itself (`Saved screenshot as 2026-11-02_21.04.22.png`): it shows the whole textured hero standing in the middle of the screen with the textured Blaster in his hand, the text of the screen under the model and the button under the text. The mouse and the keyboard of the session of the agent do not reach the window of the game, so the picture was taken by the game itself and not by a key of the keyboard; the worker that verifies the tree can take its own picture. |
 
 All of the measurements above were taken on Windows. The Linux and macOS build and test runs are
 covered by the CI matrix but have not been executed yet, and the client and dedicated server
