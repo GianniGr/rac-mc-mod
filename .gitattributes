@@ -1,0 +1,14 @@
+# The Gradle wrapper scripts need platform specific line endings: gradlew is a POSIX shell
+# script and must stay LF even when it is checked out on Windows.
+gradlew text eol=lf
+gradlew.bat text eol=crlf
+
+# Generated sources are always written with LF.
+src/generated/**/.cache/* text eol=lf
+src/generated/**/*.json text eol=lf
+
+# Binary files must never be line ending translated.
+*.jar binary
+*.zip binary
+*.png binary
+*.class binary

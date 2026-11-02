@@ -1,0 +1,68 @@
+# Mod metadata for the Ratchet & Clank Minecraft mod.
+# The placeholder expressions below are expanded from gradle.properties by the
+# "generateModMetadata" Gradle task. Do not edit the expanded copy in
+# build/generated/sources/modMetadata; edit this template instead.
+# Format: TOML v0.5.0 - https://github.com/toml-lang/toml
+
+# The name of the mod loader type to load - for regular FML @Mod mods it should be javafml.
+modLoader="javafml" #mandatory
+
+# A version range to match for said mod loader - for regular FML @Mod it will be the FML version.
+loaderVersion="${loader_version_range}" #mandatory
+
+# The license for your mod. This is mandatory metadata and allows for easier comprehension of
+# your redistributive properties. No source-code license has been selected by the project owner
+# yet, so this currently carries the upstream MDK default placeholder: it grants no reuse or
+# redistribution rights and is not a license selection. Replace it with the owner's actual choice
+# before publishing or distributing the mod.
+license="${mod_license}"
+
+# Where to report problems with this mod.
+issueTrackerURL="https://github.com/GianniGr/rac-mc-mod/issues"
+
+# A list of mods - how many allowed here is determined by the individual mod loader.
+[[mods]] #mandatory
+
+# The modid of the mod.
+modId="${mod_id}" #mandatory
+
+# The version number of the mod.
+version="${mod_version}" #mandatory
+
+# A display name for the mod.
+displayName="${mod_name}" #mandatory
+
+# The authors of the mod, displayed in the mod UI.
+authors="GianniGr" #optional
+
+# The description text for the mod (multi line!) (#mandatory)
+description='''
+A community-made Minecraft Java Edition mod inspired by Ratchet & Clank.
+Original game assets are imported from a player's own legally obtained game disc image
+and are never distributed with this mod.
+'''
+
+# A dependency - use the . to indicate dependency for a specific modid. Dependencies are optional.
+[[dependencies.${mod_id}]] #optional
+    # the modid of the dependency
+    modId="neoforge" #mandatory
+    # The type of the dependency. Can be one of "required", "optional", "incompatible" or "discouraged" (case insensitive).
+    # 'required' requires the mod to exist, 'optional' does not
+    type="required" #mandatory
+    # The version range of the dependency.
+    versionRange="[${neo_version},)" #mandatory
+    # An ordering relationship between the dependency.
+    # BEFORE - This mod is loaded BEFORE the dependency
+    # AFTER - This mod is loaded AFTER the dependency
+    ordering="NONE"
+    # Side this dependency is applied on - BOTH, CLIENT, or SERVER
+    side="BOTH"
+
+# Here's another dependency
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    type="required"
+    # This version range declares a minimum of the current minecraft version up to but not including the next major version
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"
