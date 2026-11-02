@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.github.giannigr.racmc.cache.Rac1CacheState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -78,5 +79,30 @@ class Rac1MediaGateTest {
         assertFalse(Rac1MediaGate.blocksScreen("net.minecraft.client.gui.screens.OptionsScreen"));
         assertFalse(Rac1MediaGate.blocksScreen("net.minecraft.client.gui.screens.multiplayer.SafetyScreen"));
         assertFalse(Rac1MediaGate.blocksScreen(null));
+    }
+
+    @Test
+    @DisplayName("The game may only be entered when the cache of the assets is ready")
+    void onlyAReadyCacheOpensTheGate() {
+        assertTrue(Rac1MediaGate.allowsWorldEntry(Rac1MediaState.VALID, Rac1CacheState.READY));
+        assertFalse(Rac1MediaGate.allowsWorldEntry(Rac1MediaState.VALID, Rac1CacheState.BUILDING),
+                "The game has to stay closed while the assets are converted");
+        assertFalse(Rac1MediaGate.allowsWorldEntry(Rac1MediaState.VALID, Rac1CacheState.MISSING),
+                "The game has to stay closed while there is no cache");
+        assertFalse(Rac1MediaGate.allowsWorldEntry(Rac1MediaState.VALID, Rac1CacheState.FAILED),
+                "The game has to stay closed when the cache could not be built");
+    }
+
+    @Test
+    @DisplayName("Every state but the ready one closes the gate")
+    void everyOtherCacheStateClosesTheGate() {
+        for (Rac1MediaState media : Rac1MediaState.values()) {
+            for (Rac1CacheState cache : Rac1CacheState.values()) {
+                boolean open = media == Rac1MediaState.VALID && cache == Rac1CacheState.READY;
+                assertEquals(open, Rac1MediaGate.allowsWorldEntry(media, cache),
+                        "The gate has to be open only for a verified image and a ready cache, but was "
+                                + "checked for " + media + " and " + cache);
+            }
+        }
     }
 }

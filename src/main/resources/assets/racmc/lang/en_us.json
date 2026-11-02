@@ -17,5 +17,11 @@
   "screen.racmc.iso_selection.status.revalidating": "The configured disc image is verified again.",
   "screen.racmc.iso_selection.status.progress": "Reading the disc image: %s%%",
   "screen.racmc.iso_selection.status.accepted": "The image is a verified %s disc.",
-  "screen.racmc.iso_selection.status.io_error": "The disc image could not be read."
+  "screen.racmc.iso_selection.status.io_error": "The disc image could not be read.",
+  "screen.racmc.iso_selection.assets.missing": "The assets of the game are not in the cache yet.",
+  "screen.racmc.iso_selection.assets.building": "The assets of the game are converted: %s%%",
+  "screen.racmc.iso_selection.assets.progress": "Converting the assets: %s%% (%s)",
+  "screen.racmc.iso_selection.assets.ready": "The assets of the game are ready.",
+  "screen.racmc.iso_selection.assets.failed": "The assets of the game could not be converted: %s",
+  "screen.racmc.iso_selection.retry": "Try again"
 }

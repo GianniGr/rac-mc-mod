@@ -32,13 +32,50 @@ rac-mc-mod/
 ├── gradle/wrapper/                  # Committed wrapper jar and pinned distribution
 ├── .github/workflows/ci.yml         # CI foundation (build + test on Java 21, Linux/Windows/macOS)
 ├── docs/development.md              # This file
+├── docs/assets.md                   # The conversion of the assets and the cache
 ├── src/main/java/com/github/giannigr/racmc/
 │   ├── RacMcConstants.java          # Mod id / mod name, free of Minecraft imports
 │   ├── RacMcMod.java                # @Mod entry point
 │   ├── client/
 │   │   ├── RacMcClient.java         # Client only: the gate, the menu button and the media
+│   │   ├── render/
+│   │   │   ├── Rac1ClientTextures.java  # The textures of the game in the texture manager
+│   │   │   └── Rac1MeshRenderer.java    # The renderer of the meshes of the game
 │   │   └── screen/
 │   │       └── IsoSelectionScreen.java  # The screen where the disc image is chosen
+│   ├── asset/
+│   │   ├── Rac1AssetExtractor.java   # Reads the assets of a level out of the disc
+│   │   ├── Rac1Mesh.java             # The geometry of a piece of scenery
+│   │   ├── Rac1SkinnedMesh.java      # The geometry of a character and the joints it follows
+│   │   ├── Rac1Skeleton.java         # The joints of a character and their bind matrices
+│   │   ├── Rac1Animation.java        # One animation sequence of a character
+│   │   ├── Rac1AnimationEvaluator.java # Turns the keys of a sequence into the matrices of the joints
+│   │   ├── Rac1Texture.java          # A texture of the game
+│   │   ├── Rac1TextureReader.java    # Reads a texture out of the core data and the palette
+│   │   ├── TieClassReader.java       # Reads the classes of the scenery of the game
+│   │   ├── MobyClassReader.java      # Reads the classes of the characters of the game
+│   │   ├── MobySequenceReader.java   # Reads the animation sequences of the game
+│   │   ├── VifCommandList.java       # Reads the command lists of the graphics chip of the console
+│   │   └── Rac1CoordinateTransform.java # The change from the axes of the game to the axes of the blocks
+│   ├── cache/
+│   │   ├── Rac1CacheCodec.java       # The format of the cache file
+│   │   ├── Rac1CacheStore.java       # The place where the cache is kept
+│   │   ├── Rac1AssetCacheManager.java # The life of the cache: read, build, fail, retry
+│   │   ├── Rac1CacheState.java       # The states of the cache
+│   │   ├── Rac1CacheContent.java      # The assets that a cache holds
+│   │   └── Rac1DiscIdentity.java     # The identity of the disc the assets come from
+│   ├── disc/
+│   │   ├── Rac1DiscTables.java       # The table of contents of the disc
+│   │   ├── Rac1LevelHeader.java      # The header of a level of the game
+│   │   ├── Rac1LevelData.java        # The container of the data of a level
+│   │   ├── Rac1CoreIndex.java        # The index of the core data of a level
+│   │   ├── Rac1LevelAssets.java      # The data of a level: the index, the core data, the palettes
+│   │   ├── Rac1ClassEntry.java       # An entry of a class table of a level
+│   │   ├── Rac1TextureEntry.java     # An entry of a texture table of a level
+│   │   └── DiscFormatException.java  # A damaged or unexpected table
+│   ├── wad/
+│   │   ├── WadDecoder.java           # The decoder of the compressed streams of the game
+│   │   └── WadFormatException.java   # A damaged or unexpected stream
 │   └── iso/
 │       ├── Rac1DiscCatalog.java     # The supported revisions and their digests
 │       ├── DiscProfile.java         # The identity of one supported revision
@@ -66,6 +103,15 @@ rac-mc-mod/
     ├── ModDisplayNameTest.java        # Focused checks for the canonical project name
     ├── ModLicenseTest.java            # Focused checks for the MIT licence
     ├── ModNamespaceTest.java          # Focused checks for the mod namespace
+    ├── asset/
+    │   └── TieClassReaderTest.java   # Focused checks for the reader of the scenery
+    ├── cache/
+    │   ├── SyntheticAssets.java       # The assets that the checks of the cache use
+    │   ├── Rac1CacheCodecTest.java    # Focused checks for the format of the cache file
+    │   ├── Rac1CacheStoreTest.java    # Focused checks for the place of the cache
+    │   └── Rac1AssetCacheManagerTest.java # Focused checks for the life of the cache
+    ├── wad/
+    │   └── WadDecoderTest.java       # Focused checks for the decoder of the compressed streams
     └── iso/
         ├── SyntheticIso.java          # Builds synthetic ISO 9660 images for the tests
         ├── SyntheticDisc.java         # A synthetic image with the profile that describes it
@@ -158,8 +204,9 @@ that was modified is refused with a `CORRUPT_IMAGE` result.
 
 ### What the importer does not do
 
-- It does not extract anything. `Rac1DiscImage` only hands out the bytes of the files of the
-  image; the extraction step comes later and is a separate milestone.
+- It does not extract anything on its own. `Rac1DiscImage` only hands out the bytes of the files
+  of the image and the bytes of its sectors; the conversion of the assets lives in
+  `com.github.giannigr.racmc.asset` and is described in `docs/assets.md`.
 - It does not write to the image and does not copy it anywhere. The configuration of the mod
   stores the path of the image and a few facts about it, never any part of the image.
 - It does not keep the image in memory. The image is read in chunks of one megabyte for the
@@ -252,6 +299,25 @@ only against synthetic ones.
 The disc images themselves are not part of this repository and were not copied into it. The
 check has to be repeated by every player who wants to verify a disc image of their own, with the
 command above.
+
+## The assets of the game and the cache
+
+The importer only proves that the disc image of the player is the disc of the game. The assets of
+the game - the geometry, the textures and the animation of the characters - live in the data of the
+levels, which the game reads by absolute sector. `com.github.giannigr.racmc.disc` and
+`com.github.giannigr.racmc.asset` read that data and turn it into the format the game of blocks
+uses. `docs/assets.md` describes the whole path, the format facts it is based on and the sources
+those facts come from.
+
+The converted assets are kept in a local cache file (`com.github.giannigr.racmc.cache`). The file
+is written by the player, into the cache directory of the mod, and it is never part of this
+repository.
+
+The cache is part of the gate: the game may only be entered when the disc image was verified **and**
+the cache holds both assets. A cache that is being built, a cache that failed and a cache that is
+missing all keep the game closed, so the game never runs with assets that are missing or only half
+there. The selection screen shows the step and the share of the work that is done, reports what
+went wrong when the conversion failed and offers to try again.
 
 ## Gradle tasks
 
@@ -349,13 +415,37 @@ Nine focused test classes exist today:
   else.
 - `Rac1MediaGateTest` verifies the rule that decides whether the game may be entered: only a
   verified image opens it, the selection screen can only be dismissed with a verified image, a
-  world that was entered without one has to be left again, and the screens that lead into a world
-  or into a server are blocked while the main menu is not.
+  world that was entered without one has to be left again, the screens that lead into a world or
+  into a server are blocked while the main menu is not, and the cache of the assets has to be ready
+  as well before the gate opens.
+- `WadDecoderTest` verifies the decoder of the compressed streams of the game with streams that
+  were built by hand: literals, matches with little literals, the dummy packet and the block
+  marker, and the streams that are refused because they hold two literal packets in a row, because
+  they are not streams at all, because they claim to be longer than they are, because they decode
+  to the wrong size or because a match reaches before the start of the output.
+- `TieClassReaderTest` verifies the reader of the classes of the scenery with a class that was
+  built by hand: the vertices, the texture coordinates, the triangles of the strip of the packet,
+  and the classes that are refused because their header is too short, because their packet table
+  lies outside of the class, because their vertices do not fit into their region or because their
+  strip does not start where the graphics packet of the console says.
+- `Rac1CacheCodecTest` verifies the format of the cache file: a cache that was written can be read
+  back, the file starts with the magic of the format, the identity of the disc is written into the
+  file, and a cache whose bytes were changed, that was cut short, that belongs to another disc,
+  that was written for another version of the schema or that is not a cache file at all is refused.
+- `Rac1CacheStoreTest` verifies the place where the cache is kept: a cache that was written can be
+  read back, there is no cache before one was written, a written cache leaves no file of a half
+  written cache behind, a damaged cache is refused, the cache of another disc is not used, a cache
+  can be thrown away and every disc gets a file of its own.
+- `Rac1AssetCacheManagerTest` verifies the life of the cache: a cache that holds both assets is
+  used, a cache that is damaged is not used, a disc image that is missing or that is not a disc of
+  the game is reported, a failure can be tried again and the manager reports the step it is at.
 
-The suite currently contains 89 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
+The suite currently contains 126 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in
 `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in
-`Rac1MediaManagerTest` and 6 in `Rac1MediaGateTest`.
+`Rac1MediaManagerTest`, 8 in `Rac1MediaGateTest`, 8 in `WadDecoderTest`, 5 in `TieClassReaderTest`,
+8 in `Rac1CacheCodecTest`, 7 in `Rac1CacheStoreTest` and 6 in `Rac1AssetCacheManagerTest`. One
+test, the opt-in check of a real disc image, is skipped unless it is asked for.
 
 `RealDiscImageTest` is a further, opt-in check of a real disc image. It is skipped unless the path
 of an image is given on the command line, and it is described in the section about the disc
@@ -377,9 +467,9 @@ tree.
 | --- | --- |
 | `gradlew.bat tasks` | Listed the task groups reproduced above; the configuration succeeded with ModDevGradle 2.0.148 and NeoForge 21.1.265. |
 | `gradlew.bat build` | `BUILD SUCCESSFUL`. Produced `build/libs/racmc-0.1.0.jar` containing `META-INF/neoforge.mods.toml` and the mod classes. The first run of the foundation downloaded and decompiled the Minecraft 1.21.1 artifacts (about 83 s of tool time, plus the 787 MiB asset download for the run configurations). |
-| `gradlew.bat test` | `BUILD SUCCESSFUL`, 89 of 89 tests passed (7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`, 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in `Rac1MediaManagerTest`, 6 in `Rac1MediaGateTest`). The opt-in check of a real disc image is skipped. |
-| `gradlew.bat test --rerun` | `BUILD SUCCESSFUL`, 89 of 89 tests passed with the test task forced to re-execute. |
-| `gradlew.bat clean build` | `BUILD SUCCESSFUL`, the same 89 of 89 tests passed after a clean. |
+| `gradlew.bat test` | `BUILD SUCCESSFUL`, 125 of 125 tests passed (7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`, 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in `Rac1MediaManagerTest`, 8 in `Rac1MediaGateTest`, 8 in `WadDecoderTest`, 5 in `TieClassReaderTest`, 8 in `Rac1CacheCodecTest`, 7 in `Rac1CacheStoreTest`, 6 in `Rac1AssetCacheManagerTest`). The opt-in check of a real disc image is skipped. |
+| `gradlew.bat test --rerun` | `BUILD SUCCESSFUL`, 125 of 125 tests passed with the test task forced to re-execute. |
+| `gradlew.bat clean build` | `BUILD SUCCESSFUL`, the same 125 of 125 tests passed after a clean. |
 | `CI=true .\gradlew.bat --no-daemon build` | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. |
 | `gradlew.bat runClient` | The client window opened (title `Minecraft NeoForge* 1.21.1`). With no disc image configured the main menu did not open: the log shows `The disc image gate keeps the main menu closed until a disc image is configured.` and `The disc image picker was opened and cannot be dismissed.`, and the screen shows the selection screen with the button *Pick disc image* and without a back button. The escape key was sent to the window and the log shows `The disc image picker ignored the escape key.`; the screen stayed open and no world was prepared. The client was closed through its own window, which logged `Stopping!` and ended the Gradle task with `BUILD SUCCESSFUL`. |
 | `gradlew.bat runClient` and the *Pick disc image* button | The file chooser of the system opened in its own window (`The file chooser of the system is opened.`, `headless=false`). A retail disc image was picked in it, the check of the whole image ran on a worker thread and the log shows `The disc image was verified: PAL v2.00.`. The path of the image and the facts about it were written to `run/config/racmc/racmc-media.properties` with the keys `path`, `revision`, `imageSize`, `imageSha1` and `modifiedTime`; the file holds no part of the image. |

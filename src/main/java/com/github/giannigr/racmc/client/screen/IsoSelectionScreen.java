@@ -1,14 +1,22 @@
 package com.github.giannigr.racmc.client.screen;
 
 import com.github.giannigr.racmc.RacMcMod;
+import com.github.giannigr.racmc.asset.Rac1AnimatedAsset;
+import com.github.giannigr.racmc.asset.Rac1Animation;
+import com.github.giannigr.racmc.asset.Rac1AnimationEvaluator;
+import com.github.giannigr.racmc.asset.Rac1StaticAsset;
+import com.github.giannigr.racmc.cache.Rac1CacheState;
 import com.github.giannigr.racmc.client.RacMcClient;
+import com.github.giannigr.racmc.client.render.Rac1MeshRenderer;
 import com.github.giannigr.racmc.iso.IsoValidationResult;
 import com.github.giannigr.racmc.iso.Rac1MediaManager;
+import com.mojang.blaze3d.vertex.PoseStack;
 import java.awt.Frame;
 import java.awt.GraphicsEnvironment;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.SwingUtilities;
@@ -20,6 +28,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.options.OptionsScreen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 
 /**
@@ -49,6 +58,16 @@ public class IsoSelectionScreen extends Screen {
     private Component status = Component.empty();
     private IsoValidationResult reportedResult;
     private Button pickButton;
+    private Button retryButton;
+
+    /** The textures of the assets of the game, when they were registered. */
+    private ResourceLocation[] staticTextures;
+
+    /** The textures of the animated asset of the game, when they were registered. */
+    private ResourceLocation[] animatedTextures;
+
+    /** The moment of the animation of the preview, in seconds. */
+    private float previewTime;
 
     /**
      * Creates the screen in the mode that can be left with the back button.
@@ -93,6 +112,15 @@ public class IsoSelectionScreen extends Screen {
             addRenderableWidget(Button.builder(Component.translatable("menu.quit"), button -> this.minecraft.stop())
                     .bounds(left, top + 26, 160, 20)
                     .build());
+            this.retryButton = addRenderableWidget(Button.builder(
+                            Component.translatable("screen.racmc.iso_selection.retry"),
+                            button -> {
+                                RacMcMod.LOGGER.info("The cache of the assets is built again.");
+                                RacMcClient.assets().retry();
+                            })
+                    .bounds(left, top + 52, 160, 20)
+                    .build());
+            this.retryButton.visible = false;
         } else {
             addRenderableWidget(Button.builder(Component.translatable("gui.back"), button -> onClose())
                     .bounds(left + BAR_WIDTH - 100, top, 100, 20)
@@ -115,8 +143,9 @@ public class IsoSelectionScreen extends Screen {
         graphics.drawString(this.font,
                 Component.translatable("screen.racmc.iso_selection.mandatory"),
                 left, top - 26, 0xFFAA00);
-        drawWrapped(graphics, describeState(), left, top + 58, BAR_WIDTH, 0xFFFFFF);
+        drawWrapped(graphics, describeState(), left, top + 78, BAR_WIDTH, 0xFFFFFF);
         drawProgress(graphics, left, top + 40);
+        drawPreview(graphics, partialTick);
     }
 
     @Override
@@ -126,8 +155,13 @@ public class IsoSelectionScreen extends Screen {
             // Only one check runs at a time.
             this.pickButton.active = !RacMcClient.media().isChecking();
         }
-        // A verified disc image lets the player leave the screen and go to the main menu.
-        if (this.mandatory && RacMcClient.media().isReady()) {
+        if (this.retryButton != null) {
+            // The button is only there when the cache could not be built.
+            this.retryButton.visible = RacMcClient.assets().state() == Rac1CacheState.FAILED;
+        }
+        // A verified disc image and a cache that holds the assets let the player leave the screen
+        // and go to the main menu.
+        if (this.mandatory && RacMcClient.allowsWorldEntry()) {
             this.minecraft.setScreen(new TitleScreen());
         }
     }
@@ -242,7 +276,8 @@ public class IsoSelectionScreen extends Screen {
     }
 
     /**
-     * Describes the state of the configured disc image and of the running check.
+     * Describes the state of the configured disc image, of the running check and of the cache of the
+     * assets of the game.
      */
     private Component describeState() {
         Rac1MediaManager media = RacMcClient.media();
@@ -251,6 +286,7 @@ public class IsoSelectionScreen extends Screen {
                         path.toString()))
                 .orElse(Component.translatable("screen.racmc.iso_selection.not_configured"));
 
+        Component assets = describeAssets();
         if (media.isChecking()) {
             // A configured image is verified again after a start of the game. The player does not
             // have to pick it again, so the screen says that the image is being verified.
@@ -268,27 +304,121 @@ public class IsoSelectionScreen extends Screen {
         if (result != null && result.isSupported()) {
             return Component.empty().append(configured).append("\n")
                     .append(Component.translatable("screen.racmc.iso_selection.status.accepted",
-                            result.revision().label()));
+                            result.revision().label()))
+                    .append("\n").append(assets);
         }
         return configured;
     }
 
     /**
-     * Draws the progress of the running check.
+     * Describes the state of the cache of the assets of the game.
+     */
+    private Component describeAssets() {
+        var cache = RacMcClient.assets();
+        switch (cache.state()) {
+            case BUILDING:
+                return Component.translatable("screen.racmc.iso_selection.assets.building",
+                        cache.progress());
+            case READY:
+                return Component.translatable("screen.racmc.iso_selection.assets.ready");
+            case FAILED:
+                return Component.translatable("screen.racmc.iso_selection.assets.failed",
+                        cache.error().orElse(""));
+            default:
+                return Component.translatable("screen.racmc.iso_selection.assets.missing");
+        }
+    }
+
+    /**
+     * Draws the progress of the running check and of the running build of the cache.
      */
     private void drawProgress(GuiGraphics graphics, int x, int y) {
         Rac1MediaManager media = RacMcClient.media();
-        if (!media.isChecking()) {
+        if (media.isChecking()) {
+            long total = media.bytesTotal();
+            int done = total > 0 ? (int) Math.min(BAR_WIDTH, media.bytesRead() * BAR_WIDTH / total) : 0;
+            graphics.fill(x, y, x + BAR_WIDTH, y + BAR_HEIGHT, 0xFF404040);
+            graphics.fill(x, y, x + done, y + BAR_HEIGHT, 0xFF55FF55);
+            graphics.drawString(this.font,
+                    Component.translatable("screen.racmc.iso_selection.status.progress",
+                            percent(media.bytesRead(), total)),
+                    x, y - 12, 0xFFFFFF);
             return;
         }
-        long total = media.bytesTotal();
-        int done = total > 0 ? (int) Math.min(BAR_WIDTH, media.bytesRead() * BAR_WIDTH / total) : 0;
+        var cache = RacMcClient.assets();
+        if (cache.state() != Rac1CacheState.BUILDING) {
+            return;
+        }
+        int done = cache.progress() * BAR_WIDTH / 100;
         graphics.fill(x, y, x + BAR_WIDTH, y + BAR_HEIGHT, 0xFF404040);
         graphics.fill(x, y, x + done, y + BAR_HEIGHT, 0xFF55FF55);
         graphics.drawString(this.font,
-                Component.translatable("screen.racmc.iso_selection.status.progress",
-                        percent(media.bytesRead(), total)),
+                Component.translatable("screen.racmc.iso_selection.assets.progress", cache.progress(),
+                        cache.step()),
                 x, y - 12, 0xFFFFFF);
+    }
+
+    /**
+     * Draws the assets of the game, so that the player can see that they were converted.
+     *
+     * <p>The preview is only drawn when the cache holds the assets. A failure of the drawing is
+     * logged and ignored, because the screen has to stay usable.
+     */
+    private void drawPreview(GuiGraphics graphics, float partialTick) {
+        if (RacMcClient.assets().state() != Rac1CacheState.READY) {
+            return;
+        }
+        try {
+            Optional<Rac1StaticAsset> staticAsset = RacMcClient.staticAsset();
+            Optional<Rac1AnimatedAsset> animatedAsset = RacMcClient.animatedAsset();
+            if (staticAsset.isEmpty() || animatedAsset.isEmpty()) {
+                return;
+            }
+            if (this.staticTextures == null) {
+                this.staticTextures = RacMcClient.registerTextures(staticAsset.get());
+                this.animatedTextures = RacMcClient.registerTextures(animatedAsset.get());
+            }
+            this.previewTime += partialTick / 20.0f;
+            PoseStack pose = graphics.pose();
+            pose.pushPose();
+            pose.translate(this.width / 2.0f, this.height / 2.0f + 40.0f, 0.0f);
+            pose.scale(40.0f, 40.0f, 40.0f);
+            pose.mulPose(com.mojang.math.Axis.YP.rotationDegrees(
+                    (this.previewTime * 20.0f) % 360.0f));
+            net.minecraft.client.renderer.MultiBufferSource.BufferSource buffers =
+                    Minecraft.getInstance().renderBuffers().bufferSource();
+            Rac1MeshRenderer.render(pose, buffers, staticAsset.get().mesh(), this.staticTextures);
+            pose.popPose();
+
+            pose.pushPose();
+            pose.translate(this.width / 4.0f, this.height / 2.0f + 40.0f, 0.0f);
+            pose.scale(40.0f, 40.0f, 40.0f);
+            drawAnimated(pose, buffers, animatedAsset.get());
+            pose.popPose();
+        } catch (RuntimeException | LinkageError exception) {
+            RacMcMod.LOGGER.warn("The preview of the assets could not be drawn.", exception);
+        }
+    }
+
+    /**
+     * Draws the animated asset of the game at the current moment of its first sequence.
+     */
+    private void drawAnimated(PoseStack pose,
+                              net.minecraft.client.renderer.MultiBufferSource.BufferSource buffers,
+                              Rac1AnimatedAsset asset) {
+        if (asset.animations().length == 0) {
+            return;
+        }
+        Rac1Animation animation = asset.animations()[0];
+        float[] times = animation.times();
+        float duration = times.length > 0 ? times[times.length - 1] : 0.0f;
+        float time = duration > 0.0f ? this.previewTime % duration : 0.0f;
+        float[] matrices = Rac1AnimationEvaluator.evaluate(asset.skeleton(), animation, time, 1.0f);
+        float[] positions = new float[asset.mesh().positions().length];
+        float[] normals = new float[asset.mesh().normals().length];
+        Rac1AnimationEvaluator.pose(asset.mesh(), matrices, positions, normals);
+        Rac1MeshRenderer.render(pose, buffers, asset.mesh(), positions, normals,
+                this.animatedTextures);
     }
 
     /**

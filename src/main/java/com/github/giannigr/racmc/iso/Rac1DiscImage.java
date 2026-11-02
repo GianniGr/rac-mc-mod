@@ -71,4 +71,29 @@ public interface Rac1DiscImage extends Closeable {
      * @throws IllegalArgumentException when the path is unsafe or the image does not contain it
      */
     InputStream openFile(String isoPath) throws IOException;
+
+    /**
+     * Reads a range of bytes at an absolute offset of the image.
+     *
+     * <p>The game addresses its data by absolute sector, not by the name of a file of the image
+     * system, so the tables that point at the game data can only be read this way.
+     *
+     * @param byteOffset the offset of the first byte in the image
+     * @param length the number of bytes to read
+     * @return the bytes that were read
+     * @throws IOException when the range cannot be read
+     * @throws IllegalArgumentException when the range lies outside of the image
+     */
+    byte[] readBytes(long byteOffset, int length) throws IOException;
+
+    /**
+     * Reads a number of sectors at an absolute sector number of the image.
+     *
+     * @param sector the number of the first sector
+     * @param sectorCount the number of sectors to read
+     * @return the bytes that were read
+     * @throws IOException when the range cannot be read
+     * @throws IllegalArgumentException when the range lies outside of the image
+     */
+    byte[] readSectors(long sector, int sectorCount) throws IOException;
 }
