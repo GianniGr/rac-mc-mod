@@ -109,6 +109,6 @@ final class SyntheticAssets {
      * @return the content
      */
     static Rac1CacheContent content(String discKey) {
-        return new Rac1CacheContent(discKey, staticAsset(), animatedAsset());
+        return new Rac1CacheContent(discKey, staticAsset(), animatedAsset(), animatedAsset(), 56);
     }
 }

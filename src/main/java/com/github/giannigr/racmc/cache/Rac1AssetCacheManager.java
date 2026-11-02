@@ -222,16 +222,22 @@ public final class Rac1AssetCacheManager implements Closeable {
             Rac1LevelAssets assets = Rac1LevelAssets.load(outcome.image(),
                     Rac1AssetExtractor.LEVEL);
             step = "The scenery is converted.";
-            progress = 45;
+            progress = 40;
             Rac1StaticAsset staticAsset = Rac1AssetExtractor.readStaticAsset(assets,
                     Rac1AssetExtractor.STATIC_CLASS);
             step = "The character is converted.";
-            progress = 70;
+            progress = 60;
             Rac1AnimatedAsset animatedAsset = Rac1AssetExtractor.readAnimatedAsset(assets,
                     Rac1AssetExtractor.ANIMATED_CLASS);
+            step = "The weapon is converted.";
+            progress = 80;
+            Rac1AnimatedAsset blaster = Rac1AssetExtractor.readGadgetAsset(assets,
+                    Rac1AssetExtractor.BLASTER_CLASS);
+            int[] handChain = Rac1AssetExtractor.readHandChain(assets);
+            int handJoint = handChain.length == 0 ? 0 : handChain[handChain.length - 1];
             step = "The cache is written.";
             progress = 90;
-            return new Rac1CacheContent(key, staticAsset, animatedAsset);
+            return new Rac1CacheContent(key, staticAsset, animatedAsset, blaster, handJoint);
         }
     }
 

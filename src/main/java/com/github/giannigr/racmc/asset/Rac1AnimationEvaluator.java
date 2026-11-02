@@ -65,6 +65,27 @@ public final class Rac1AnimationEvaluator {
      * @return the matrices, sixteen floats per joint
      */
     public static float[] evaluatePose(Rac1Skeleton skeleton, Rac1Animation animation, float time) {
+        return evaluatePose(skeleton, animation, time, true);
+    }
+
+    /**
+     * The pose of the joints of a skeleton at a moment of an animation, without the scales that
+     * only reach the joint itself.
+     *
+     * <p>The game places the items of the hero with the pose of the joint they hang on, and it
+     * leaves the scales that only reach the joint itself out of it.
+     *
+     * @param skeleton the skeleton of the class
+     * @param animation the animation sequence
+     * @param time the moment of the animation in seconds
+     * @return the matrices, sixteen floats per joint
+     */
+    public static float[] evaluateChain(Rac1Skeleton skeleton, Rac1Animation animation, float time) {
+        return evaluatePose(skeleton, animation, time, false);
+    }
+
+    private static float[] evaluatePose(Rac1Skeleton skeleton, Rac1Animation animation, float time,
+                                        boolean postScale) {
         int joints = skeleton.jointCount();
         float[] matrices = new float[joints * MATRIX_SIZE];
 
@@ -167,18 +188,20 @@ public final class Rac1AnimationEvaluator {
             }
         }
         // The scales that only reach the joint itself are applied after the whole chain.
-        for (int joint = 0; joint < joints; joint++) {
-            float sx = postScales[joint * 3];
-            float sy = postScales[joint * 3 + 1];
-            float sz = postScales[joint * 3 + 2];
-            if (sx == 1.0f && sy == 1.0f && sz == 1.0f) {
-                continue;
-            }
-            int at = joint * MATRIX_SIZE;
-            for (int row = 0; row < 3; row++) {
-                matrices[at + row] *= sx;
-                matrices[at + 4 + row] *= sy;
-                matrices[at + 8 + row] *= sz;
+        if (postScale) {
+            for (int joint = 0; joint < joints; joint++) {
+                float sx = postScales[joint * 3];
+                float sy = postScales[joint * 3 + 1];
+                float sz = postScales[joint * 3 + 2];
+                if (sx == 1.0f && sy == 1.0f && sz == 1.0f) {
+                    continue;
+                }
+                int at = joint * MATRIX_SIZE;
+                for (int row = 0; row < 3; row++) {
+                    matrices[at + row] *= sx;
+                    matrices[at + 4 + row] *= sy;
+                    matrices[at + 8 + row] *= sz;
+                }
             }
         }
         // The skinning matrices of the joints are built by the caller.
@@ -300,6 +323,9 @@ public final class Rac1AnimationEvaluator {
         float z = rotation[joint * 4 + 2];
         float w = rotation[joint * 4 + 3];
         float[] matrix = new float[MATRIX_SIZE];
+        // The game builds the rows of its matrix from the quaternion: the row 0 is the image of
+        // the first axis. The matrix of the game of blocks holds the columns of that matrix, so
+        // the rotation of the quaternion is used the other way around.
         matrix[0] = 1.0f - 2.0f * (y * y + z * z);
         matrix[4] = 2.0f * (x * y + z * w);
         matrix[8] = 2.0f * (x * z - y * w);

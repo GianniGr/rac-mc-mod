@@ -11,6 +11,7 @@ import com.github.giannigr.racmc.cache.Rac1CacheContent;
 import com.github.giannigr.racmc.cache.Rac1CacheStore;
 import com.github.giannigr.racmc.cache.Rac1DiscIdentity;
 import com.github.giannigr.racmc.client.render.Rac1ClientTextures;
+import com.github.giannigr.racmc.client.screen.BlasterTestScreen;
 import com.github.giannigr.racmc.client.screen.IsoSelectionScreen;
 import com.github.giannigr.racmc.iso.Rac1DiscRevision;
 import com.github.giannigr.racmc.iso.Rac1DiscValidator;
@@ -30,6 +31,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 
 /**
@@ -201,6 +203,30 @@ public final class RacMcClient {
                 .bounds(4, event.getScreen().height - 24, 160, 20)
                 .build();
         event.addListener(button);
+
+        if (ASSETS.isReady()) {
+            // The demo of the Blaster is only there when the assets are in the cache.
+            Button demo = Button.builder(
+                            Component.translatable("screen.racmc.blaster_test.open"),
+                            pressed -> {
+                                RacMcMod.LOGGER.info("The demo of the Blaster is opened from the "
+                                        + "main menu.");
+                                Minecraft.getInstance().setScreen(new BlasterTestScreen());
+                            })
+                    .bounds(4, event.getScreen().height - 48, 160, 20)
+                    .build();
+            event.addListener(demo);
+        }
+    }
+
+    /**
+     * Registers the keys of the mod.
+     *
+     * @param event the event that is fired when the keys of the mods are registered
+     */
+    @SubscribeEvent
+    public static void onRegisterKeys(RegisterKeyMappingsEvent event) {
+        event.register(Rac1ClientKeys.blasterTest());
     }
 
     /**
@@ -212,6 +238,7 @@ public final class RacMcClient {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         startAssetsWhenReady();
+        openDemoWhenAsked();
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null || allowsWorldEntry()) {
             return;
@@ -220,6 +247,20 @@ public final class RacMcClient {
                 + "verified disc image or without the assets of the game.");
         minecraft.disconnect(new TitleScreen());
         minecraft.setScreen(new IsoSelectionScreen(true));
+    }
+
+    /**
+     * Opens the demo of the Blaster when its key was pressed.
+     */
+    private static void openDemoWhenAsked() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen != null || !ASSETS.isReady()) {
+            return;
+        }
+        if (Rac1ClientKeys.blasterTest().consumeClick()) {
+            RacMcMod.LOGGER.info("The demo of the Blaster is opened with its key.");
+            minecraft.setScreen(new BlasterTestScreen());
+        }
     }
 
     /**

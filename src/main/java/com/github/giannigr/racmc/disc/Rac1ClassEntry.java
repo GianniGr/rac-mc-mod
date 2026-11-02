@@ -8,7 +8,6 @@ package com.github.giannigr.racmc.disc;
  * unknown words and sixteen bytes that name the textures of the class.
  */
 public final class Rac1ClassEntry {
-
     /** The size of an entry in bytes. */
     public static final int SIZE = 0x20;
 

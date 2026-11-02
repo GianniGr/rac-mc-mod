@@ -322,6 +322,61 @@ public final class MobyClassReader {
     }
 
     /**
+     * The joint lists of a class.
+     *
+     * <p>The lists name the joints that belong together. The first list of every entry is a chain
+     * that leads from the root of the skeleton to a joint: the game uses it to place an item in
+     * the hand of the hero. The second list names the joint that a modifier of the game acts on.
+     *
+     * @param chain the joints of the chain, from the root to the joint
+     * @param target the joints of the second list
+     */
+    public record JointList(byte[] chain, byte[] target) {
+    }
+
+    /**
+     * Reads the joint lists of the class.
+     *
+     * @return the lists, in the order of the class
+     * @throws AssetFormatException when the lists do not follow the expected layout
+     */
+    public List<JointList> readJointLists() throws AssetFormatException {
+        List<JointList> lists = new ArrayList<>();
+        int table = readInt(blob, 0x1C);
+        if (table <= 0 || table > blob.length - 4) {
+            return lists;
+        }
+        int count = readInt(blob, table);
+        if (count <= 0) {
+            return lists;
+        }
+        if (count > 1024 || table > blob.length - count * 4) {
+            throw new AssetFormatException("The joint lists of the moby class lie outside of the "
+                    + "class.");
+        }
+        for (int index = 0; index < count; index++) {
+            int at = readInt(blob, table + 4 + index * 4);
+            if (at <= 0 || at > blob.length - 4) {
+                throw new AssetFormatException("A joint list of the moby class lies outside of the "
+                        + "class.");
+            }
+            int chainCount = readUnsignedShort(blob, at);
+            int targetCount = readUnsignedShort(blob, at + 2);
+            if (chainCount < 0 || targetCount < 0 || chainCount > 256 || targetCount > 256
+                    || at + 4 + chainCount + targetCount + 1 > blob.length) {
+                throw new AssetFormatException("A joint list of the moby class has an implausible "
+                        + "size.");
+            }
+            byte[] chain = new byte[chainCount];
+            byte[] target = new byte[targetCount];
+            System.arraycopy(blob, at + 4, chain, 0, chainCount);
+            System.arraycopy(blob, at + 4 + chainCount, target, 0, targetCount);
+            lists.add(new JointList(chain, target));
+        }
+        return lists;
+    }
+
+    /**
      * Reads an animation sequence of the class.
      *
      * @param offset the offset of the sequence in the class
@@ -393,10 +448,11 @@ public final class MobyClassReader {
             int matrix = skeletonOffset + joint * 0x40;
             for (int column = 0; column < 3; column++) {
                 for (int row = 0; row < 3; row++) {
-                    // The game reads the rows of the matrix as the columns of the matrix it
-                    // works with.
+                    // The game keeps the rows of its matrices, and the row 0 of a matrix is the
+                    // image of its first axis. The matrix of the game of blocks holds the
+                    // columns, so the rows of the disc are read the other way around.
                     inverseBind[joint * 16 + column * 4 + row] =
-                            readFloat(blob, matrix + row * 16 + column * 4);
+                            readFloat(blob, matrix + column * 16 + row * 4);
                 }
                 inverseBind[joint * 16 + column * 4 + 3] = 0.0f;
             }

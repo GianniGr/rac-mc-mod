@@ -27,6 +27,7 @@ public final class Rac1CoreIndex {
     private final byte[] index;
     private final List<Rac1ClassEntry> mobyClasses;
     private final List<Rac1ClassEntry> tieClasses;
+    private final List<Rac1GadgetEntry> gadgets;
     private final List<Rac1TextureEntry> mobyTextures;
     private final List<Rac1TextureEntry> tieTextures;
     private final int texturesBase;
@@ -35,12 +36,14 @@ public final class Rac1CoreIndex {
     private final TreeSet<Integer> boundaries;
 
     private Rac1CoreIndex(byte[] index, List<Rac1ClassEntry> mobyClasses,
-                          List<Rac1ClassEntry> tieClasses, List<Rac1TextureEntry> mobyTextures,
+                          List<Rac1ClassEntry> tieClasses, List<Rac1GadgetEntry> gadgets,
+                          List<Rac1TextureEntry> mobyTextures,
                           List<Rac1TextureEntry> tieTextures, int texturesBase, int decompressedSize,
                           int[] ratchetSequences, TreeSet<Integer> boundaries) {
         this.index = index;
         this.mobyClasses = mobyClasses;
         this.tieClasses = tieClasses;
+        this.gadgets = gadgets;
         this.mobyTextures = mobyTextures;
         this.tieTextures = tieTextures;
         this.texturesBase = texturesBase;
@@ -69,6 +72,7 @@ public final class Rac1CoreIndex {
 
         List<Rac1ClassEntry> mobyClasses = classes(index, 0x18);
         List<Rac1ClassEntry> tieClasses = classes(index, 0x20);
+        List<Rac1GadgetEntry> gadgets = gadgets(index);
         List<Rac1TextureEntry> mobyTextures = textures(index, 0x38);
         List<Rac1TextureEntry> tieTextures = textures(index, 0x40);
 
@@ -103,8 +107,27 @@ public final class Rac1CoreIndex {
         }
         boundaries.add(decompressedSize);
 
-        return new Rac1CoreIndex(index, mobyClasses, tieClasses, mobyTextures, tieTextures,
+        return new Rac1CoreIndex(index, mobyClasses, tieClasses, gadgets, mobyTextures, tieTextures,
                 DiscBytes.i32(index, 0x60), decompressedSize, ratchetSequences, boundaries);
+    }
+
+    private static List<Rac1GadgetEntry> gadgets(byte[] index) throws DiscFormatException {
+        int count = DiscBytes.i32(index, 0x80);
+        int offset = DiscBytes.i32(index, 0x84);
+        List<Rac1GadgetEntry> entries = new ArrayList<>();
+        if (count <= 0 || offset <= 0) {
+            return entries;
+        }
+        if (count > 1000 || !DiscBytes.inBounds(index, offset, count * Rac1GadgetEntry.SIZE)) {
+            throw new DiscFormatException("The table of the gadgets of the core index points "
+                    + "outside of it.");
+        }
+        for (int entry = 0; entry < count; entry++) {
+            int at = offset + entry * Rac1GadgetEntry.SIZE;
+            entries.add(new Rac1GadgetEntry(DiscBytes.i32(index, at), DiscBytes.i32(index, at + 4),
+                    DiscBytes.i32(index, at + 8)));
+        }
+        return entries;
     }
 
     private static void add(TreeSet<Integer> boundaries, int offset) {
@@ -211,6 +234,30 @@ public final class Rac1CoreIndex {
      */
     public List<Rac1ClassEntry> tieClasses() {
         return tieClasses;
+    }
+
+    /**
+     * The entry of the table of the gadgets with the given number.
+     *
+     * @param classNumber the number of the class of the gadget
+     * @return the entry, or {@code null} when the level has no such gadget
+     */
+    public Rac1GadgetEntry gadget(int classNumber) {
+        for (Rac1GadgetEntry entry : gadgets) {
+            if (entry.classNumber() == classNumber) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The entries of the table of the gadgets of the level.
+     *
+     * @return the entries
+     */
+    public List<Rac1GadgetEntry> gadgets() {
+        return gadgets;
     }
 
     /**

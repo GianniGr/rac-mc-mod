@@ -269,8 +269,21 @@ public final class MobySequenceReader {
             }
 
             if (!times.isEmpty() && times.get(times.size() - 1) == tick) {
+                // The key has the same time as the key before it, so it is dropped. The records
+                // of the channels belong to the keys, so the records of the dropped key are
+                // dropped as well and the numbers of the keys of the records that follow are
+                // made smaller by one.
                 times.remove(times.size() - 1);
                 rotations.remove(rotations.size() - 1);
+                dropLast(translationKeys, translations);
+                dropLast(translationJoints, translations);
+                dropLast(translationValues, translations * 3);
+                dropLast(scaleKeys, scales);
+                dropLast(scaleJoints, scales);
+                dropLast(scaleValues, scales * 3);
+                dropLast(scaleInherited, scales);
+                shiftKeys(translationKeys, key);
+                shiftKeys(scaleKeys, key);
             }
             rotationArray[key] = rotation;
             times.add(tick);
@@ -327,6 +340,32 @@ public final class MobySequenceReader {
         return new Keys(allTimes, loop, allRotations, allTranslationKeys, allTranslationJoints,
                 allTranslationValues, allScaleKeys, allScaleJoints, allScaleValues,
                 allScaleInherited);
+    }
+
+    /**
+     * Drops the last records of a list of the records of a channel.
+     *
+     * @param records the records
+     * @param count the number of the records that are dropped
+     */
+    private static void dropLast(List<?> records, int count) {
+        for (int index = 0; index < count && !records.isEmpty(); index++) {
+            records.remove(records.size() - 1);
+        }
+    }
+
+    /**
+     * Makes the numbers of the keys of the records that follow a dropped key smaller by one.
+     *
+     * @param records the records with their key
+     * @param key the number of the dropped key
+     */
+    private static void shiftKeys(List<Integer> records, int key) {
+        for (int index = 0; index < records.size(); index++) {
+            if (records.get(index) > key) {
+                records.set(index, records.get(index) - 1);
+            }
+        }
     }
 
     private static int readShort(byte[] data, int offset) {

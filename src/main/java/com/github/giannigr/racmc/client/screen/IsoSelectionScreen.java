@@ -1,16 +1,13 @@
 package com.github.giannigr.racmc.client.screen;
 
 import com.github.giannigr.racmc.RacMcMod;
-import com.github.giannigr.racmc.asset.Rac1AnimatedAsset;
-import com.github.giannigr.racmc.asset.Rac1Animation;
-import com.github.giannigr.racmc.asset.Rac1AnimationEvaluator;
-import com.github.giannigr.racmc.asset.Rac1StaticAsset;
+import com.github.giannigr.racmc.cache.Rac1CacheContent;
+import com.github.giannigr.racmc.client.Rac1BlasterDemo;
 import com.github.giannigr.racmc.cache.Rac1CacheState;
 import com.github.giannigr.racmc.client.RacMcClient;
-import com.github.giannigr.racmc.client.render.Rac1MeshRenderer;
+import com.github.giannigr.racmc.client.render.Rac1AssetPreview;
 import com.github.giannigr.racmc.iso.IsoValidationResult;
 import com.github.giannigr.racmc.iso.Rac1MediaManager;
-import com.mojang.blaze3d.vertex.PoseStack;
 import java.awt.Frame;
 import java.awt.GraphicsEnvironment;
 import java.io.File;
@@ -60,11 +57,11 @@ public class IsoSelectionScreen extends Screen {
     private Button pickButton;
     private Button retryButton;
 
-    /** The textures of the assets of the game, when they were registered. */
-    private ResourceLocation[] staticTextures;
+    /** The pose of the demo of the Blaster. */
+    private final Rac1BlasterDemo demo = new Rac1BlasterDemo();
 
-    /** The textures of the animated asset of the game, when they were registered. */
-    private ResourceLocation[] animatedTextures;
+    /** The drawing of the assets of the game. */
+    private final Rac1AssetPreview preview = new Rac1AssetPreview();
 
     /** The moment of the animation of the preview, in seconds. */
     private float previewTime;
@@ -209,7 +206,18 @@ public class IsoSelectionScreen extends Screen {
             RacMcMod.LOGGER.info("The disc image picker refused to close.");
             return;
         }
-        super.onClose();
+        // The screen is left for the main menu, so that the game is never left without a screen.
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(new TitleScreen());
+        }
+    }
+
+    @Override
+    public void removed() {
+        // The textures of the preview are images in the memory of the texture manager of the game,
+        // so they have to be released when the screen is closed.
+        this.preview.release();
+        super.removed();
     }
 
     /**
@@ -361,64 +369,28 @@ public class IsoSelectionScreen extends Screen {
     /**
      * Draws the assets of the game, so that the player can see that they were converted.
      *
-     * <p>The preview is only drawn when the cache holds the assets. A failure of the drawing is
-     * logged and ignored, because the screen has to stay usable.
+     * <p>The preview shows the hero with his Blaster in his hand, the same pose as the demo of the
+     * Blaster. A failure of the drawing is reported once by the preview and the screen stays
+     * usable.
      */
     private void drawPreview(GuiGraphics graphics, float partialTick) {
         if (RacMcClient.assets().state() != Rac1CacheState.READY) {
             return;
         }
-        try {
-            Optional<Rac1StaticAsset> staticAsset = RacMcClient.staticAsset();
-            Optional<Rac1AnimatedAsset> animatedAsset = RacMcClient.animatedAsset();
-            if (staticAsset.isEmpty() || animatedAsset.isEmpty()) {
-                return;
-            }
-            if (this.staticTextures == null) {
-                this.staticTextures = RacMcClient.registerTextures(staticAsset.get());
-                this.animatedTextures = RacMcClient.registerTextures(animatedAsset.get());
-            }
-            this.previewTime += partialTick / 20.0f;
-            PoseStack pose = graphics.pose();
-            pose.pushPose();
-            pose.translate(this.width / 2.0f, this.height / 2.0f + 40.0f, 0.0f);
-            pose.scale(40.0f, 40.0f, 40.0f);
-            pose.mulPose(com.mojang.math.Axis.YP.rotationDegrees(
-                    (this.previewTime * 20.0f) % 360.0f));
-            net.minecraft.client.renderer.MultiBufferSource.BufferSource buffers =
-                    Minecraft.getInstance().renderBuffers().bufferSource();
-            Rac1MeshRenderer.render(pose, buffers, staticAsset.get().mesh(), this.staticTextures);
-            pose.popPose();
-
-            pose.pushPose();
-            pose.translate(this.width / 4.0f, this.height / 2.0f + 40.0f, 0.0f);
-            pose.scale(40.0f, 40.0f, 40.0f);
-            drawAnimated(pose, buffers, animatedAsset.get());
-            pose.popPose();
-        } catch (RuntimeException | LinkageError exception) {
-            RacMcMod.LOGGER.warn("The preview of the assets could not be drawn.", exception);
-        }
-    }
-
-    /**
-     * Draws the animated asset of the game at the current moment of its first sequence.
-     */
-    private void drawAnimated(PoseStack pose,
-                              net.minecraft.client.renderer.MultiBufferSource.BufferSource buffers,
-                              Rac1AnimatedAsset asset) {
-        if (asset.animations().length == 0) {
+        Optional<Rac1CacheContent> content = RacMcClient.assets().content();
+        if (content.isEmpty()) {
             return;
         }
-        Rac1Animation animation = asset.animations()[0];
-        float[] times = animation.times();
-        float duration = times.length > 0 ? times[times.length - 1] : 0.0f;
-        float time = duration > 0.0f ? this.previewTime % duration : 0.0f;
-        float[] matrices = Rac1AnimationEvaluator.evaluate(asset.skeleton(), animation, time, 1.0f);
-        float[] positions = new float[asset.mesh().positions().length];
-        float[] normals = new float[asset.mesh().normals().length];
-        Rac1AnimationEvaluator.pose(asset.mesh(), matrices, positions, normals);
-        Rac1MeshRenderer.render(pose, buffers, asset.mesh(), positions, normals,
-                this.animatedTextures);
+        this.previewTime += partialTick / 20.0f;
+        this.demo.update(content.get(), this.previewTime);
+        graphics.pose().pushPose();
+        try {
+            graphics.pose().translate(this.width / 2.0f, this.height - 80.0f, 0.0f);
+            graphics.pose().scale(45.0f, 45.0f, 45.0f);
+            this.preview.draw(graphics, content.get(), this.demo, (this.previewTime * 20.0f) % 360.0f);
+        } finally {
+            graphics.pose().popPose();
+        }
     }
 
     /**

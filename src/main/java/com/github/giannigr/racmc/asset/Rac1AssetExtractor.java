@@ -1,9 +1,11 @@
 package com.github.giannigr.racmc.asset;
 
+import com.github.giannigr.racmc.disc.DiscFormatException;
 import com.github.giannigr.racmc.disc.Rac1ClassEntry;
 import com.github.giannigr.racmc.disc.Rac1CoreIndex;
 import com.github.giannigr.racmc.disc.Rac1LevelAssets;
 import com.github.giannigr.racmc.disc.Rac1TextureEntry;
+import com.github.giannigr.racmc.wad.WadFormatException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,6 +30,16 @@ public final class Rac1AssetExtractor {
 
     /** The number of the class of the character that is used as the animated asset. */
     public static final int ANIMATED_CLASS = 0;
+
+    /**
+     * The number of the class of the Blaster, the weapon of the hero.
+     *
+     * <p>The Blaster is one of the gadgets of the game. The list of the gadgets and the number of
+     * every one of them were measured by the ReRAC project (ISC), see
+     * {@code docs/plan/gadgets.md} of that project: the item 15 of the hand slot is the Blaster
+     * and it has the class 168.
+     */
+    public static final int BLASTER_CLASS = 168;
 
     /**
      * The number of the units of the game in a block of the game of blocks.
@@ -137,6 +149,117 @@ public final class Rac1AssetExtractor {
     }
 
     /**
+     * Reads the class of a gadget of the level.
+     *
+     * <p>The gadgets of the game - the weapons and the tools of the hero - are not part of the
+     * core data like the other classes. Every gadget is a compressed stream of its own, and the
+     * table of the gadgets of the level names the stream of every gadget. The result is the same
+     * class blob as the one of the other classes, so the same reader is used for it.
+     *
+     * @param assets the data of the level
+     * @param classNumber the number of the class of the gadget
+     * @return the asset
+     * @throws AssetFormatException when the gadget cannot be read
+     */
+    public static Rac1AnimatedAsset readGadgetAsset(Rac1LevelAssets assets, int classNumber)
+            throws AssetFormatException {
+        Rac1CoreIndex index = assets.coreIndex();
+        byte[] blob;
+        try {
+            blob = assets.gadgetClass(classNumber);
+        } catch (DiscFormatException | WadFormatException exception) {
+            throw new AssetFormatException(exception.getMessage(), exception);
+        }
+        MobyClassReader reader = MobyClassReader.of(blob);
+        MobyClassReader.Mesh mesh = reader.readMesh();
+        MobyClassReader.Skeleton skeleton = reader.readSkeleton();
+
+        float classScale = reader.scale();
+        Rac1CoordinateTransform transform = new Rac1CoordinateTransform(UNIT_SCALE);
+        int vertexCount = mesh.vertexCount();
+        float[] positions = new float[vertexCount * 3];
+        float[] normals = new float[vertexCount * 3];
+        float[] uvs = new float[vertexCount * 2];
+        for (int vertex = 0; vertex < vertexCount; vertex++) {
+            float[] point = transform.convert(mesh.positions()[vertex * 3],
+                    mesh.positions()[vertex * 3 + 1], mesh.positions()[vertex * 3 + 2]);
+            positions[vertex * 3] = point[0];
+            positions[vertex * 3 + 1] = point[1];
+            positions[vertex * 3 + 2] = point[2];
+            float[] normal = transform.convertDirection(mesh.normals()[vertex * 3],
+                    mesh.normals()[vertex * 3 + 1], mesh.normals()[vertex * 3 + 2]);
+            normals[vertex * 3] = normal[0];
+            normals[vertex * 3 + 1] = normal[1];
+            normals[vertex * 3 + 2] = normal[2];
+            uvs[vertex * 2] = mesh.uvs()[vertex * 2];
+            uvs[vertex * 2 + 1] = mesh.uvs()[vertex * 2 + 1];
+        }
+
+        Rac1Skeleton converted = convert(skeleton, classScale * UNIT_SCALE);
+        List<Rac1Animation> animations = new ArrayList<>();
+        for (int slot = 0; slot < reader.sequenceCount(); slot++) {
+            int offset = reader.sequenceOffset(slot);
+            if (offset <= 0) {
+                continue;
+            }
+            MobySequenceReader.Keys keys = reader.readSequence(offset);
+            animations.add(convert("sequence_" + slot, keys, reader.jointCount(),
+                    classScale * UNIT_SCALE));
+        }
+
+        // The textures of a gadget are named by the entry of the class table of the level, which
+        // holds the textures but no geometry for the gadgets.
+        Rac1ClassEntry entry = index.mobyClass(classNumber);
+        if (entry == null) {
+            throw new AssetFormatException("The level has no entry for the gadget of the class "
+                    + classNumber + ", so its textures are unknown.");
+        }
+        Rac1Texture[] textures = textures(assets, entry, index.mobyTextures(), entry.textureCount());
+        Rac1SkinnedMesh skinned = new Rac1SkinnedMesh(positions, normals, uvs, mesh.indices(),
+                mesh.materials(), mesh.joints(), mesh.weights());
+        return new Rac1AnimatedAsset(classNumber, "gadget_" + classNumber, skinned, converted,
+                animations.toArray(new Rac1Animation[0]), textures);
+    }
+
+    /**
+     * Reads the chain of joints the hero holds his items on.
+     *
+     * <p>The first list of the joint lists of the hero is the chain of the hand. The game places
+     * the items of the hand on the last joint of that chain, which is the joint 56 for the
+     * OmniWrench. The chain itself is read out of the class of the hero, so the mod does not have
+     * to know the number of the joint.
+     *
+     * @param assets the data of the level
+     * @return the joints of the chain, from the root of the skeleton to the joint of the hand
+     * @throws AssetFormatException when the chain cannot be read
+     */
+    public static int[] readHandChain(Rac1LevelAssets assets) throws AssetFormatException {
+        Rac1CoreIndex index = assets.coreIndex();
+        Rac1ClassEntry entry = index.mobyClass(ANIMATED_CLASS);
+        if (entry == null || entry.offset() <= 0) {
+            throw new AssetFormatException("The level has no entry for the class of the hero.");
+        }
+        byte[] blob;
+        try {
+            blob = assets.classBlob(entry.offset());
+        } catch (DiscFormatException exception) {
+            throw new AssetFormatException(exception.getMessage(), exception);
+        }
+        MobyClassReader reader = MobyClassReader.of(blob);
+        List<MobyClassReader.JointList> lists = reader.readJointLists();
+        if (lists.isEmpty() || lists.get(0).chain().length == 0) {
+            throw new AssetFormatException("The class of the hero has no chain of joints for the "
+                    + "items of the hand.");
+        }
+        byte[] chain = lists.get(0).chain();
+        int[] joints = new int[chain.length];
+        for (int place = 0; place < chain.length; place++) {
+            joints[place] = chain[place] & 0xFF;
+        }
+        return joints;
+    }
+
+    /**
      * Reads the animation sequences of a class.
      *
      * <p>A class holds its sequences in its own slots. The hero of the game has no sequences of
@@ -219,17 +342,52 @@ public final class Rac1AssetExtractor {
     private static Rac1Skeleton convert(MobyClassReader.Skeleton skeleton, float scale) {
         int joints = skeleton.jointCount();
         float[] inverseBind = new float[joints * 16];
+        int[] parents = skeleton.parents();
+        float[] places = new float[joints * 3];
         for (int joint = 0; joint < joints; joint++) {
+            // The place of the joint in the model, built out of the rest translations of its
+            // chain.
+            float x = skeleton.restTranslations()[joint * 3];
+            float y = skeleton.restTranslations()[joint * 3 + 1];
+            float z = skeleton.restTranslations()[joint * 3 + 2];
+            int parent = parents[joint];
+            if (parent >= 0 && parent < joint) {
+                x += places[parent * 3];
+                y += places[parent * 3 + 1];
+                z += places[parent * 3 + 2];
+            }
+            places[joint * 3] = x;
+            places[joint * 3 + 1] = y;
+            places[joint * 3 + 2] = z;
+
             float[] source = new float[16];
             System.arraycopy(skeleton.inverseBind(), joint * 16, source, 0, 16);
-            source[12] *= scale;
-            source[13] *= scale;
-            source[14] *= scale;
+            if (degenerate(source)) {
+                // The bind pose of the joint collapsed to a point, so its inverse bind matrix
+                // cannot be used. The rest pose of the joint is used instead, so that the
+                // vertices that follow it keep the place the model gave them.
+                for (int index = 0; index < 16; index++) {
+                    source[index] = 0.0f;
+                }
+                source[0] = 1.0f;
+                source[5] = 1.0f;
+                source[10] = 1.0f;
+                source[12] = -x * scale;
+                source[13] = -y * scale;
+                source[14] = -z * scale;
+                source[15] = 1.0f;
+            } else {
+                source[12] *= scale;
+                source[13] *= scale;
+                source[14] *= scale;
+            }
             float[] converted = change(source);
             System.arraycopy(converted, 0, inverseBind, joint * 16, 16);
         }
         float[] rest = new float[joints * 3];
         for (int joint = 0; joint < joints; joint++) {
+            // The rest translation of a joint is the offset to its parent, not the place of the
+            // joint in the model.
             float x = skeleton.restTranslations()[joint * 3] * scale;
             float y = skeleton.restTranslations()[joint * 3 + 1] * scale;
             float z = skeleton.restTranslations()[joint * 3 + 2] * scale;
@@ -237,7 +395,34 @@ public final class Rac1AssetExtractor {
             rest[joint * 3 + 1] = z;
             rest[joint * 3 + 2] = -y;
         }
-        return new Rac1Skeleton(inverseBind, skeleton.parents(), rest);
+        return new Rac1Skeleton(inverseBind, parents, rest);
+    }
+
+    /**
+     * Whether the matrix of a joint is degenerate.
+     *
+     * <p>A matrix is degenerate when it holds a number that is not finite or when its axes are
+     * much longer or much shorter than they should be.
+     *
+     * @param matrix the sixteen floats of the matrix
+     * @return {@code true} when the matrix cannot be used
+     */
+    static boolean degenerate(float[] matrix) {
+        for (int index = 0; index < 16; index++) {
+            if (!Float.isFinite(matrix[index])) {
+                return true;
+            }
+        }
+        for (int column = 0; column < 3; column++) {
+            float x = matrix[column * 4];
+            float y = matrix[column * 4 + 1];
+            float z = matrix[column * 4 + 2];
+            float length = (float) Math.sqrt(x * x + y * y + z * z);
+            if (length > 1.0e4f || length < 1.0e-4f) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

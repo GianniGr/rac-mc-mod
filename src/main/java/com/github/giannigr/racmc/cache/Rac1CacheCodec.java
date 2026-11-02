@@ -1,9 +1,12 @@
 package com.github.giannigr.racmc.cache;
 
 import com.github.giannigr.racmc.asset.Rac1AnimatedAsset;
+import com.github.giannigr.racmc.asset.Rac1Animation;
+import com.github.giannigr.racmc.asset.Rac1Mesh;
+import com.github.giannigr.racmc.asset.Rac1SkinnedMesh;
+import com.github.giannigr.racmc.asset.Rac1Skeleton;
 import com.github.giannigr.racmc.asset.Rac1StaticAsset;
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
+import com.github.giannigr.racmc.asset.Rac1Texture;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.CRC32;
@@ -55,6 +58,9 @@ public final class Rac1CacheCodec {
     /** The kind of the section that holds the animated asset. */
     public static final int SECTION_ANIMATED = 2;
 
+    /** The kind of the section that holds the weapon. */
+    public static final int SECTION_BLASTER = 3;
+
     private Rac1CacheCodec() {
         throw new UnsupportedOperationException("Utility class");
     }
@@ -66,9 +72,7 @@ public final class Rac1CacheCodec {
      * @return the checksum
      */
     public static int checksum(byte[] data) {
-        CRC32 crc = new CRC32();
-        crc.update(data);
-        return (int) crc.getValue();
+        return checksum(data, 0, data.length);
     }
 
     /**
@@ -97,14 +101,18 @@ public final class Rac1CacheCodec {
         byte[] discKey = content.discKey().getBytes(StandardCharsets.UTF_8);
         byte[] staticSection = writeStatic(content);
         byte[] animatedSection = writeAnimated(content);
+        byte[] blasterSection = writeBlaster(content);
 
-        int sectionCount = 2;
+        int sectionCount = 3;
         int tableLength = sectionCount * SECTION_ENTRY_SIZE;
         int tableOffset = HEADER_SIZE;
         int keyOffset = tableOffset + tableLength;
         int staticOffset = keyOffset + discKey.length;
+        int animatedOffset = staticOffset + staticSection.length;
+        int blasterOffset = animatedOffset + animatedSection.length;
         int payloadOffset = keyOffset;
-        int payloadLength = discKey.length + staticSection.length + animatedSection.length;
+        int payloadLength = discKey.length + staticSection.length + animatedSection.length
+                + blasterSection.length;
 
         byte[] file = new byte[payloadOffset + payloadLength];
         System.arraycopy(MAGIC, 0, file, 0, 4);
@@ -119,14 +127,16 @@ public final class Rac1CacheCodec {
         writeLong(file, 32, payloadLength);
         System.arraycopy(discKey, 0, file, keyOffset, discKey.length);
         System.arraycopy(staticSection, 0, file, staticOffset, staticSection.length);
-        System.arraycopy(animatedSection, 0, file, staticOffset + staticSection.length,
-                animatedSection.length);
+        System.arraycopy(animatedSection, 0, file, animatedOffset, animatedSection.length);
+        System.arraycopy(blasterSection, 0, file, blasterOffset, blasterSection.length);
         writeInt(file, 40, checksum(file, payloadOffset, payloadLength));
         writeInt(file, 44, checksum(file, 0, 44));
 
         writeSection(file, tableOffset, SECTION_STATIC, staticOffset, staticSection);
-        writeSection(file, tableOffset + SECTION_ENTRY_SIZE, SECTION_ANIMATED,
-                staticOffset + staticSection.length, animatedSection);
+        writeSection(file, tableOffset + SECTION_ENTRY_SIZE, SECTION_ANIMATED, animatedOffset,
+                animatedSection);
+        writeSection(file, tableOffset + 2 * SECTION_ENTRY_SIZE, SECTION_BLASTER, blasterOffset,
+                blasterSection);
         return file;
     }
 
@@ -171,7 +181,7 @@ public final class Rac1CacheCodec {
         int tableOffset = readInt(file, 24);
         int tableLength = readInt(file, 28);
         long payloadLength = readLong(file, 32);
-        if (keyLength < 0 || sectionCount < 0 || sectionCount > 16
+        if (keyLength < 0 || keyLength > 4096 || sectionCount < 0 || sectionCount > 16
                 || tableOffset != HEADER_SIZE || tableLength != sectionCount * SECTION_ENTRY_SIZE
                 || payloadLength < 0
                 || (long) tableOffset + tableLength + payloadLength > file.length) {
@@ -191,6 +201,7 @@ public final class Rac1CacheCodec {
         }
         byte[] staticSection = null;
         byte[] animatedSection = null;
+        byte[] blasterSection = null;
         for (int index = 0; index < sectionCount; index++) {
             int entry = tableOffset + index * SECTION_ENTRY_SIZE;
             int kind = readInt(file, entry);
@@ -209,13 +220,16 @@ public final class Rac1CacheCodec {
                 staticSection = section;
             } else if (kind == SECTION_ANIMATED) {
                 animatedSection = section;
+            } else if (kind == SECTION_BLASTER) {
+                blasterSection = section;
             }
         }
-        if (staticSection == null || animatedSection == null) {
-            throw new IOException("The cache file does not hold both assets.");
+        if (staticSection == null || animatedSection == null || blasterSection == null) {
+            throw new IOException("The cache file does not hold all of the assets.");
         }
+        int handJoint = readInt(blasterSection, 0);
         Rac1CacheContent content = new Rac1CacheContent(discKey, readStatic(staticSection),
-                readAnimated(animatedSection));
+                readAnimated(animatedSection), readBlaster(blasterSection), handJoint);
         return content;
     }
 
@@ -229,232 +243,281 @@ public final class Rac1CacheCodec {
     }
 
     private static byte[] writeStatic(Rac1CacheContent content) throws IOException {
-        com.github.giannigr.racmc.asset.Rac1StaticAsset asset = content.staticAsset();
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        DataOutputStream out = new DataOutputStream(bytes);
-        com.github.giannigr.racmc.asset.Rac1Mesh mesh = asset.mesh();
-        out.writeInt(mesh.vertexCount());
-        out.writeInt(mesh.triangleCount());
-        out.writeInt(asset.textures().length);
-        writeFloats(out, mesh.positions());
-        writeFloats(out, mesh.normals());
-        writeFloats(out, mesh.uvs());
-        writeInts(out, mesh.indices());
-        writeInts(out, mesh.materials());
-        writeTextures(out, asset.textures());
-        out.flush();
-        return bytes.toByteArray();
+        Rac1Bytes.Writer out = new Rac1Bytes.Writer();
+        Rac1StaticAsset asset = content.staticAsset();
+        Rac1Mesh mesh = asset.mesh();
+        byte[] name = asset.name().getBytes(StandardCharsets.UTF_8);
+        out.putInt(asset.classNumber());
+        out.putInt(name.length);
+        out.putBytes(name);
+        out.putInt(mesh.vertexCount());
+        out.putInt(mesh.triangleCount());
+        out.putInt(asset.textures().length);
+        putFloats(out, mesh.positions());
+        putFloats(out, mesh.normals());
+        putFloats(out, mesh.uvs());
+        putInts(out, mesh.indices());
+        putInts(out, mesh.materials());
+        putTextures(out, asset.textures());
+        return out.toByteArray();
     }
 
     private static Rac1StaticAsset readStatic(byte[] section) throws IOException {
-        java.io.DataInputStream in = new java.io.DataInputStream(
-                new java.io.ByteArrayInputStream(section));
-        int vertexCount = in.readInt();
-        int triangleCount = in.readInt();
-        int textureCount = in.readInt();
+        Rac1Bytes.Reader in = new Rac1Bytes.Reader(section);
+        int classNumber = in.getInt();
+        int nameLength = in.getInt();
+        if (nameLength < 0 || nameLength > 1024) {
+            throw new IOException("The name of an asset of the cache file is implausible.");
+        }
+        byte[] name = new byte[nameLength];
+        in.getBytes(name);
+        int vertexCount = in.getInt();
+        int triangleCount = in.getInt();
+        int textureCount = in.getInt();
         if (vertexCount < 0 || triangleCount < 0 || textureCount < 0 || vertexCount > 1 << 20
                 || triangleCount > 1 << 20 || textureCount > 64) {
             throw new IOException("The static asset of the cache file has implausible sizes.");
         }
-        float[] positions = readFloats(in, vertexCount * 3);
-        float[] normals = readFloats(in, vertexCount * 3);
-        float[] uvs = readFloats(in, vertexCount * 2);
-        int[] indices = readInts(in, triangleCount * 3);
-        int[] materials = readInts(in, triangleCount);
-        com.github.giannigr.racmc.asset.Rac1Texture[] textures = readTextures(in, textureCount);
-        com.github.giannigr.racmc.asset.Rac1Mesh mesh = new com.github.giannigr.racmc.asset.Rac1Mesh(
-                positions, normals, uvs, indices, materials);
-        return new Rac1StaticAsset(0, "static", mesh, textures);
+        float[] positions = getFloats(in, vertexCount * 3);
+        float[] normals = getFloats(in, vertexCount * 3);
+        float[] uvs = getFloats(in, vertexCount * 2);
+        int[] indices = getInts(in, triangleCount * 3);
+        int[] materials = getInts(in, triangleCount);
+        Rac1Texture[] textures = getTextures(in, textureCount);
+        Rac1Mesh mesh = new Rac1Mesh(positions, normals, uvs, indices, materials);
+        return new Rac1StaticAsset(classNumber, new String(name, StandardCharsets.UTF_8), mesh,
+                textures);
     }
 
     private static byte[] writeAnimated(Rac1CacheContent content) throws IOException {
-        com.github.giannigr.racmc.asset.Rac1AnimatedAsset asset = content.animatedAsset();
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        DataOutputStream out = new DataOutputStream(bytes);
-        com.github.giannigr.racmc.asset.Rac1SkinnedMesh mesh = asset.mesh();
-        com.github.giannigr.racmc.asset.Rac1Skeleton skeleton = asset.skeleton();
-        out.writeInt(mesh.vertexCount());
-        out.writeInt(mesh.triangleCount());
-        out.writeInt(skeleton.jointCount());
-        out.writeInt(asset.animations().length);
-        out.writeInt(asset.textures().length);
-        writeFloats(out, mesh.positions());
-        writeFloats(out, mesh.normals());
-        writeFloats(out, mesh.uvs());
-        writeInts(out, mesh.indices());
-        writeInts(out, mesh.materials());
-        writeInts(out, mesh.joints());
-        writeFloats(out, mesh.weights());
-        writeFloats(out, skeleton.inverseBind());
-        writeFloats(out, skeleton.restTranslations());
-        writeInts(out, skeleton.parents());
-        for (com.github.giannigr.racmc.asset.Rac1Animation animation : asset.animations()) {
-            byte[] name = animation.name().getBytes(StandardCharsets.UTF_8);
-            out.writeInt(name.length);
-            out.write(name);
-            out.writeInt(animation.keyCount());
-            out.writeBoolean(animation.loop());
-            writeFloats(out, animation.times());
-            writeFloats(out, animation.rotations());
+        return writeAnimatedAsset(content.animatedAsset());
+    }
+
+    private static byte[] writeBlaster(Rac1CacheContent content) throws IOException {
+        Rac1Bytes.Writer out = new Rac1Bytes.Writer();
+        out.putInt(content.handJoint());
+        out.putBytes(writeAnimatedAsset(content.blaster()));
+        return out.toByteArray();
+    }
+
+    private static byte[] writeAnimatedAsset(Rac1AnimatedAsset asset) throws IOException {
+        Rac1Bytes.Writer out = new Rac1Bytes.Writer();
+        Rac1SkinnedMesh mesh = asset.mesh();
+        Rac1Skeleton skeleton = asset.skeleton();
+        byte[] name = asset.name().getBytes(StandardCharsets.UTF_8);
+        out.putInt(asset.classNumber());
+        out.putInt(name.length);
+        out.putBytes(name);
+        out.putInt(mesh.vertexCount());
+        out.putInt(mesh.triangleCount());
+        out.putInt(skeleton.jointCount());
+        out.putInt(asset.animations().length);
+        out.putInt(asset.textures().length);
+        putFloats(out, mesh.positions());
+        putFloats(out, mesh.normals());
+        putFloats(out, mesh.uvs());
+        putInts(out, mesh.indices());
+        putInts(out, mesh.materials());
+        putInts(out, mesh.joints());
+        putFloats(out, mesh.weights());
+        putFloats(out, skeleton.inverseBind());
+        putFloats(out, skeleton.restTranslations());
+        putInts(out, skeleton.parents());
+        for (Rac1Animation animation : asset.animations()) {
+            byte[] sequenceName = animation.name().getBytes(StandardCharsets.UTF_8);
+            out.putInt(sequenceName.length);
+            out.putBytes(sequenceName);
+            out.putInt(animation.keyCount());
+            out.putBoolean(animation.loop());
+            putFloats(out, animation.times());
+            putFloats(out, animation.rotations());
             int translationCount = animation.translationKeys().length;
-            out.writeInt(translationCount);
+            out.putInt(translationCount);
             for (int index = 0; index < translationCount; index++) {
-                out.writeInt(animation.translationKeys()[index]);
-                out.writeInt(animation.translationJoints()[index]);
-                writeFloats(out, new float[] { animation.translationValues()[index * 3],
+                out.putInt(animation.translationKeys()[index]);
+                out.putInt(animation.translationJoints()[index]);
+                putFloats(out, new float[] { animation.translationValues()[index * 3],
                         animation.translationValues()[index * 3 + 1],
                         animation.translationValues()[index * 3 + 2] });
             }
             int scaleCount = animation.scaleKeys().length;
-            out.writeInt(scaleCount);
+            out.putInt(scaleCount);
             for (int index = 0; index < scaleCount; index++) {
-                out.writeInt(animation.scaleKeys()[index]);
-                out.writeInt(animation.scaleJoints()[index]);
-                writeFloats(out, new float[] { animation.scaleValues()[index * 3],
+                out.putInt(animation.scaleKeys()[index]);
+                out.putInt(animation.scaleJoints()[index]);
+                putFloats(out, new float[] { animation.scaleValues()[index * 3],
                         animation.scaleValues()[index * 3 + 1],
                         animation.scaleValues()[index * 3 + 2] });
-                out.writeBoolean(animation.scaleInherited()[index]);
+                out.putBoolean(animation.scaleInherited()[index]);
             }
         }
-        writeTextures(out, asset.textures());
-        out.flush();
-        return bytes.toByteArray();
+        putTextures(out, asset.textures());
+        return out.toByteArray();
+    }
+
+    private static Rac1AnimatedAsset readBlaster(byte[] section) throws IOException {
+        if (section.length < 4) {
+            throw new IOException("The weapon of the cache file is damaged.");
+        }
+        byte[] asset = new byte[section.length - 4];
+        System.arraycopy(section, 4, asset, 0, asset.length);
+        return readAnimatedAsset(asset);
     }
 
     private static Rac1AnimatedAsset readAnimated(byte[] section) throws IOException {
-        java.io.DataInputStream in = new java.io.DataInputStream(
-                new java.io.ByteArrayInputStream(section));
-        int vertexCount = in.readInt();
-        int triangleCount = in.readInt();
-        int jointCount = in.readInt();
-        int sequenceCount = in.readInt();
-        int textureCount = in.readInt();
+        return readAnimatedAsset(section);
+    }
+
+    private static Rac1AnimatedAsset readAnimatedAsset(byte[] section) throws IOException {
+        Rac1Bytes.Reader in = new Rac1Bytes.Reader(section);
+        int classNumber = in.getInt();
+        int assetNameLength = in.getInt();
+        if (assetNameLength < 0 || assetNameLength > 1024) {
+            throw new IOException("The name of an asset of the cache file is implausible.");
+        }
+        byte[] assetName = new byte[assetNameLength];
+        in.getBytes(assetName);
+        int vertexCount = in.getInt();
+        int triangleCount = in.getInt();
+        int jointCount = in.getInt();
+        int sequenceCount = in.getInt();
+        int textureCount = in.getInt();
         if (vertexCount < 0 || triangleCount < 0 || jointCount < 0 || sequenceCount < 0
                 || textureCount < 0 || vertexCount > 1 << 20 || triangleCount > 1 << 20
                 || jointCount > 4096 || sequenceCount > 4096 || textureCount > 64) {
             throw new IOException("The animated asset of the cache file has implausible sizes.");
         }
-        float[] positions = readFloats(in, vertexCount * 3);
-        float[] normals = readFloats(in, vertexCount * 3);
-        float[] uvs = readFloats(in, vertexCount * 2);
-        int[] indices = readInts(in, triangleCount * 3);
-        int[] materials = readInts(in, triangleCount);
-        int[] joints = readInts(in, vertexCount * 3);
-        float[] weights = readFloats(in, vertexCount * 3);
-        float[] inverseBind = readFloats(in, jointCount * 16);
-        float[] restTranslations = readFloats(in, jointCount * 3);
-        int[] parents = readInts(in, jointCount);
-        com.github.giannigr.racmc.asset.Rac1Animation[] animations =
-                new com.github.giannigr.racmc.asset.Rac1Animation[sequenceCount];
+        float[] positions = getFloats(in, vertexCount * 3);
+        float[] normals = getFloats(in, vertexCount * 3);
+        float[] uvs = getFloats(in, vertexCount * 2);
+        int[] indices = getInts(in, triangleCount * 3);
+        int[] materials = getInts(in, triangleCount);
+        int[] joints = getInts(in, vertexCount * 3);
+        float[] weights = getFloats(in, vertexCount * 3);
+        float[] inverseBind = getFloats(in, jointCount * 16);
+        float[] restTranslations = getFloats(in, jointCount * 3);
+        int[] parents = getInts(in, jointCount);
+        Rac1Animation[] animations = new Rac1Animation[sequenceCount];
         for (int index = 0; index < sequenceCount; index++) {
-            int nameLength = in.readInt();
+            int nameLength = in.getInt();
             if (nameLength < 0 || nameLength > 1024) {
                 throw new IOException("The name of an animation of the cache file is implausible.");
             }
             byte[] name = new byte[nameLength];
-            in.readFully(name);
-            int keyCount = in.readInt();
-            boolean loop = in.readBoolean();
+            in.getBytes(name);
+            int keyCount = in.getInt();
+            boolean loop = in.getBoolean();
             if (keyCount < 0 || keyCount > 1 << 16) {
                 throw new IOException("An animation of the cache file has an implausible number of "
                         + "keys.");
             }
-            float[] times = readFloats(in, keyCount);
-            if (keyCount * (long) jointCount * 4 > Integer.MAX_VALUE) {
+            float[] times = getFloats(in, keyCount);
+            if ((long) keyCount * jointCount * 4 > in.remaining()) {
                 throw new IOException("An animation of the cache file has too many keys.");
             }
-            float[] rotations = readFloats(in, keyCount * jointCount * 4);
-            int translationCount = in.readInt();
+            float[] rotations = getFloats(in, keyCount * jointCount * 4);
+            int translationCount = in.getInt();
+            if (translationCount < 0 || translationCount > 1 << 20
+                    || (long) translationCount * 12 > in.remaining()) {
+                throw new IOException("An animation of the cache file has an implausible number of "
+                        + "translations.");
+            }
             int[] translationKeys = new int[translationCount];
             int[] translationJoints = new int[translationCount];
             float[] translationValues = new float[translationCount * 3];
             for (int record = 0; record < translationCount; record++) {
-                translationKeys[record] = in.readInt();
-                translationJoints[record] = in.readInt();
-                translationValues[record * 3] = in.readFloat();
-                translationValues[record * 3 + 1] = in.readFloat();
-                translationValues[record * 3 + 2] = in.readFloat();
+                translationKeys[record] = in.getInt();
+                translationJoints[record] = in.getInt();
+                translationValues[record * 3] = in.getFloat();
+                translationValues[record * 3 + 1] = in.getFloat();
+                translationValues[record * 3 + 2] = in.getFloat();
             }
-            int scaleCount = in.readInt();
+            int scaleCount = in.getInt();
+            if (scaleCount < 0 || scaleCount > 1 << 20
+                    || (long) scaleCount * 13 > in.remaining()) {
+                throw new IOException("An animation of the cache file has an implausible number of "
+                        + "scales.");
+            }
             int[] scaleKeys = new int[scaleCount];
             int[] scaleJoints = new int[scaleCount];
             float[] scaleValues = new float[scaleCount * 3];
             boolean[] scaleInherited = new boolean[scaleCount];
             for (int record = 0; record < scaleCount; record++) {
-                scaleKeys[record] = in.readInt();
-                scaleJoints[record] = in.readInt();
-                scaleValues[record * 3] = in.readFloat();
-                scaleValues[record * 3 + 1] = in.readFloat();
-                scaleValues[record * 3 + 2] = in.readFloat();
-                scaleInherited[record] = in.readBoolean();
+                scaleKeys[record] = in.getInt();
+                scaleJoints[record] = in.getInt();
+                scaleValues[record * 3] = in.getFloat();
+                scaleValues[record * 3 + 1] = in.getFloat();
+                scaleValues[record * 3 + 2] = in.getFloat();
+                scaleInherited[record] = in.getBoolean();
             }
-            animations[index] = new com.github.giannigr.racmc.asset.Rac1Animation(
-                    new String(name, StandardCharsets.UTF_8), times, loop, rotations,
-                    translationKeys, translationJoints, translationValues, scaleKeys, scaleJoints,
-                    scaleValues, scaleInherited);
+            animations[index] = new Rac1Animation(new String(name, StandardCharsets.UTF_8), times,
+                    loop, rotations, translationKeys, translationJoints, translationValues,
+                    scaleKeys, scaleJoints, scaleValues, scaleInherited);
         }
-        com.github.giannigr.racmc.asset.Rac1Texture[] textures = readTextures(in, textureCount);
-        com.github.giannigr.racmc.asset.Rac1SkinnedMesh mesh =
-                new com.github.giannigr.racmc.asset.Rac1SkinnedMesh(positions, normals, uvs,
-                        indices, materials, joints, weights);
-        com.github.giannigr.racmc.asset.Rac1Skeleton skeleton =
-                new com.github.giannigr.racmc.asset.Rac1Skeleton(inverseBind, parents,
-                        restTranslations);
-        return new com.github.giannigr.racmc.asset.Rac1AnimatedAsset(0, "animated", mesh, skeleton,
-                animations, textures);
+        Rac1Texture[] textures = getTextures(in, textureCount);
+        Rac1SkinnedMesh mesh = new Rac1SkinnedMesh(positions, normals, uvs, indices, materials,
+                joints, weights);
+        Rac1Skeleton skeleton = new Rac1Skeleton(inverseBind, parents, restTranslations);
+        return new Rac1AnimatedAsset(classNumber, new String(assetName, StandardCharsets.UTF_8), mesh,
+                skeleton, animations, textures);
     }
 
-    private static void writeTextures(DataOutputStream out,
-                                      com.github.giannigr.racmc.asset.Rac1Texture[] textures)
-            throws IOException {
-        for (com.github.giannigr.racmc.asset.Rac1Texture texture : textures) {
-            out.writeInt(texture.width());
-            out.writeInt(texture.height());
-            out.write(texture.pixels());
+    private static void putTextures(Rac1Bytes.Writer out, Rac1Texture[] textures) {
+        for (Rac1Texture texture : textures) {
+            out.putInt(texture.width());
+            out.putInt(texture.height());
+            out.putBytes(texture.pixels());
         }
     }
 
-    private static com.github.giannigr.racmc.asset.Rac1Texture[] readTextures(
-            java.io.DataInputStream in, int count) throws IOException {
-        com.github.giannigr.racmc.asset.Rac1Texture[] textures =
-                new com.github.giannigr.racmc.asset.Rac1Texture[count];
+    private static Rac1Texture[] getTextures(Rac1Bytes.Reader in, int count) throws IOException {
+        Rac1Texture[] textures = new Rac1Texture[count];
         for (int index = 0; index < count; index++) {
-            int width = in.readInt();
-            int height = in.readInt();
+            int width = in.getInt();
+            int height = in.getInt();
             if (width <= 0 || height <= 0 || width > 4096 || height > 4096) {
                 throw new IOException("A texture of the cache file has an implausible size.");
             }
             byte[] pixels = new byte[width * height * 4];
-            in.readFully(pixels);
-            textures[index] = new com.github.giannigr.racmc.asset.Rac1Texture(width, height, pixels);
+            if (pixels.length > in.remaining()) {
+                throw new IOException("A texture of the cache file does not fit into the file.");
+            }
+            in.getBytes(pixels);
+            textures[index] = new Rac1Texture(width, height, pixels);
         }
         return textures;
     }
 
-    private static void writeFloats(DataOutputStream out, float[] values) throws IOException {
+    private static void putFloats(Rac1Bytes.Writer out, float[] values) {
         for (float value : values) {
-            out.writeFloat(value);
+            out.putFloat(value);
         }
     }
 
-    private static void writeInts(DataOutputStream out, int[] values) throws IOException {
+    private static void putInts(Rac1Bytes.Writer out, int[] values) {
         for (int value : values) {
-            out.writeInt(value);
+            out.putInt(value);
         }
     }
 
-    private static float[] readFloats(java.io.DataInputStream in, int count) throws IOException {
+    private static float[] getFloats(Rac1Bytes.Reader in, int count) throws IOException {
+        if (count < 0 || (long) count * 4 > in.remaining()) {
+            throw new IOException("The cache file does not hold the numbers that were read.");
+        }
         float[] values = new float[count];
         for (int index = 0; index < count; index++) {
-            values[index] = in.readFloat();
+            values[index] = in.getFloat();
         }
         return values;
     }
 
-    private static int[] readInts(java.io.DataInputStream in, int count) throws IOException {
+    private static int[] getInts(Rac1Bytes.Reader in, int count) throws IOException {
+        if (count < 0 || (long) count * 4 > in.remaining()) {
+            throw new IOException("The cache file does not hold the numbers that were read.");
+        }
         int[] values = new int[count];
         for (int index = 0; index < count; index++) {
-            values[index] = in.readInt();
+            values[index] = in.getInt();
         }
         return values;
     }

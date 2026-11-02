@@ -284,7 +284,12 @@ public final class TieClassReader {
     }
 
     private Packet readPacket(int table, int header) throws AssetFormatException {
-        int data = table + readInt(blob, header);
+        int offset = readInt(blob, header);
+        if (offset < 0) {
+            throw new AssetFormatException("A packet of the tie class names an offset that is "
+                    + "before the class.");
+        }
+        long start = (long) table + offset;
         int shaderCount = blob[header + 4] & 0xFF;
         int controlSize = blob[header + 7] & 0xFF;
         int vertexOffset = blob[header + 8] & 0xFF;
@@ -293,8 +298,9 @@ public final class TieClassReader {
         int colourCount = blob[header + 0x0B] & 0xFF;
         int stripCount = blob[header + 0x0E] & 0xFF;
 
-        require(data + 0x20 + UNPACK_HEADER_SIZE + stripCount * 4 <= blob.length,
+        require(start + 0x20 + UNPACK_HEADER_SIZE + stripCount * 4 <= blob.length,
                 "The data of a packet of the tie class lies outside of the class.");
+        int data = (int) start;
 
         int[] adGifDest = new int[4];
         int[] adGifSrc = new int[4];

@@ -23,5 +23,12 @@
   "screen.racmc.iso_selection.assets.progress": "Converting the assets: %s%% (%s)",
   "screen.racmc.iso_selection.assets.ready": "The assets of the game are ready.",
   "screen.racmc.iso_selection.assets.failed": "The assets of the game could not be converted: %s",
-  "screen.racmc.iso_selection.retry": "Try again"
+  "screen.racmc.iso_selection.retry": "Try again",
+  "screen.racmc.blaster_test.title": "Ratchet and his Blaster",
+  "screen.racmc.blaster_test.open": "Blaster test",
+  "screen.racmc.blaster_test.waiting": "The assets of the game are not in the cache yet.",
+  "screen.racmc.blaster_test.failed": "The assets of the game could not be drawn. The reason is in the log of the game.",
+  "screen.racmc.blaster_test.hint": "The imported geometry, the imported textures and the imported animations of the hero and of his Blaster. The Blaster hangs on the joint of the hand of the hero and plays its own firing sequence. Press B to open this screen again.",
+  "key.racmc.blaster_test": "Open the Blaster test",
+  "key.categories.racmc": "Ratchet & Clank: Getting Wood"
 }

@@ -40,6 +40,47 @@ class Rac1CacheCodecTest {
         assertEquals(2, content.animatedAsset().animations()[0].keyCount());
         assertTrue(content.animatedAsset().animations()[0].loop());
         assertEquals(1, content.animatedAsset().textures().length);
+        assertEquals(4, content.blaster().mesh().vertexCount());
+        assertEquals(56, content.handJoint(), "The joint of the hand has to survive the round trip");
+    }
+
+    @Test
+    @DisplayName("The identity of the assets survives the round trip")
+    void theIdentityOfTheAssetsSurvivesTheRoundTrip() throws IOException {
+        byte[] file = Rac1CacheCodec.write(SyntheticAssets.content(KEY),
+                Rac1CacheStore.SCHEMA_VERSION);
+
+        Rac1CacheContent content = Rac1CacheCodec.read(file, KEY, Rac1CacheStore.SCHEMA_VERSION);
+
+        assertEquals(452, content.staticAsset().classNumber(),
+                "The number of the class of the scenery has to survive the round trip");
+        assertEquals("tie_452", content.staticAsset().name(),
+                "The name of the scenery has to survive the round trip");
+        assertEquals(0, content.animatedAsset().classNumber(),
+                "The number of the class of the character has to survive the round trip");
+        assertEquals("moby_0", content.animatedAsset().name(),
+                "The name of the character has to survive the round trip");
+        assertEquals(0, content.blaster().classNumber(),
+                "The number of the class of the weapon has to survive the round trip");
+        assertEquals("moby_0", content.blaster().name(),
+                "The name of the weapon has to survive the round trip");
+    }
+
+    @Test
+    @DisplayName("The textures of the assets survive the round trip")
+    void theTexturesOfTheAssetsSurviveTheRoundTrip() throws IOException {
+        byte[] file = Rac1CacheCodec.write(SyntheticAssets.content(KEY),
+                Rac1CacheStore.SCHEMA_VERSION);
+
+        Rac1CacheContent content = Rac1CacheCodec.read(file, KEY, Rac1CacheStore.SCHEMA_VERSION);
+
+        assertEquals(1, content.staticAsset().textures().length);
+        assertEquals(2, content.staticAsset().textures()[0].width());
+        assertEquals(2, content.staticAsset().textures()[0].height());
+        assertEquals(0xFF, content.staticAsset().textures()[0].pixels()[0] & 0xFF);
+        assertEquals(0x40, content.staticAsset().textures()[0].pixels()[1] & 0xFF);
+        assertEquals(1, content.animatedAsset().textures().length);
+        assertEquals(1, content.blaster().textures().length);
     }
 
     @Test

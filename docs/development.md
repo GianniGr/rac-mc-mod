@@ -104,12 +104,24 @@ rac-mc-mod/
     ├── ModLicenseTest.java            # Focused checks for the MIT licence
     ├── ModNamespaceTest.java          # Focused checks for the mod namespace
     ├── asset/
-    │   └── TieClassReaderTest.java   # Focused checks for the reader of the scenery
+    │   ├── MobyClassReaderTest.java   # Focused checks for the reader of the characters
+    │   ├── MobySequenceReaderTest.java # Focused checks for the reader of the sequences
+    │   ├── Rac1AnimationEvaluatorTest.java # Focused checks for the skinning of the meshes
+    │   ├── Rac1CoordinateTransformTest.java # Focused checks for the change of the axes
+    │   ├── Rac1TextureReaderTest.java # Focused checks for the reader of the textures
+    │   ├── TieClassReaderTest.java   # Focused checks for the reader of the scenery
+    │   ├── VifCommandListTest.java   # Focused checks for the commands of the graphics chip
+    │   └── RealDiscAssetTest.java    # The opt-in check of the conversion of a real disc image
     ├── cache/
     │   ├── SyntheticAssets.java       # The assets that the checks of the cache use
     │   ├── Rac1CacheCodecTest.java    # Focused checks for the format of the cache file
     │   ├── Rac1CacheStoreTest.java    # Focused checks for the place of the cache
     │   └── Rac1AssetCacheManagerTest.java # Focused checks for the life of the cache
+    ├── client/
+    │   └── render/
+    │       └── Rac1MeshRendererTest.java # Focused checks for the grouping of the triangles
+    ├── disc/
+    │   └── Rac1CoreIndexTest.java     # Focused checks for the reader of the core index
     ├── wad/
     │   └── WadDecoderTest.java       # Focused checks for the decoder of the compressed streams
     └── iso/
@@ -314,10 +326,25 @@ is written by the player, into the cache directory of the mod, and it is never p
 repository.
 
 The cache is part of the gate: the game may only be entered when the disc image was verified **and**
-the cache holds both assets. A cache that is being built, a cache that failed and a cache that is
+the cache holds all of the assets. A cache that is being built, a cache that failed and a cache that is
 missing all keep the game closed, so the game never runs with assets that are missing or only half
 there. The selection screen shows the step and the share of the work that is done, reports what
 went wrong when the conversion failed and offers to try again.
+
+The cache holds three assets: a piece of the scenery (the tie class 452 of Novalis), the hero (the
+moby class 0, with his skeleton and his 88 animation sequences) and his Blaster (the gadget class
+168, which is a compressed stream of its own in the core data of the level).
+
+The mod shows the imported assets in the game. The demo screen draws the hero with his Blaster in
+his hand: the hero is posed with one of his own imported animation sequences, the Blaster with
+its own imported firing sequence (the fourth one, as the ReRAC project measured in the code of the
+game), and the Blaster hangs on the joint of the skeleton of the hero that the game hangs the
+items of the hand on. That joint is read out of the class of the hero, from the first list of its
+joint lists, whose chain ends at the joint 56.
+
+The demo is reachable in three ways: the setup screen, which the client shows when it starts,
+draws the hero with the Blaster as long as the cache holds the assets; the main menu has a
+**Blaster test** button; and the key **B** opens the demo screen from anywhere in the game.
 
 ## Gradle tasks
 
@@ -436,20 +463,63 @@ Nine focused test classes exist today:
   read back, there is no cache before one was written, a written cache leaves no file of a half
   written cache behind, a damaged cache is refused, the cache of another disc is not used, a cache
   can be thrown away and every disc gets a file of its own.
-- `Rac1AssetCacheManagerTest` verifies the life of the cache: a cache that holds both assets is
-  used, a cache that is damaged is not used, a disc image that is missing or that is not a disc of
+- `Rac1AssetCacheManagerTest` verifies the life of the cache: a cache that holds all of the assets
+  is used, a cache that is damaged is not used, a disc image that is missing or that is not a disc of
   the game is reported, a failure can be tried again and the manager reports the step it is at.
 
-The suite currently contains 126 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
+- `MobyClassReaderTest` verifies the reader of the classes of the characters with a class that was
+  built by hand: the joint lists of the class, which name the chain of joints the items of the hero
+  hang on, a class without joint lists, a joint list that lies outside of the class, a joint list
+  with an implausible size, and the recognition of a joint whose bind pose collapsed to a point.
+- `MobySequenceReaderTest` verifies the reader of the animation sequences with a sequence that was
+  built by hand: the times of the keys, the quaternions of the joints, the records of the
+  translations and of the scales, the key that is dropped when it has the time of the key before it
+  - with the records of its channels, which have to be dropped with it - and the sequences that are
+  refused because they have no keys, because the payload of a key does not fit or because the key
+  uses the special format of the game.
+- `Rac1AnimationEvaluatorTest` verifies the skinning of the meshes: at the bind pose the skinning
+  matrices are the identity and the vertices do not move, a key that turns a joint turns the
+  vertices that follow it, the chain of the joints is followed, a scale that only reaches the joint
+  itself does not reach its children and the pose of the chain of the hand does not hold it. The
+  checks spell out the convention of the game of the disc, so that a change of the convention in
+  the evaluator is noticed.
+- `Rac1CoordinateTransformTest` verifies the change of the coordinate systems: the up axis of the
+  game becomes the up axis of the game of blocks, the change of the axes keeps the length of a
+  direction, a direction is not scaled and a point is scaled with the size of a unit.
+- `Rac1TextureReaderTest` verifies the reader of the textures: the colours of the palette of the
+  game become the pixels of the game of blocks, and the textures whose pixels or whose palette lie
+  outside of the data and the textures without a size are refused.
+- `VifCommandListTest` verifies the reader of the command lists of the graphics chip of the console:
+  the unpack commands are found, the unpack of the coordinates of the texture and the unpack of the
+  indices of the triangles are told apart, an unpack without a number of elements holds 256 of them
+  and a command that runs past the end of its list is refused.
+- `Rac1CoreIndexTest` verifies the reader of the core index of a level with an index that was built
+  by hand: the tables of the classes, of the gadgets and of the animation sequences of the hero, the
+  size of the core data and the size of the blocks of it, and the indexes that are refused because
+  they are too short, because they have no size or because one of their tables points outside of
+  them.
+- `Rac1MeshRendererTest` verifies the grouping of the triangles of the renderer: the triangles of a
+  mesh are grouped by their material, the triangles of a run keep their order, and a material that
+  is out of range does not make the renderer read outside of the array of the textures.
+- `RealDiscAssetTest` is the opt-in check of the conversion of the assets of a real disc image: the
+  scenery, the hero and the Blaster are converted with the numbers of the vertices, of the
+  triangles, of the joints, of the sequences and of the textures that were measured on the disc, the
+  chain of the hand of the hero ends at the joint 56 and the skinning does not tear the model of the
+  hero apart.
+
+The suite currently contains 188 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in
 `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in
 `Rac1MediaManagerTest`, 8 in `Rac1MediaGateTest`, 8 in `WadDecoderTest`, 5 in `TieClassReaderTest`,
-8 in `Rac1CacheCodecTest`, 7 in `Rac1CacheStoreTest` and 6 in `Rac1AssetCacheManagerTest`. One
-test, the opt-in check of a real disc image, is skipped unless it is asked for.
+5 in `MobyClassReaderTest`, 7 in `MobySequenceReaderTest`, 8 in `Rac1AnimationEvaluatorTest`,
+7 in `Rac1CoordinateTransformTest`, 5 in `Rac1TextureReaderTest`, 6 in `VifCommandListTest`,
+10 in `Rac1CoreIndexTest`, 5 in `Rac1MeshRendererTest`, 10 in `Rac1CacheCodecTest`, 7 in
+`Rac1CacheStoreTest` and 6 in `Rac1AssetCacheManagerTest`. Eight of them, the opt-in checks of a
+real disc image, are skipped unless they are asked for.
 
-`RealDiscImageTest` is a further, opt-in check of a real disc image. It is skipped unless the path
-of an image is given on the command line, and it is described in the section about the disc
-importer above.
+`RealDiscImageTest` and `RealDiscAssetTest` are further, opt-in checks of a real disc image. They
+are skipped unless the path of an image is given on the command line, and they are described in the
+section about the disc importer above.
 
 No test needs a game disc image to run. The images used by the tests are built by `SyntheticIso`
 and contain no game data.
@@ -467,9 +537,9 @@ tree.
 | --- | --- |
 | `gradlew.bat tasks` | Listed the task groups reproduced above; the configuration succeeded with ModDevGradle 2.0.148 and NeoForge 21.1.265. |
 | `gradlew.bat build` | `BUILD SUCCESSFUL`. Produced `build/libs/racmc-0.1.0.jar` containing `META-INF/neoforge.mods.toml` and the mod classes. The first run of the foundation downloaded and decompiled the Minecraft 1.21.1 artifacts (about 83 s of tool time, plus the 787 MiB asset download for the run configurations). |
-| `gradlew.bat test` | `BUILD SUCCESSFUL`, 125 of 125 tests passed (7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`, 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in `Rac1MediaManagerTest`, 8 in `Rac1MediaGateTest`, 8 in `WadDecoderTest`, 5 in `TieClassReaderTest`, 8 in `Rac1CacheCodecTest`, 7 in `Rac1CacheStoreTest`, 6 in `Rac1AssetCacheManagerTest`). The opt-in check of a real disc image is skipped. |
-| `gradlew.bat test --rerun` | `BUILD SUCCESSFUL`, 125 of 125 tests passed with the test task forced to re-execute. |
-| `gradlew.bat clean build` | `BUILD SUCCESSFUL`, the same 125 of 125 tests passed after a clean. |
+| `gradlew.bat test` | `BUILD SUCCESSFUL`, 180 of 180 tests passed, the eight opt-in checks of a real disc image were skipped. |
+| `gradlew.bat test --rerun` | `BUILD SUCCESSFUL`, 180 of 180 tests passed with the test task forced to re-execute. |
+| `gradlew.bat clean build` | `BUILD SUCCESSFUL`, the same 180 of 180 tests passed after a clean. |
 | `CI=true .\gradlew.bat --no-daemon build` | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. |
 | `gradlew.bat runClient` | The client window opened (title `Minecraft NeoForge* 1.21.1`). With no disc image configured the main menu did not open: the log shows `The disc image gate keeps the main menu closed until a disc image is configured.` and `The disc image picker was opened and cannot be dismissed.`, and the screen shows the selection screen with the button *Pick disc image* and without a back button. The escape key was sent to the window and the log shows `The disc image picker ignored the escape key.`; the screen stayed open and no world was prepared. The client was closed through its own window, which logged `Stopping!` and ended the Gradle task with `BUILD SUCCESSFUL`. |
 | `gradlew.bat runClient` and the *Pick disc image* button | The file chooser of the system opened in its own window (`The file chooser of the system is opened.`, `headless=false`). A retail disc image was picked in it, the check of the whole image ran on a worker thread and the log shows `The disc image was verified: PAL v2.00.`. The path of the image and the facts about it were written to `run/config/racmc/racmc-media.properties` with the keys `path`, `revision`, `imageSize`, `imageSha1` and `modifiedTime`; the file holds no part of the image. |

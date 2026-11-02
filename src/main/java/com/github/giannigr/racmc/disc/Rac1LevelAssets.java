@@ -131,4 +131,33 @@ public final class Rac1LevelAssets {
         System.arraycopy(coreData, offset, blob, 0, size);
         return blob;
     }
+
+    /**
+     * The bytes of the class of a gadget of the level.
+     *
+     * <p>The gadgets of the game are not part of the core data like the other classes: every
+     * gadget is a compressed stream of its own. The reader cuts the stream out of the core data and
+     * decodes it, so that the result is the same class blob as the one of the other classes.
+     *
+     * @param classNumber the number of the class of the gadget
+     * @return the bytes of the class of the gadget
+     * @throws DiscFormatException when the level has no such gadget or when its stream is damaged
+     * @throws WadFormatException when the compressed stream of the gadget is damaged
+     */
+    public byte[] gadgetClass(int classNumber) throws DiscFormatException, WadFormatException {
+        Rac1GadgetEntry entry = coreIndex.gadget(classNumber);
+        if (entry == null) {
+            throw new DiscFormatException("The level has no gadget of the class " + classNumber
+                    + ".");
+        }
+        int offset = entry.offset();
+        int size = entry.compressedSize();
+        if (offset <= 0 || size <= 0 || offset > coreData.length - size) {
+            throw new DiscFormatException("The compressed class of the gadget " + classNumber
+                    + " lies outside of the core data of the level.");
+        }
+        byte[] compressed = new byte[size];
+        System.arraycopy(coreData, offset, compressed, 0, size);
+        return WadDecoder.decode(compressed, -1);
+    }
 }
