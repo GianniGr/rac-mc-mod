@@ -5,12 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
-import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -35,15 +32,11 @@ class Rac1DiscValidatorTest {
     @Test
     @DisplayName("A PAL v2.00 disc is accepted")
     void palRevisionIsAccepted() throws IOException {
-        byte[] executable = SyntheticIso.elf(4096);
-        Rac1DiscValidator validator = validatorFor(palProfile(PAL_PRODUCT_CODE, executable));
+        SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00, PAL_PRODUCT_CODE,
+                SyntheticIso.elf(4096));
+        Path image = write("pal.iso", disc.image());
 
-        Path image = write("pal.iso", SyntheticIso.create()
-                .file("SYSTEM.CNF", SyntheticIso.systemCnf(PAL_PRODUCT_CODE, "2.00", "PAL"))
-                .file(PAL_PRODUCT_CODE, executable)
-                .build());
-
-        IsoValidationResult result = validator.validate(image);
+        IsoValidationResult result = disc.validator().validate(image);
 
         assertEquals(IsoValidationStatus.SUPPORTED, result.status(), result.message());
         assertEquals(Rac1DiscRevision.PAL_V2_00, result.revision());
@@ -54,15 +47,11 @@ class Rac1DiscValidatorTest {
     @Test
     @DisplayName("An NTSC-U v1.00 disc is accepted")
     void ntscRevisionIsAccepted() throws IOException {
-        byte[] executable = SyntheticIso.elf(4096);
-        Rac1DiscValidator validator = validatorFor(ntscProfile(NTSC_U_PRODUCT_CODE, executable));
+        SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.NTSC_U_V1_00, NTSC_U_PRODUCT_CODE,
+                SyntheticIso.elf(4096));
+        Path image = write("ntsc.iso", disc.image());
 
-        Path image = write("ntsc.iso", SyntheticIso.create()
-                .file("SYSTEM.CNF", SyntheticIso.systemCnf(NTSC_U_PRODUCT_CODE, "1.00", "NTSC"))
-                .file(NTSC_U_PRODUCT_CODE, executable)
-                .build());
-
-        IsoValidationResult result = validator.validate(image);
+        IsoValidationResult result = disc.validator().validate(image);
 
         assertEquals(IsoValidationStatus.SUPPORTED, result.status(), result.message());
         assertEquals(Rac1DiscRevision.NTSC_U_V1_00, result.revision());
@@ -228,15 +217,13 @@ class Rac1DiscValidatorTest {
     @DisplayName("A path that walks out of its own directory is refused")
     void pathWithParentSegmentIsRefused() throws IOException {
         Rac1DiscValidator validator = new Rac1DiscValidator();
-        Path image = write("disc.iso", SyntheticIso.create().build());
-        Path traversal = tempDir.resolve("folder").resolve("..").resolve("disc.iso");
         Files.createDirectory(tempDir.resolve("folder"));
+        Path traversal = tempDir.resolve("folder").resolve("..").resolve("disc.iso");
 
         IsoValidationResult result = validator.validate(traversal);
 
         assertEquals(IsoValidationStatus.INVALID_PATH, result.status(), result.message());
         assertTrue(result.message().contains(".."), result.message());
-        assertTrue(Files.exists(image));
     }
 
     @Test
@@ -252,15 +239,15 @@ class Rac1DiscValidatorTest {
     @Test
     @DisplayName("A boot executable with the wrong size is refused")
     void wrongExecutableSizeIsRefused() throws IOException {
-        byte[] executable = SyntheticIso.elf(4096);
-        Rac1DiscValidator validator = validatorFor(palProfile(PAL_PRODUCT_CODE, executable));
+        SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00, PAL_PRODUCT_CODE,
+                SyntheticIso.elf(4096));
 
         Path image = write("short.iso", SyntheticIso.create()
                 .file("SYSTEM.CNF", SyntheticIso.systemCnf(PAL_PRODUCT_CODE, "2.00", "PAL"))
                 .file(PAL_PRODUCT_CODE, SyntheticIso.elf(2048))
                 .build());
 
-        IsoValidationResult result = validator.validate(image);
+        IsoValidationResult result = disc.validator().validate(image);
 
         assertEquals(IsoValidationStatus.CORRUPT_IMAGE, result.status(), result.message());
     }
@@ -268,9 +255,9 @@ class Rac1DiscValidatorTest {
     @Test
     @DisplayName("A modified boot executable is refused")
     void modifiedExecutableIsRefused() throws IOException {
-        byte[] executable = SyntheticIso.elf(4096);
-        Rac1DiscValidator validator = validatorFor(palProfile(PAL_PRODUCT_CODE, executable));
-        byte[] modified = executable.clone();
+        SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00, PAL_PRODUCT_CODE,
+                SyntheticIso.elf(4096));
+        byte[] modified = disc.executable().clone();
         modified[100] = (byte) (modified[100] + 1);
 
         Path image = write("modified.iso", SyntheticIso.create()
@@ -278,23 +265,58 @@ class Rac1DiscValidatorTest {
                 .file(PAL_PRODUCT_CODE, modified)
                 .build());
 
-        IsoValidationResult result = validator.validate(image);
+        IsoValidationResult result = disc.validator().validate(image);
 
         assertEquals(IsoValidationStatus.CORRUPT_IMAGE, result.status(), result.message());
         assertTrue(result.message().contains("digest"), result.message());
     }
 
     @Test
+    @DisplayName("A disc that was changed outside of the boot executable is refused")
+    void changeOutsideOfTheExecutableIsRefused() throws IOException {
+        SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00, PAL_PRODUCT_CODE,
+                SyntheticIso.elf(4096));
+        // The change is in the SYSTEM.CNF file, so the boot executable stays exactly the same.
+        byte[] changed = disc.image().clone();
+        int position = indexOf(changed, "VER = 2.00".getBytes(StandardCharsets.ISO_8859_1));
+        assertTrue(position > 0, "The synthetic image has to hold a VER line");
+        changed[position + "VER = ".length()] = '3';
+
+        Path image = write("changed.iso", changed);
+
+        IsoValidationResult result = disc.validator().validate(image);
+
+        assertEquals(IsoValidationStatus.CORRUPT_IMAGE, result.status(), result.message());
+        assertTrue(result.message().contains("whole"), result.message());
+    }
+
+    @Test
+    @DisplayName("An image whose size is not the size of a supported disc image is refused")
+    void wrongImageSizeIsRefused() throws IOException {
+        SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00, PAL_PRODUCT_CODE,
+                SyntheticIso.elf(4096));
+        // One byte more than the profile allows.
+        byte[] changed = java.util.Arrays.copyOf(disc.image(), disc.image().length + 1);
+
+        Path image = write("wrong-size.iso", changed);
+
+        IsoValidationResult result = disc.validator().validate(image);
+
+        assertEquals(IsoValidationStatus.CORRUPT_IMAGE, result.status(), result.message());
+        assertTrue(result.message().contains("bytes"), result.message());
+    }
+
+    @Test
     @DisplayName("A disc without the boot executable of its revision is refused")
     void missingBootExecutableIsRefused() throws IOException {
-        byte[] executable = SyntheticIso.elf(4096);
-        Rac1DiscValidator validator = validatorFor(palProfile(PAL_PRODUCT_CODE, executable));
+        SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00, PAL_PRODUCT_CODE,
+                SyntheticIso.elf(4096));
 
         Path image = write("missing-exe.iso", SyntheticIso.create()
                 .file("SYSTEM.CNF", SyntheticIso.systemCnf(PAL_PRODUCT_CODE, "2.00", "PAL"))
                 .build());
 
-        IsoValidationResult result = validator.validate(image);
+        IsoValidationResult result = disc.validator().validate(image);
 
         assertEquals(IsoValidationStatus.CORRUPT_IMAGE, result.status(), result.message());
     }
@@ -320,7 +342,7 @@ class Rac1DiscValidatorTest {
     void directoryRecordWithUnusableNameIsRefused() throws IOException {
         Rac1DiscValidator validator = new Rac1DiscValidator();
         byte[] record = SyntheticIso.record(SyntheticIso.ROOT_DIRECTORY_SECTOR, 64, 0x00,
-                "../escape".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+                "../escape".getBytes(StandardCharsets.ISO_8859_1));
 
         Path image = write("escape.iso", SyntheticIso.create()
                 .rawRootDirectory(record)
@@ -349,15 +371,11 @@ class Rac1DiscValidatorTest {
     @Test
     @DisplayName("A disc whose boot executable is not named in SYSTEM.CNF is identified by its content")
     void bootExecutableIsFoundByItsContent() throws IOException {
-        byte[] executable = SyntheticIso.elf(4096);
-        Rac1DiscValidator validator = validatorFor(palProfile(PAL_PRODUCT_CODE, executable));
+        SyntheticDisc disc = SyntheticDisc.createWithoutBootLine(Rac1DiscRevision.PAL_V2_00,
+                PAL_PRODUCT_CODE, SyntheticIso.elf(4096));
+        Path image = write("elf.iso", disc.image());
 
-        Path image = write("elf.iso", SyntheticIso.create()
-                .file("SYSTEM.CNF", SyntheticIso.systemCnf(null, "2.00", "PAL"))
-                .file(PAL_PRODUCT_CODE, executable)
-                .build());
-
-        IsoValidationResult result = validator.validate(image);
+        IsoValidationResult result = disc.validator().validate(image);
 
         assertEquals(IsoValidationStatus.SUPPORTED, result.status(), result.message());
         assertEquals(Rac1DiscRevision.PAL_V2_00, result.revision());
@@ -366,15 +384,11 @@ class Rac1DiscValidatorTest {
     @Test
     @DisplayName("A supported disc is opened and its files can be read")
     void supportedDiscIsOpened() throws IOException {
-        byte[] executable = SyntheticIso.elf(4096);
-        Rac1DiscValidator validator = validatorFor(palProfile(PAL_PRODUCT_CODE, executable));
+        SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00, PAL_PRODUCT_CODE,
+                SyntheticIso.elf(4096));
+        Path image = write("open.iso", disc.image());
 
-        Path image = write("open.iso", SyntheticIso.create()
-                .file("SYSTEM.CNF", SyntheticIso.systemCnf(PAL_PRODUCT_CODE, "2.00", "PAL"))
-                .file(PAL_PRODUCT_CODE, executable)
-                .build());
-
-        try (Rac1IsoSelectionResult outcome = validator.inspect(image)) {
+        try (Rac1IsoSelectionResult outcome = disc.validator().inspect(image)) {
             assertTrue(outcome.isSupported(), outcome.result().message());
             Rac1DiscImage opened = outcome.image();
             assertEquals(Rac1DiscRevision.PAL_V2_00, opened.revision());
@@ -382,27 +396,28 @@ class Rac1DiscValidatorTest {
             assertTrue(opened.listFilePaths().contains("SYSTEM.CNF"), opened.listFilePaths().toString());
 
             byte[] configuration = opened.readFile("SYSTEM.CNF", 4096);
-            assertTrue(new String(configuration, java.nio.charset.StandardCharsets.ISO_8859_1)
+            assertTrue(new String(configuration, StandardCharsets.ISO_8859_1)
                     .contains(PAL_PRODUCT_CODE));
 
             try (var stream = opened.openFile(PAL_PRODUCT_CODE)) {
-                assertEquals(executable.length, stream.readAllBytes().length);
+                assertEquals(disc.executable().length, stream.readAllBytes().length);
             }
         }
     }
 
-    private Rac1DiscValidator validatorFor(DiscProfile profile) {
-        return new Rac1DiscValidator(Rac1DiscCatalog.of(List.of(profile)));
-    }
+    @Test
+    @DisplayName("The verification reports how far it has come")
+    void verificationReportsProgress() throws IOException {
+        SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00, PAL_PRODUCT_CODE,
+                SyntheticIso.elf(4096));
+        Path image = write("progress.iso", disc.image());
+        long[] reported = new long[1];
 
-    private static DiscProfile palProfile(String productCode, byte[] executable) {
-        return new DiscProfile(Rac1DiscRevision.PAL_V2_00, productCode, productCode,
-                executable.length, sha256(executable));
-    }
+        disc.validator().inspect(image, (bytesRead, totalBytes) -> reported[0] = bytesRead)
+                .close();
 
-    private static DiscProfile ntscProfile(String productCode, byte[] executable) {
-        return new DiscProfile(Rac1DiscRevision.NTSC_U_V1_00, productCode, productCode,
-                executable.length, sha256(executable));
+        assertEquals(disc.image().length, reported[0],
+                "The verification has to read the whole image");
     }
 
     private Path write(String name, byte[] content) throws IOException {
@@ -411,12 +426,16 @@ class Rac1DiscValidatorTest {
         return file;
     }
 
-    private static String sha256(byte[] content) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(content));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new AssertionError("SHA-256 is not available", exception);
+    private static int indexOf(byte[] haystack, byte[] needle) {
+        outer:
+        for (int index = 0; index + needle.length <= haystack.length; index++) {
+            for (int offset = 0; offset < needle.length; offset++) {
+                if (haystack[index + offset] != needle[offset]) {
+                    continue outer;
+                }
+            }
+            return index;
         }
+        return -1;
     }
 }

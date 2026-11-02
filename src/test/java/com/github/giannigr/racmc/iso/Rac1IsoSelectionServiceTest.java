@@ -2,6 +2,7 @@ package com.github.giannigr.racmc.iso;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -16,6 +17,8 @@ import org.junit.jupiter.api.io.TempDir;
  * Focused checks for the selection service and for the catalogue of the supported revisions.
  */
 class Rac1IsoSelectionServiceTest {
+
+    private static final String PAL_PRODUCT_CODE = "SCES_509.16";
 
     @TempDir
     Path tempDir;
@@ -89,7 +92,7 @@ class Rac1IsoSelectionServiceTest {
     }
 
     @Test
-    @DisplayName("The boot executable digests of the catalogue are the published ones")
+    @DisplayName("The digests of the catalogue are the published ones")
     void catalogueUsesThePublishedDigests() {
         DiscProfile pal = Rac1DiscCatalog.supported().byProductCode("SCES_509.16").orElseThrow();
         DiscProfile ntsc = Rac1DiscCatalog.supported().byProductCode("SCUS_971.99").orElseThrow();
@@ -97,60 +100,70 @@ class Rac1IsoSelectionServiceTest {
         assertEquals(1388100L, pal.executableSize());
         assertEquals("17f8a846329fd10798cb97847e9610e5eecd1867668420ed627b2292a96b122b",
                 pal.executableSha256());
+        assertEquals(4214784000L, pal.imageSize());
+        assertEquals("ef304c641c7cd426ba492707dda5974679befbc0", pal.imageSha1());
+
         assertEquals(1383028L, ntsc.executableSize());
         assertEquals("e050581032e4bb3f20341307da5b69b76f1574910519155380ea771e55c3c0c9",
                 ntsc.executableSha256());
+        assertEquals(4214095872L, ntsc.imageSize());
+        assertEquals("aee9275384f739c9b24cd5de6f7e200292db7b01", ntsc.imageSha1());
     }
 
-    private Rac1IsoSelectionService newService() {
-        byte[] executable = SyntheticIso.elf(1024);
-        DiscProfile profile = new DiscProfile(Rac1DiscRevision.PAL_V2_00, "SCES_509.16", "SCES_509.16",
-                executable.length, sha256(executable));
-        return new Rac1IsoSelectionService(
-                new Rac1DiscValidator(Rac1DiscCatalog.of(List.of(profile))));
-    }
+    @Test
+    @DisplayName("The catalogue knows the size of the supported disc images")
+    void catalogueKnowsTheImageSizes() {
+        Rac1DiscCatalog catalog = Rac1DiscCatalog.supported();
 
-    private Path writeSupportedImage(String name) throws IOException {
-        byte[] executable = SyntheticIso.elf(1024);
-        Path image = tempDir.resolve(name);
-        Files.write(image, SyntheticIso.create()
-                .file("SYSTEM.CNF", SyntheticIso.systemCnf("SCES_509.16", "2.00", "PAL"))
-                .file("SCES_509.16", executable)
-                .build());
-        return image;
-    }
-
-    private static String sha256(byte[] content) {
-        try {
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            return java.util.HexFormat.of().formatHex(digest.digest(content));
-        } catch (java.security.NoSuchAlgorithmException exception) {
-            throw new AssertionError("SHA-256 is not available", exception);
-        }
+        assertTrue(catalog.hasImageSize(4214784000L));
+        assertTrue(catalog.hasImageSize(4214095872L));
+        assertFalse(catalog.hasImageSize(4214784001L));
+        assertFalse(catalog.hasImageSize(0L));
     }
 
     @Test
     @DisplayName("A profile with impossible values is refused")
     void impossibleProfileIsRefused() {
-        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+        assertThrows(IllegalArgumentException.class,
                 () -> new DiscProfile(Rac1DiscRevision.PAL_V2_00, "SCES_509.16", "SCES_509.16",
-                        0L, "17f8a846329fd10798cb97847e9610e5eecd1867668420ed627b2292a96b122b"));
-        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                        0L, "17f8a846329fd10798cb97847e9610e5eecd1867668420ed627b2292a96b122b",
+                        4214784000L, "ef304c641c7cd426ba492707dda5974679befbc0"));
+        assertThrows(IllegalArgumentException.class,
                 () -> new DiscProfile(Rac1DiscRevision.PAL_V2_00, "SCES_509.16", "SCES_509.16",
-                        10L, "not a digest"));
-        org.junit.jupiter.api.Assertions.assertThrows(NullPointerException.class,
+                        10L, "not a digest", 4214784000L, "ef304c641c7cd426ba492707dda5974679befbc0"));
+        assertThrows(IllegalArgumentException.class,
+                () -> new DiscProfile(Rac1DiscRevision.PAL_V2_00, "SCES_509.16", "SCES_509.16",
+                        10L, "17f8a846329fd10798cb97847e9610e5eecd1867668420ed627b2292a96b122b",
+                        4214784000L, "not a digest"));
+        assertThrows(NullPointerException.class,
                 () -> new DiscProfile(null, "SCES_509.16", "SCES_509.16", 10L,
-                        "17f8a846329fd10798cb97847e9610e5eecd1867668420ed627b2292a96b122b"));
+                        "17f8a846329fd10798cb97847e9610e5eecd1867668420ed627b2292a96b122b",
+                        4214784000L, "ef304c641c7cd426ba492707dda5974679befbc0"));
     }
 
     @Test
     @DisplayName("The catalogue of the tests can hold synthetic profiles")
     void syntheticCatalogueIsSupported() {
         DiscProfile profile = new DiscProfile(Rac1DiscRevision.PAL_V2_00, "SCES_509.16", "SCES_509.16",
-                10L, "17f8a846329fd10798cb97847e9610e5eecd1867668420ed627b2292a96b122b");
+                10L, "17f8a846329fd10798cb97847e9610e5eecd1867668420ed627b2292a96b122b",
+                20L, "ef304c641c7cd426ba492707dda5974679befbc0");
         Rac1DiscCatalog catalog = Rac1DiscCatalog.of(List.of(profile));
 
         assertEquals(1, catalog.profiles().size());
         assertTrue(catalog.byProductCode("SCES_509.16").isPresent());
+    }
+
+    private Rac1IsoSelectionService newService() {
+        SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00, PAL_PRODUCT_CODE,
+                SyntheticIso.elf(1024));
+        return new Rac1IsoSelectionService(new Rac1DiscValidator(disc.catalog()));
+    }
+
+    private Path writeSupportedImage(String name) throws IOException {
+        SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00, PAL_PRODUCT_CODE,
+                SyntheticIso.elf(1024));
+        Path image = tempDir.resolve(name);
+        Files.write(image, disc.image());
+        return image;
     }
 }

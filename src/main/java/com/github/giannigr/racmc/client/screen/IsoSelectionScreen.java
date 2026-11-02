@@ -3,11 +3,11 @@ package com.github.giannigr.racmc.client.screen;
 import com.github.giannigr.racmc.client.RacMcClient;
 import com.github.giannigr.racmc.iso.IsoImagePath;
 import com.github.giannigr.racmc.iso.IsoValidationResult;
+import com.github.giannigr.racmc.iso.Rac1MediaManager;
+import com.github.giannigr.racmc.iso.Rac1MediaState;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -18,12 +18,12 @@ import net.minecraft.util.FormattedCharSequence;
 /**
  * The screen where the player points the mod at the disc image of their game.
  *
- * <p>The screen takes the path of a local file, checks it and reports what it found. It does not
- * copy, extract or modify anything, and it is not a requirement to play: it is opened with the key
- * mapping of the mod and can be closed at any time.
+ * <p>The screen belongs to the main menu. It takes the path of a local file, checks it in the
+ * background and reports what it found. It never copies, extracts or modifies anything.
  *
- * <p>The check itself runs on a worker thread, because it reads a part of a file that can be
- * several gigabytes large. The result is handed back to the client thread before it is shown.
+ * <p>The screen cannot be used to remove the configured disc image: the path of an image is only
+ * written to the configuration after the image was verified completely, and a failed attempt leaves
+ * the previous image in place.
  */
 public class IsoSelectionScreen extends Screen {
 
@@ -36,7 +36,6 @@ public class IsoSelectionScreen extends Screen {
     private EditBox pathField;
     private Button checkButton;
     private Component status = Component.empty();
-    private boolean busy;
 
     /**
      * Creates the screen.
@@ -54,7 +53,7 @@ public class IsoSelectionScreen extends Screen {
                 Component.translatable("screen.racmc.iso_selection.path"));
         this.pathField.setMaxLength(IsoImagePath.MAX_LENGTH);
         this.pathField.setHint(Component.translatable("screen.racmc.iso_selection.path_hint"));
-        this.pathField.setValue(RacMcClient.selectionService().selectedPath()
+        this.pathField.setValue(RacMcClient.media().configuredPath()
                 .map(Path::toString)
                 .orElse(""));
         addRenderableWidget(this.pathField);
@@ -65,7 +64,7 @@ public class IsoSelectionScreen extends Screen {
                 .bounds(left, top + FIELD_HEIGHT + 6, 120, 20)
                 .build());
 
-        addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose())
+        addRenderableWidget(Button.builder(Component.translatable("gui.back"), button -> onClose())
                 .bounds(left + FIELD_WIDTH - 120, top + FIELD_HEIGHT + 6, 120, 20)
                 .build());
 
@@ -80,11 +79,14 @@ public class IsoSelectionScreen extends Screen {
         int left = (this.width - FIELD_WIDTH) / 2;
         int top = this.height / 2 - 30;
 
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, top - 46, 0xFFFFFF);
+        graphics.drawCenteredString(this.font, this.title, this.width / 2, top - 58, 0xFFFFFF);
         graphics.drawString(this.font,
                 Component.translatable("screen.racmc.iso_selection.hint"),
-                left, top - 24, 0xA0A0A0);
-        drawWrapped(graphics, this.status, left, top + FIELD_HEIGHT + 32, FIELD_WIDTH, 0xFFFFFF);
+                left, top - 38, 0xA0A0A0);
+        graphics.drawString(this.font,
+                Component.translatable("screen.racmc.iso_selection.mandatory"),
+                left, top - 26, 0xFFAA00);
+        drawWrapped(graphics, describeState(), left, top + FIELD_HEIGHT + 34, FIELD_WIDTH, 0xFFFFFF);
     }
 
     @Override
@@ -93,12 +95,12 @@ public class IsoSelectionScreen extends Screen {
     }
 
     /**
-     * Checks the file in the path field and shows what it found.
+     * Starts the check of the file in the path field.
+     *
+     * <p>The check runs on a worker thread of the media manager, so the screen stays usable while
+     * the image is read.
      */
     private void check() {
-        if (this.busy) {
-            return;
-        }
         String text = this.pathField.getValue().trim();
         if (text.isEmpty()) {
             this.status = Component.translatable("screen.racmc.iso_selection.status.no_path");
@@ -111,48 +113,49 @@ public class IsoSelectionScreen extends Screen {
             this.status = Component.translatable("screen.racmc.iso_selection.status.invalid_path");
             return;
         }
-
-        this.busy = true;
         this.status = Component.translatable("screen.racmc.iso_selection.status.checking");
-        if (this.checkButton != null) {
-            this.checkButton.active = false;
-        }
-
-        Minecraft client = this.minecraft;
-        CompletableFuture.supplyAsync(() -> RacMcClient.selectionService().select(path))
-                .thenAccept(result -> {
-                    if (client != null) {
-                        client.execute(() -> applyResult(result));
-                    }
-                })
-                .exceptionally(throwable -> {
-                    if (client != null) {
-                        client.execute(() -> {
-                            this.busy = false;
-                            if (this.checkButton != null) {
-                                this.checkButton.active = true;
-                            }
-                            this.status = Component.translatable("screen.racmc.iso_selection.status.io_error");
-                        });
-                    }
-                    return null;
-                });
+        RacMcClient.media().select(path);
     }
 
     /**
-     * Shows the outcome of a check.
+     * Describes the state of the configured disc image and of the running check.
      */
-    private void applyResult(IsoValidationResult result) {
-        this.busy = false;
-        if (this.checkButton != null) {
-            this.checkButton.active = true;
+    private Component describeState() {
+        Rac1MediaManager media = RacMcClient.media();
+        Component configured = media.configuredPath()
+                .map(path -> Component.translatable("screen.racmc.iso_selection.configured",
+                        path.toString()))
+                .orElse(Component.translatable("screen.racmc.iso_selection.not_configured"));
+
+        if (media.isChecking()) {
+            long total = media.bytesTotal();
+            Component progress = total > 0
+                    ? Component.translatable("screen.racmc.iso_selection.status.progress",
+                            percent(media.bytesRead(), total))
+                    : Component.translatable("screen.racmc.iso_selection.status.checking");
+            return Component.empty().append(configured).append("\n").append(progress);
         }
-        this.status = Component.literal(result.message());
+
+        IsoValidationResult result = media.attemptResult().orElse(null);
+        if (result != null && !result.isSupported()) {
+            return Component.empty().append(configured).append("\n")
+                    .append(Component.literal(result.message()));
+        }
+        return configured;
     }
 
     /**
-     * Draws a text over several lines and returns nothing, because the text is drawn below the
-     * field and does not overlap with anything else.
+     * The share of the work that is done, in percent.
+     */
+    private static int percent(long read, long total) {
+        if (total <= 0) {
+            return 0;
+        }
+        return (int) Math.min(100L, read * 100L / total);
+    }
+
+    /**
+     * Draws a text over several lines.
      */
     private void drawWrapped(GuiGraphics graphics, Component text, int x, int y, int width, int color) {
         if (text.getString().isEmpty()) {

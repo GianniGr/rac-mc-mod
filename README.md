@@ -7,7 +7,8 @@ A community-made Minecraft Java Edition mod project inspired by **Ratchet & Clan
 **Foundation and disc importer started.** The Minecraft mod project is set up and buildable, and the
 first milestone (M1) covers the asset import pipeline and the first rendering of original assets.
 The local disc importer is now in place up to the point where a validated disc image can be read;
-extracting the assets themselves and rendering them is not implemented yet.
+the game keeps the disc image mandatory and asks for it in the main menu. Extracting the assets
+themselves and rendering them is not implemented yet.
 
 ## Vision
 
@@ -49,13 +50,20 @@ Every other revision - the PAL v1.00 release, the Japanese release and the demo 
 with a clear message, and so is a file that is not an ISO 9660 disc image or that uses a container
 format such as CHD.
 
-To point the mod at your disc image, press **O** in the game, or rebind the key under
-*Options → Controls → Key Mappings* under *Ratchet & Clank: Getting Wood*. Enter the path of the
-ISO file of your disc and the mod checks it. The check only reads the small parts of the image that
-identify the disc, so it finishes quickly and does not copy anything.
+An image is only accepted when it is the unmodified retail disc: the size and the digest of the
+whole image have to match the values of the Redump record of the disc, and so do the size and the
+digest of its boot executable. A copy that was changed anywhere is refused.
 
-The importer is not a requirement to play: the game starts normally whether or not a disc image was
-selected. The first-launch setup gate that requires a valid import is a separate milestone.
+**A disc image is mandatory.** The game cannot be entered before a verified disc image is
+configured: the world list, the screen that creates a world and the server list stay closed, and
+the game asks for the image in the main menu. The image is remembered by its path, so it is only
+asked for once; the file is verified again on every start of the game, and the game asks again when
+the file is missing or was changed.
+
+To point the mod at your disc image, press the **Disc image** button in the lower left corner of
+the main menu, enter the path of the ISO file of your disc and let the mod check it. The check
+reads the image in the background and shows how far it has come, so the game stays usable while it
+runs.
 
 The importer was checked against retail disc images of both supported revisions, with the
 permission of the project owner; the images themselves are not part of this repository and are

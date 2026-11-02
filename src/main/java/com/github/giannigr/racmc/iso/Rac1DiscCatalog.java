@@ -12,9 +12,22 @@ import java.util.Optional;
  * European PAL release v2.00 and the North American NTSC-U release v1.00. Every other revision of
  * the game is absent from the catalogue and is therefore refused.
  *
- * <p>The values are the public facts of the retail discs, taken from the OpenRAC manifest
- * {@code games/rac1/game.json} (the {@code boot} section of each version). No game data is bundled
- * with the mod; the values only describe what a legitimate disc image has to contain.
+ * <p>The values are the public facts of the retail discs. The digests and the sizes of the whole
+ * disc images are the ones of the Redump records of the two discs:
+ *
+ * <ul>
+ *   <li>PAL v2.00, Redump disc 4254, {@code https://redump.org/disc/4254/}: 4214784000 bytes,
+ *       SHA-1 {@code ef304c641c7cd426ba492707dda5974679befbc0}.</li>
+ *   <li>NTSC-U v1.00, Redump disc 5362, {@code https://redump.org/disc/5362/}: 4214095872 bytes,
+ *       SHA-1 {@code aee9275384f739c9b24cd5de6f7e200292db7b01}.</li>
+ * </ul>
+ *
+ * <p>The same values are published in the OpenRAC manifest {@code games/rac1/game.json} (the
+ * {@code disc} section of each version). The digest of the boot executable of each disc is taken
+ * from the {@code boot} section of the same manifest.
+ *
+ * <p>No game data is bundled with the mod; the values only describe what a legitimate disc image
+ * has to contain.
  */
 public final class Rac1DiscCatalog {
 
@@ -45,13 +58,17 @@ public final class Rac1DiscCatalog {
                         PAL_PRODUCT_CODE,
                         PAL_PRODUCT_CODE,
                         1388100L,
-                        "17f8a846329fd10798cb97847e9610e5eecd1867668420ed627b2292a96b122b"),
+                        "17f8a846329fd10798cb97847e9610e5eecd1867668420ed627b2292a96b122b",
+                        4214784000L,
+                        "ef304c641c7cd426ba492707dda5974679befbc0"),
                 new DiscProfile(
                         Rac1DiscRevision.NTSC_U_V1_00,
                         NTSC_U_PRODUCT_CODE,
                         NTSC_U_PRODUCT_CODE,
                         1383028L,
-                        "e050581032e4bb3f20341307da5b69b76f1574910519155380ea771e55c3c0c9")));
+                        "e050581032e4bb3f20341307da5b69b76f1574910519155380ea771e55c3c0c9",
+                        4214095872L,
+                        "aee9275384f739c9b24cd5de6f7e200292db7b01")));
     }
 
     /**
@@ -85,6 +102,16 @@ public final class Rac1DiscCatalog {
         }
         String normalized = productCode.trim().toUpperCase(Locale.ROOT);
         return profiles.stream().filter(profile -> profile.productCode().equals(normalized)).findFirst();
+    }
+
+    /**
+     * Whether one of the profiles of this catalogue describes an image of the given size.
+     *
+     * @param size the size of a candidate image in bytes
+     * @return {@code true} when the size belongs to a supported revision
+     */
+    public boolean hasImageSize(long size) {
+        return profiles.stream().anyMatch(profile -> profile.matchesImageSize(size));
     }
 
     /**

@@ -41,6 +41,9 @@ public final class Rac1DiscValidator {
     /** The size of the buffer that the digest of the boot executable is computed with. */
     private static final int DIGEST_BUFFER_SIZE = 64 * 1024;
 
+    /** The size of the buffer that the digest of the whole image is computed with. */
+    private static final int IMAGE_DIGEST_BUFFER_SIZE = 1024 * 1024;
+
     /** The smallest file that can hold an ISO 9660 primary volume descriptor. */
     private static final long MINIMUM_ISO_SIZE =
             (long) (Iso9660Tree.PRIMARY_VOLUME_DESCRIPTOR_SECTOR + 1) * Iso9660Tree.SECTOR_SIZE;
@@ -82,6 +85,22 @@ public final class Rac1DiscValidator {
      * @return the outcome of the check
      */
     public Rac1IsoSelectionResult inspect(Path path) {
+        return inspect(path, IsoVerificationProgress.NONE);
+    }
+
+    /**
+     * Checks a candidate image and opens it when it is supported.
+     *
+     * <p>When the image is accepted, the returned result carries the opened image and the caller
+     * has to close it. When the image is refused, no image is opened.
+     *
+     * @param path the file to check, may be {@code null}
+     * @param progress the listener that is told how far the verification has come, may be
+     *        {@code null}
+     * @return the outcome of the check
+     */
+    public Rac1IsoSelectionResult inspect(Path path, IsoVerificationProgress progress) {
+        IsoVerificationProgress listener = progress == null ? IsoVerificationProgress.NONE : progress;
         if (path == null) {
             return new Rac1IsoSelectionResult(IsoValidationResult.failed(IsoValidationStatus.INVALID_PATH,
                     "No disc image was selected.", null));
@@ -142,7 +161,7 @@ public final class Rac1DiscValidator {
         RandomAccessFile handle = null;
         try {
             handle = new RandomAccessFile(normalized.toFile(), "r");
-            Rac1IsoSelectionResult outcome = inspectImage(normalized, size, handle);
+            Rac1IsoSelectionResult outcome = inspectImage(normalized, size, handle, listener);
             if (outcome.image() != null) {
                 // The opened image owns the handle now, so it must not be closed below.
                 handle = null;
@@ -180,7 +199,8 @@ public final class Rac1DiscValidator {
         }
     }
 
-    private Rac1IsoSelectionResult inspectImage(Path normalized, long size, RandomAccessFile handle)
+    private Rac1IsoSelectionResult inspectImage(Path normalized, long size, RandomAccessFile handle,
+                                                  IsoVerificationProgress progress)
             throws IsoFormatException, IOException {
         Iso9660Tree tree = Iso9660Tree.parse(handle, size);
 
@@ -217,6 +237,11 @@ public final class Rac1DiscValidator {
         }
 
         DiscProfile supported = profile.get();
+        if (!supported.matchesImageSize(size)) {
+            return refused(IsoValidationStatus.CORRUPT_IMAGE,
+                    "The selected disc is " + size + " bytes long, but the " + supported.revision().label()
+                            + " release is " + supported.imageSize() + " bytes long.", normalized);
+        }
         Iso9660File executable = tree.find(supported.executableName()).orElse(null);
         if (executable == null) {
             return refused(IsoValidationStatus.CORRUPT_IMAGE,
@@ -237,6 +262,12 @@ public final class Rac1DiscValidator {
                     "The boot executable of the selected disc does not match the digest of the "
                             + supported.revision().label() + " release. The image is damaged or was modified.",
                     normalized);
+        }
+        String imageDigest = imageDigest(handle, size, progress);
+        if (!imageDigest.equals(supported.imageSha1())) {
+            return refused(IsoValidationStatus.CORRUPT_IMAGE,
+                    "The selected disc does not match the digest of the whole " + supported.revision().label()
+                            + " image. The image is damaged or was modified.", normalized);
         }
 
         Rac1DiscImage opened = new Iso9660DiscImage(normalized, supported.revision(), handle, size, tree);
@@ -318,6 +349,39 @@ public final class Rac1DiscValidator {
             handle.readFully(buffer, 0, chunk);
             digest.update(buffer, 0, chunk);
             remaining -= chunk;
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    /**
+     * Computes the SHA-1 digest of the whole image without loading it into memory.
+     *
+     * <p>The image is read in chunks of a fixed size, so the memory that is used does not depend
+     * on the size of the image. The progress is reported after every chunk.
+     *
+     * @param handle the image to read
+     * @param imageSize the size of the image in bytes
+     * @param progress the listener that is told how far the reading has come
+     * @return the digest of the image, in lower case hexadecimal
+     * @throws IOException when the image cannot be read
+     */
+    private static String imageDigest(RandomAccessFile handle, long imageSize,
+                                       IsoVerificationProgress progress) throws IOException {
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-1");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-1 is not available in this Java runtime", exception);
+        }
+        byte[] buffer = new byte[IMAGE_DIGEST_BUFFER_SIZE];
+        handle.seek(0);
+        long remaining = imageSize;
+        while (remaining > 0) {
+            int chunk = (int) Math.min(buffer.length, remaining);
+            handle.readFully(buffer, 0, chunk);
+            digest.update(buffer, 0, chunk);
+            remaining -= chunk;
+            progress.onProgress(imageSize - remaining, imageSize);
         }
         return HexFormat.of().formatHex(digest.digest());
     }
