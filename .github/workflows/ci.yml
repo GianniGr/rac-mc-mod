@@ -1,0 +1,44 @@
+name: CI
+
+# Security posture of this workflow:
+# - `pull_request` (never `pull_request_target`) is used, so untrusted pull request code is
+#   executed in the untrusted context without access to repository secrets.
+# - `contents: read` is the only permission granted; the workflow never writes to the repository.
+# - No secrets are used and there is no publishing or deployment step.
+# - The only third party actions used are actions/checkout (MIT) and actions/setup-java (MIT).
+#   `gradle/actions/setup-gradle` is deliberately not used because that repository also bundles a
+#   proprietary component under a separate licence.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test (Java 21)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # `build` compiles the mod and runs the JUnit test suite in `src/test/java`.
+      # ModDevGradle skips the Minecraft decompilation step when the CI environment variable is
+      # set, which keeps the job within the timeout.
+      - name: Build and test with Gradle
+        run: ./gradlew --no-daemon build

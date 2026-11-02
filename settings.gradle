@@ -1,0 +1,13 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+    }
+}
+
+plugins {
+    // Resolves the Java 21 toolchain automatically when the JDK running Gradle is
+    // not Java 21. Apache-2.0 (https://github.com/gradle/foojay-toolchains).
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'rac-mc-mod'
