@@ -1,0 +1,21 @@
+{
+  "screen.racmc.iso_selection.title": "Select a Ratchet & Clank disc image",
+  "screen.racmc.iso_selection.open": "Disc image",
+  "screen.racmc.iso_selection.pick": "Pick disc image",
+  "screen.racmc.iso_selection.filter": "Disc image (*.iso)",
+  "screen.racmc.iso_selection.path": "Disc image file",
+  "screen.racmc.iso_selection.path_hint": "Path to the ISO file of your own disc",
+  "screen.racmc.iso_selection.check": "Check image",
+  "screen.racmc.iso_selection.options": "Options",
+  "screen.racmc.iso_selection.hint": "Only PAL v2.00 and NTSC-U v1.00 disc images are supported.",
+  "screen.racmc.iso_selection.mandatory": "A verified disc image is needed before a world can be played.",
+  "screen.racmc.iso_selection.configured": "Configured disc image: %s",
+  "screen.racmc.iso_selection.not_configured": "No disc image is configured yet.",
+  "screen.racmc.iso_selection.status.no_path": "Enter the path of a disc image first.",
+  "screen.racmc.iso_selection.status.invalid_path": "The path is not a valid file system path.",
+  "screen.racmc.iso_selection.status.checking": "Checking the disc image...",
+  "screen.racmc.iso_selection.status.revalidating": "The configured disc image is verified again.",
+  "screen.racmc.iso_selection.status.progress": "Reading the disc image: %s%%",
+  "screen.racmc.iso_selection.status.accepted": "The image is a verified %s disc.",
+  "screen.racmc.iso_selection.status.io_error": "The disc image could not be read."
+}

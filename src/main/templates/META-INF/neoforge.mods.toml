@@ -11,10 +11,9 @@ modLoader="javafml" #mandatory
 loaderVersion="${loader_version_range}" #mandatory
 
 # The license for your mod. This is mandatory metadata and allows for easier comprehension of
-# your redistributive properties. No source-code license has been selected by the project owner
-# yet, so this currently carries the upstream MDK default placeholder: it grants no reuse or
-# redistribution rights and is not a license selection. Replace it with the owner's actual choice
-# before publishing or distributing the mod.
+# your redistributive properties. The project owner selected the MIT licence for the source code
+# of this project; the full text is in the LICENSE file. It covers the source code only and grants
+# no rights to the original game assets.
 license="${mod_license}"
 
 # Where to report problems with this mod.
@@ -39,7 +38,7 @@ authors="GianniGr" #optional
 description='''
 A community-made Minecraft Java Edition mod inspired by Ratchet & Clank.
 Original game assets are imported from a player's own legally obtained game disc image
-and are never distributed with this mod.
+and are never distributed with this mod. This is an unofficial fan project.
 '''
 
 # A dependency - use the . to indicate dependency for a specific modid. Dependencies are optional.

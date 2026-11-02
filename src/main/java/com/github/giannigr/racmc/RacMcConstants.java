@@ -17,9 +17,10 @@ public final class RacMcConstants {
     public static final String MOD_ID = "racmc";
 
     /**
-     * The human readable mod name. Must match {@code mod_name} in {@code gradle.properties}.
+     * The human readable mod name. This is also the canonical name of the project. It must match
+     * {@code mod_name} in {@code gradle.properties}.
      */
-    public static final String MOD_NAME = "Ratchet & Clank Mod";
+    public static final String MOD_NAME = "Ratchet & Clank: Getting Wood";
 
     private RacMcConstants() {
         throw new UnsupportedOperationException("Utility class");

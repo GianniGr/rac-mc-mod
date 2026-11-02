@@ -142,6 +142,13 @@ tasks.named('test', Test).configure {
     // Paths used by the tests to locate the project files without relying on the working directory.
     systemProperty 'racmc.projectDir', projectDir.absolutePath
     systemProperty 'racmc.buildDir', layout.buildDirectory.get().asFile.absolutePath
+    // The check of a real disc image is opt-in: it only runs when the path of an image is given,
+    // for example -Dracmc.isoImage=C:/path/to/the/disc.iso. The image is only read, never copied.
+    ['racmc.isoImage', 'racmc.isoExpectedRevision'].each { propertyName ->
+        if (System.getProperty(propertyName) != null) {
+            systemProperty propertyName, System.getProperty(propertyName)
+        }
+    }
     useJUnitPlatform()
     testLogging {
         events 'passed', 'skipped', 'failed'
