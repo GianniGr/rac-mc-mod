@@ -174,24 +174,43 @@ configured, and the selection screen belongs to the main menu:
 
 - The main menu shows a **Disc image** button in the lower left corner that opens the selection
   screen. The screen takes the path of a local file, checks it and reports the outcome.
-- While no verified disc image is configured, the selection screen opens by itself once when the
-  main menu appears, and the screens that lead into a world or into a multiplayer server - the
-  singleplayer screen, the screen that creates a world and the server list - do not open. The
-  selection screen takes their place and explains what is missing.
+- While no verified disc image is configured, the main menu does not open either. It is replaced
+  by the selection screen, which cannot be dismissed: there is no back button, the escape key does
+  nothing and the main menu it replaces never opens. The only ways out are a verified disc image,
+  the settings of the game and quitting the game.
+- The screens that lead into a world or into a multiplayer server - the singleplayer screen, the
+  screen that creates a world and the server list - do not open either. The selection screen takes
+  their place and explains what is missing.
 - There is no key mapping for the screen and no way to open it from inside a world. The screen
   cannot remove the configured image either: the path of an image is only written to the
   configuration after the image was verified completely, and a failed attempt leaves the previous,
   valid image in place.
 
+The selection screen lets the player pick the disc image with the file chooser of the system. As
+soon as a file is picked, the check of that file starts on a worker thread; the screen shows how far
+the reading of the image has come and reports the outcome. There is no separate button that starts
+the check.
+
+The game itself turns the graphical user interface of Java off in its entry point with
+`java.awt.headless=true`, because the game does not need one. The file chooser does need one, so the
+mod turns it back on before the chooser is used for the first time. The Java runtime reads the
+property when it is asked for the first time, so the change has to happen early, which it does in
+the static initialiser of `RacMcClient`.
+
 `Rac1MediaManager` holds the state of the media and does all of its work on a worker thread, so
 neither the verification of a 4.2 GB image nor the reading of its digest blocks the screen. The
-screen shows how far the reading has come.
+file chooser of the system runs on the thread of the user interface toolkit of Java and hands the
+chosen file back to the thread of the game.
 
 The path of the verified image and a few facts about it - the revision, the size, the digest and
-the time the file was changed - are written to `config/racmc/racmc-media.properties`. No part of
-the image is stored anywhere. When the game starts again, the file is verified again in the
-background; the game stays closed until it is over, and it stays closed for good when the file is
-missing or was changed.
+the time the file was changed - are written to `config/racmc/racmc-media.properties`, in the
+configuration directory of the game. The file holds the keys `path`, `revision`, `imageSize`,
+`imageSha1` and `modifiedTime` and nothing else; no part of the image is stored anywhere. When the
+game starts again, that file is verified again in the background, so the player does not have to
+pick the image again. The screen says that the configured image is being verified and shows how far
+the reading has come. The game stays closed until the check is over, and it stays closed for good
+when the file is missing or was changed - the path in the configuration is kept, so that the player
+can replace it with a valid image.
 
 Everything under `com.github.giannigr.racmc.client` is client only: the event subscribers are
 registered with `Dist.CLIENT` and the screen is never referenced from common code, so a dedicated
@@ -199,11 +218,11 @@ server neither loads them nor opens the screen.
 
 ### Quick play and other ways around the gate
 
-A quick play launch starts a world or joins a server before the mod is loaded, so the gate cannot
-stop it from happening. Such a world is left again on the next client tick and the player is sent
-back to the main menu with the selection screen. The game therefore fails closed on that path as
-well: a world is never played without a verified disc image, even though the quick play launch
-itself is not prevented.
+A quick play launch starts a world or joins a server before the mod is loaded, so the screens above
+cannot stop it. Such a world is left again on the next client tick: the mod closes the connection
+to the server and sends the player back to the selection screen. The game therefore fails closed on
+that path as well - a world is never played and a server is never played on without a verified disc
+image - and the player is asked for the disc image instead.
 
 ### The check of a real disc image
 
@@ -325,16 +344,18 @@ Nine focused test classes exist today:
 - `Rac1MediaManagerTest` verifies the state of the media: without a configured image the game
   stays closed, a verified image opens the gate and is remembered, the remembered image is
   verified again when the game starts, a missing or changed image sends the game back to the gate,
-  a failed replacement does not remove the valid image, the verification runs on a worker thread
-  and the configuration holds the path of the image and nothing else.
+  a failed replacement does not remove the valid image, the verification runs on a worker thread,
+  it reports how far it has come, and the configuration holds the path of the image and nothing
+  else.
 - `Rac1MediaGateTest` verifies the rule that decides whether the game may be entered: only a
-  verified image opens it, and the screens that lead into a world or into a server are blocked
-  while the main menu is not.
+  verified image opens it, the selection screen can only be dismissed with a verified image, a
+  world that was entered without one has to be left again, and the screens that lead into a world
+  or into a server are blocked while the main menu is not.
 
-The suite currently contains 85 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
+The suite currently contains 89 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in
-`Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 9 in
-`Rac1MediaManagerTest` and 3 in `Rac1MediaGateTest`.
+`Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in
+`Rac1MediaManagerTest` and 6 in `Rac1MediaGateTest`.
 
 `RealDiscImageTest` is a further, opt-in check of a real disc image. It is skipped unless the path
 of an image is given on the command line, and it is described in the section about the disc
@@ -356,11 +377,15 @@ tree.
 | --- | --- |
 | `gradlew.bat tasks` | Listed the task groups reproduced above; the configuration succeeded with ModDevGradle 2.0.148 and NeoForge 21.1.265. |
 | `gradlew.bat build` | `BUILD SUCCESSFUL`. Produced `build/libs/racmc-0.1.0.jar` containing `META-INF/neoforge.mods.toml` and the mod classes. The first run of the foundation downloaded and decompiled the Minecraft 1.21.1 artifacts (about 83 s of tool time, plus the 787 MiB asset download for the run configurations). |
-| `gradlew.bat test` | `BUILD SUCCESSFUL`, 85 of 85 tests passed (7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`, 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 9 in `Rac1MediaManagerTest`, 3 in `Rac1MediaGateTest`). The opt-in check of a real disc image is skipped. |
-| `gradlew.bat test --rerun` | `BUILD SUCCESSFUL`, 85 of 85 tests passed with the test task forced to re-execute. |
-| `gradlew.bat clean build` | `BUILD SUCCESSFUL`, the same 85 of 85 tests passed after a clean. |
+| `gradlew.bat test` | `BUILD SUCCESSFUL`, 89 of 89 tests passed (7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`, 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in `Rac1MediaManagerTest`, 6 in `Rac1MediaGateTest`). The opt-in check of a real disc image is skipped. |
+| `gradlew.bat test --rerun` | `BUILD SUCCESSFUL`, 89 of 89 tests passed with the test task forced to re-execute. |
+| `gradlew.bat clean build` | `BUILD SUCCESSFUL`, the same 89 of 89 tests passed after a clean. |
 | `CI=true .\gradlew.bat --no-daemon build` | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. |
-| `gradlew.bat runClient` | The client window opened (title `Minecraft NeoForge* 1.21.1`), OpenGL 4.6 on the RTX 5090, the mod list contained the mod under the mod id `racmc` with the version `0.1.0` and the resource manager reloaded `mod/racmc`. The mod logged its start-up with the mod id `racmc` and the version `0.1.0`. The client was closed from its own window, which logged `Stopping!` and ended the Gradle task with `BUILD SUCCESSFUL`. The independent verification worker repeated the launch on the same tree and its second run also closed cleanly through the client window, with no error or exception in the log. This run was made on the foundation, before the display name of the project was changed. |
+| `gradlew.bat runClient` | The client window opened (title `Minecraft NeoForge* 1.21.1`). With no disc image configured the main menu did not open: the log shows `The disc image gate keeps the main menu closed until a disc image is configured.` and `The disc image picker was opened and cannot be dismissed.`, and the screen shows the selection screen with the button *Pick disc image* and without a back button. The escape key was sent to the window and the log shows `The disc image picker ignored the escape key.`; the screen stayed open and no world was prepared. The client was closed through its own window, which logged `Stopping!` and ended the Gradle task with `BUILD SUCCESSFUL`. |
+| `gradlew.bat runClient` and the *Pick disc image* button | The file chooser of the system opened in its own window (`The file chooser of the system is opened.`, `headless=false`). A retail disc image was picked in it, the check of the whole image ran on a worker thread and the log shows `The disc image was verified: PAL v2.00.`. The path of the image and the facts about it were written to `run/config/racmc/racmc-media.properties` with the keys `path`, `revision`, `imageSize`, `imageSha1` and `modifiedTime`; the file holds no part of the image. |
+| `gradlew.bat runClient` after that | The game read the configuration, verified the image again in the background (`The disc image was verified: PAL v2.00.` about two seconds after the start) and opened the main menu. The player did not have to pick the image again. |
+| `gradlew.bat runClient --args="--quickPlaySingleplayer <world>"` | The client started with a quick play entry for a world. The log shows `Starting integrated minecraft server version 1.21.1` and then `The disc image gate leaves the world that was entered without a verified disc image.`: the world was entered, the mod closed the connection and sent the player back to the selection screen, which the log reports with `The disc image picker was opened and cannot be dismissed.`. The world was not played on. |
+| `gradlew.bat runClient --args="--quickPlayMultiplayer 127.0.0.1:25565"` | The client started with a quick play entry for the dedicated server of the development environment, which listens on the loopback interface only. The log shows `Connecting to 127.0.0.1, 25565` and the server logs `Dev joined the game`: the connection was made and the player was in the world. The mod closed it again on the next tick (`The disc image gate leaves the world that was entered without a verified disc image.`), kept the main menu closed and sent the player back to the selection screen. No other server was contacted. |
 | `gradlew.bat runServer` | The dedicated server started Minecraft 1.21.1 / NeoForge 21.1.265, loaded `racmc` (the mod list showed the mod under the mod id `racmc` with the version `0.1.0`), listened on `*:25565` and reported `Done (0.720s)! For help, type "help"`. It was then stopped with the server console command `stop`, which saved the players and the world of every dimension (`Saving chunks for level .../minecraft:overworld`, `.../minecraft:the_nether`, `.../minecraft:the_end`, `All dimensions are saved`) and ended the Gradle task with `BUILD SUCCESSFUL` (exit code 0, 18 s). The final harness that delivered the `stop` input ran with `--no-configuration-cache`; see the note on the server console below. This run was made on the foundation, before the display name of the project was changed. |
 | `CI=true gradlew.bat --no-daemon clean build` | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. The first cold run took about 40 s; a run with a warm Gradle build cache took 5 s. |
 | `CI=true gradlew.bat --no-daemon test --rerun` | `BUILD SUCCESSFUL`, 11 of 11 tests passed with the test task forced to re-execute on the foundation, before the importer was added. |

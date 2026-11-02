@@ -37,6 +37,33 @@ public final class Rac1MediaGate {
     }
 
     /**
+     * Whether the selection screen may be dismissed with the given state of the media.
+     *
+     * <p>The screen may only be dismissed when a verified disc image is configured. While it is
+     * not, the screen keeps the player in it, so the main menu cannot be used around it.
+     *
+     * @param state the state of the configured disc image
+     * @return {@code true} only when the configured image was verified
+     */
+    public static boolean isDismissible(Rac1MediaState state) {
+        return state == Rac1MediaState.VALID;
+    }
+
+    /**
+     * Whether a world that is active has to be left again.
+     *
+     * <p>A quick play launch starts a world before the mod is loaded, so it can get around the
+     * screens that the gate blocks. Such a world is left again as long as no verified disc image
+     * is configured.
+     *
+     * @param state the state of the configured disc image
+     * @return {@code true} while no verified disc image is configured
+     */
+    public static boolean mustLeaveWorld(Rac1MediaState state) {
+        return state != Rac1MediaState.VALID;
+    }
+
+    /**
      * Whether the given screen leads into a world or into a server and may therefore not be
      * opened while the media is not configured.
      *

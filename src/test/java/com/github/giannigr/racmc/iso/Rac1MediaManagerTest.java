@@ -218,6 +218,27 @@ class Rac1MediaManagerTest {
     }
 
     @Test
+    @DisplayName("The verification reports how far it has come")
+    void verificationReportsProgress() throws IOException, InterruptedException {
+        SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00, PAL_PRODUCT_CODE,
+                SyntheticIso.elf(1024));
+        Path image = writeImage("disc.iso", disc.image());
+
+        Rac1MediaManager manager = newManager(disc);
+        try {
+            manager.start();
+            awaitVerification(manager, () -> manager.select(image));
+
+            assertEquals(Rac1MediaState.VALID, manager.state());
+            assertEquals(disc.image().length, manager.bytesTotal(),
+                    "The manager has to know how much it has to read");
+            assertTrue(manager.bytesRead() > 0, "The manager has to report the progress");
+        } finally {
+            manager.close();
+        }
+    }
+
+    @Test
     @DisplayName("The verification runs on a worker thread")
     void verificationRunsOnAWorkerThread() throws IOException, InterruptedException {
         SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00, PAL_PRODUCT_CODE,
