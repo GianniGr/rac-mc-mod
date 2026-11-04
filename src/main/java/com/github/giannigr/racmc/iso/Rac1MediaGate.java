@@ -1,13 +1,14 @@
 package com.github.giannigr.racmc.iso;
 
+import com.github.giannigr.racmc.cache.Rac1CacheState;
 import java.util.Set;
 
 /**
  * The rule that decides whether the game may be entered.
  *
  * <p>The rule is deliberately kept apart from the game code: it only knows the state of the
- * configured disc image and the names of the screens that lead into a world or into a server. That
- * way it can be checked without a running game.
+ * configured disc image, the state of the cache of the assets and the names of the screens that
+ * lead into a world or into a server. That way it can be checked without a running game.
  */
 public final class Rac1MediaGate {
 
@@ -34,6 +35,21 @@ public final class Rac1MediaGate {
      */
     public static boolean allowsWorldEntry(Rac1MediaState state) {
         return state == Rac1MediaState.VALID;
+    }
+
+    /**
+     * Whether the game may be entered with the given state of the media and of the cache.
+     *
+     * <p>The game may only be entered when the disc image was verified and when the cache of the
+     * assets holds both of them. A cache that is being built or that failed keeps the game closed,
+     * so that the game never runs with assets that are missing or only half there.
+     *
+     * @param media the state of the configured disc image
+     * @param cache the state of the cache of the assets
+     * @return {@code true} when the game may be entered
+     */
+    public static boolean allowsWorldEntry(Rac1MediaState media, Rac1CacheState cache) {
+        return allowsWorldEntry(media) && cache == Rac1CacheState.READY;
     }
 
     /**

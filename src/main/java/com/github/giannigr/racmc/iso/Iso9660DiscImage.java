@@ -88,6 +88,28 @@ final class Iso9660DiscImage implements Rac1DiscImage {
         return new BoundedImageStream(image, file.size());
     }
 
+    @Override
+    public byte[] readBytes(long byteOffset, int length) throws IOException {
+        if (length < 0) {
+            throw new IllegalArgumentException("The number of bytes to read must not be negative");
+        }
+        if (byteOffset < 0 || byteOffset > imageSize - length) {
+            throw new IllegalArgumentException("The range lies outside of the image");
+        }
+        byte[] content = new byte[length];
+        image.seek(byteOffset);
+        image.readFully(content);
+        return content;
+    }
+
+    @Override
+    public byte[] readSectors(long sector, int sectorCount) throws IOException {
+        if (sectorCount < 0) {
+            throw new IllegalArgumentException("The number of sectors to read must not be negative");
+        }
+        return readBytes(sector * Iso9660Tree.SECTOR_SIZE, sectorCount * Iso9660Tree.SECTOR_SIZE);
+    }
+
     private Iso9660File requireFile(String isoPath) {
         String safePath = IsoImagePath.requireSafe(isoPath);
         return tree.find(safePath).orElseThrow(() -> new IllegalArgumentException(
