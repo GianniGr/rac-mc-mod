@@ -123,7 +123,9 @@ The cache directory is `config/racmc/cache` of the Minecraft instance by default
 change it in `config/racmc/racmc-cache.properties`, under the key `directory`: a blank value means
 the standard place, an absolute path is used as it is and a relative path is resolved against
 `config/racmc` of the instance - never against the working directory. The file is read line by line
-and needs no escaping, so a path is written exactly as it is. The value is read when the game
+and needs no escaping, so a path is written exactly as it is. When the key `directory` is written
+more than once, the first value is the one that is used and the later ones are ignored, so the file
+always names one directory. The value is read when the game
 starts, so a change is applied at the next start. A value that cannot be used is reported and
 the game stays closed; the mod never falls back to another directory on its own, and it never
 moves or deletes a cache that was written before. The README describes the setting in full.
@@ -218,6 +220,12 @@ the cache is only replaced by a complete, checked file.
 A run that is interrupted leaves its staging file behind. Such a file is never read - the cache is
 only ever read from the file of the cache - and the staging files of this mod are removed when the
 cache is written again. No cache file and no file of the player is removed by that cleanup.
+
+A staging file of this mod is a plain file whose name is exactly the name the mod builds:
+`racm-`, the digest of the identity of the disc in lower case hexadecimal and `.racm.staging`.
+Only such a file is removed. A file of the player whose name only looks like that one - a name
+with a digest that is not 64 hexadecimal digits, a name in upper case, a directory or a link -
+is never touched by the cleanup, and no file of the player is read by it.
 
 ## The demo of the Blaster
 

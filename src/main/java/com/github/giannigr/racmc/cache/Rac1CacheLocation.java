@@ -25,6 +25,8 @@ import java.util.List;
  *       against the working directory of the process; and</li>
  *   <li>the value is read when the game starts, so a change is used the next time the game is
  *       started.</li>
+ *   <li>when the key is written more than once, the first value is the one that counts and the
+ *       later ones are ignored, so the file always names one directory.</li>
  * </ul>
  *
  * <p>The directory is normalized and checked. A value that is not a path of the system, a value

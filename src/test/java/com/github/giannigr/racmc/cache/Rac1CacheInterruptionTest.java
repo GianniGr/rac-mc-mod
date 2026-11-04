@@ -92,7 +92,7 @@ class Rac1CacheInterruptionTest {
             + "again")
     void theStagingFilesOfInterruptedRunsAreRemoved() throws IOException {
         Rac1CacheStore store = new Rac1CacheStore(tempDir);
-        Path orphan = tempDir.resolve("racm-orphan.racm.staging");
+        Path orphan = tempDir.resolve(stagingNameOf("another disc"));
         Files.write(orphan, halfOfAWrite());
         Path other = tempDir.resolve("notes.txt");
         Files.writeString(other, "of the player");
@@ -103,6 +103,82 @@ class Rac1CacheInterruptionTest {
         assertFalse(Files.exists(orphan),
                 "The staging file of an interrupted run of another disc has to be gone");
         assertTrue(Files.exists(other), "A file that is not a staging file has to stay");
+    }
+
+    @Test
+    @DisplayName("A file of the player whose name only looks like a staging file stays")
+    void aFileThatOnlyLooksLikeAStagingFileStays() throws IOException {
+        Rac1CacheStore store = new Rac1CacheStore(tempDir);
+        Path lookalike = tempDir.resolve("racm-orphan.racm.staging");
+        Files.write(lookalike, halfOfAWrite());
+        Path shortDigest = tempDir.resolve("racm-abc.racm.staging");
+        Files.write(shortDigest, halfOfAWrite());
+        Path upperCase = tempDir.resolve(stagingNameOf("another disc").toUpperCase(
+                java.util.Locale.ROOT));
+        Files.write(upperCase, halfOfAWrite());
+
+        store.store(KEY, SyntheticAssets.content(KEY));
+
+        assertTrue(Files.exists(lookalike),
+                "A file of the player that only looks like a staging file has to stay");
+        assertTrue(Files.exists(shortDigest),
+                "A file whose name is not the name of this mod has to stay");
+        assertTrue(Files.exists(upperCase),
+                "The name of a staging file is built in lower case, so an upper case one is not "
+                        + "one of this mod");
+    }
+
+    @Test
+    @DisplayName("A directory whose name looks like a staging file stays")
+    void aDirectoryThatLooksLikeAStagingFileStays() throws IOException {
+        Rac1CacheStore store = new Rac1CacheStore(tempDir);
+        Path directory = tempDir.resolve(stagingNameOf("another disc"));
+        Files.createDirectories(directory);
+
+        store.store(KEY, SyntheticAssets.content(KEY));
+
+        assertTrue(Files.isDirectory(directory),
+                "A directory of the player must not be removed by the cleanup");
+    }
+
+    @Test
+    @DisplayName("A link whose name looks like a staging file stays")
+    void aLinkThatLooksLikeAStagingFileStays() throws IOException {
+        Rac1CacheStore store = new Rac1CacheStore(tempDir);
+        Path target = tempDir.resolve("notes.txt");
+        Files.writeString(target, "of the player");
+        Path link = tempDir.resolve(stagingNameOf("a third disc"));
+        if (!createLink(link, target)) {
+            // A system without links cannot show the case; the check is kept for the systems
+            // that have them.
+            return;
+        }
+
+        store.store(KEY, SyntheticAssets.content(KEY));
+
+        assertTrue(Files.exists(link),
+                "A link of the player must not be removed by the cleanup");
+        assertTrue(Files.exists(target), "The file of the player must not be touched");
+    }
+
+    /**
+     * The name of the staging file of a cache of the given disc, the way the mod builds it.
+     */
+    private static String stagingNameOf(String discKey) {
+        return "racm-" + Rac1CacheStore.digest(discKey) + ".racm.staging";
+    }
+
+    /**
+     * Builds a link, and holds whether the system was able to build one.
+     */
+    private static boolean createLink(Path link, Path target) {
+        try {
+            Files.createSymbolicLink(link, target);
+            return true;
+        } catch (IOException | UnsupportedOperationException exception) {
+            // A system without links cannot show the case; the other checks hold it anyway.
+            return false;
+        }
     }
 
     /**

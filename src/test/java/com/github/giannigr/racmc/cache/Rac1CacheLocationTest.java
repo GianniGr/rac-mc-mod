@@ -277,6 +277,25 @@ class Rac1CacheLocationTest {
                 "A new start of the game has to find the same directory");
     }
 
+    @Test
+    @DisplayName("The first value of the key is the one that is used")
+    void theFirstValueOfTheKeyIsTheOneThatIsUsed() throws IOException {
+        Path elsewhere = tempDir.resolve("elsewhere");
+        Files.createDirectories(elsewhere);
+        Files.writeString(configFile(),
+                "# a comment of the player" + System.lineSeparator()
+                        + Rac1CacheLocation.DIRECTORY_KEY + "=first" + System.lineSeparator()
+                        + Rac1CacheLocation.DIRECTORY_KEY + "=second" + System.lineSeparator(),
+                StandardCharsets.UTF_8);
+
+        Rac1CacheLocation location = Rac1CacheLocation.resolve(configFile(), configDirectory());
+
+        assertTrue(location.usable(), "The directory has to be usable: " + location.failure());
+        assertEquals(configDirectory().resolve("first"), location.directory(),
+                "The first value of the key is the one that counts, and the later ones are "
+                        + "ignored");
+    }
+
     /**
      * The configuration directory of the mod inside the temporary directory of the checks.
      */

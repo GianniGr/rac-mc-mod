@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
@@ -11,6 +12,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -36,6 +38,16 @@ public final class Rac1CacheStore {
 
     /** The prefix of the files of caches of this mod. */
     private static final String FILE_PREFIX = "racm-";
+
+    /**
+     * The name of a staging file of this mod, and nothing else.
+     *
+     * <p>The name is the one the mod itself builds: the prefix, the digest of the identity of
+     * the disc in lower case hexadecimal and the suffix of a cache file. A file of the player
+     * whose name only looks like that one is never a staging file of this mod.
+     */
+    private static final Pattern OWNED_STAGING_NAME =
+            Pattern.compile("racm-[0-9a-f]{64}\\.racm\\.staging");
 
     private final Path directory;
 
@@ -229,9 +241,11 @@ public final class Rac1CacheStore {
     /**
      * Removes the staging files that an interrupted run left behind.
      *
-     * <p>Only the staging files of this mod are removed. No cache file and no file of the player
-     * is touched, and a leftover file is never read, so a directory that cannot be listed does
-     * not stop the cache from being written.
+     * <p>Only the staging files of this mod are removed, and only the ones whose name is exactly
+     * the name this mod builds: {@code racm-} and the digest of the identity of a disc and
+     * {@code .racm.staging}. No cache file, no file of the player and no file that only looks
+     * like a staging file is touched. A leftover file is never read, so a directory that cannot
+     * be listed does not stop the cache from being written.
      */
     private void deleteOwnedStaging() {
         try (Stream<Path> files = Files.list(directory)) {
@@ -242,14 +256,21 @@ public final class Rac1CacheStore {
     }
 
     /**
-     * Whether the file is a staging file of a cache of this mod.
+     * Whether the entry is a staging file of a cache of this mod.
      *
-     * @param path the file
-     * @return {@code true} for {@code racm-*.racm.staging}
+     * <p>The name has to be the name this mod builds and nothing else, and the entry has to be
+     * a plain file: a directory and a link that points somewhere else are never removed, so
+     * nothing of the player is touched by accident.
+     *
+     * @param path the entry
+     * @return {@code true} for a regular file named {@code racm-<64 hex digits>.racm.staging}
      */
     private static boolean isOwnedStaging(Path path) {
-        String name = path.getFileName().toString();
-        return name.startsWith(FILE_PREFIX) && name.endsWith(".racm" + STAGING_SUFFIX);
+        Path name = path.getFileName();
+        if (name == null || !OWNED_STAGING_NAME.matcher(name.toString()).matches()) {
+            return false;
+        }
+        return Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS);
     }
 
     /**

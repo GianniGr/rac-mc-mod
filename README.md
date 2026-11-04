@@ -91,7 +91,9 @@ setting can always be found:
 
 The file is read when the game starts, so **start the game again after a change**. Write the path
 exactly as it is: the file is read line by line and needs no escaping for backslashes or spaces.
-The value is normalized before it is used. A value that cannot be used - a path that the system does
+When the key `directory` is written more than once, the first value is the one that is used and
+the later ones are ignored, so the file always names one directory. The value is normalized before
+it is used. A value that cannot be used - a path that the system does
 not accept, a value that names a file, or a directory that cannot be created or written to - is
 reported in the log and in the game with the file and the key to change; the cache then fails with
 that message and the game stays closed instead of falling back to another directory.
