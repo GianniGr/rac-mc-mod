@@ -63,7 +63,10 @@ the file is missing or was changed.
 To point the mod at your disc image, press the **Disc image** button in the lower left corner of
 the main menu, enter the path of the ISO file of your disc and let the mod check it. The check
 reads the image in the background and shows how far it has come, so the game stays usable while it
-runs.
+runs. The button stands above the lines of the version of the game, so that they stay readable.
+The screen of the disc image keeps its report - the path of the image, the outcome of the check and
+the state of the cache - in a panel under its buttons; a report that does not fit into the panel is
+scrolled with the mouse wheel instead of being cut off, so that every line of it can be read.
 
 The importer was checked against retail disc images of both supported revisions, with the
 permission of the project owner; the images themselves are not part of this repository and are

@@ -14,6 +14,7 @@ import com.github.giannigr.racmc.cache.Rac1DiscIdentity;
 import com.github.giannigr.racmc.client.render.Rac1ClientTextures;
 import com.github.giannigr.racmc.client.screen.BlasterTestScreen;
 import com.github.giannigr.racmc.client.screen.IsoSelectionScreen;
+import com.github.giannigr.racmc.client.screen.Rac1ScreenLayout;
 import com.github.giannigr.racmc.iso.Rac1DiscRevision;
 import com.github.giannigr.racmc.iso.Rac1DiscValidator;
 import com.github.giannigr.racmc.iso.Rac1MediaConfig;
@@ -242,6 +243,10 @@ public final class RacMcClient {
      * <p>The button is only reachable while a verified disc image is configured, because the main
      * menu itself does not open otherwise.
      *
+     * <p>The buttons of the mod stand above the lines of the version of the game and of the
+     * loader, which the main menu writes into its lower left corner, so that they never cover
+     * them and the player can read them.
+     *
      * @param event the event that is fired after a screen was built
      */
     @SubscribeEvent
@@ -249,13 +254,14 @@ public final class RacMcClient {
         if (!(event.getScreen() instanceof TitleScreen)) {
             return;
         }
+        int height = event.getScreen().height;
         Button button = Button.builder(
                         Component.translatable("screen.racmc.iso_selection.open"),
                         pressed -> {
                             RacMcMod.LOGGER.info("The disc image picker is opened from the main menu.");
                             Minecraft.getInstance().setScreen(new IsoSelectionScreen());
                         })
-                .bounds(4, event.getScreen().height - 24, 160, 20)
+                .bounds(4, Rac1ScreenLayout.mainMenuButtonTop(height), 160, 20)
                 .build();
         event.addListener(button);
 
@@ -268,7 +274,7 @@ public final class RacMcClient {
                                         + "main menu.");
                                 Minecraft.getInstance().setScreen(new BlasterTestScreen());
                             })
-                    .bounds(4, event.getScreen().height - 48, 160, 20)
+                    .bounds(4, Rac1ScreenLayout.mainMenuUpperButtonTop(height), 160, 20)
                     .build();
             event.addListener(demo);
         }

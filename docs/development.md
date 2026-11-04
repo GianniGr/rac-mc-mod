@@ -238,7 +238,9 @@ The disc image is mandatory. The game cannot be entered before a verified disc i
 configured, and the selection screen belongs to the main menu:
 
 - The main menu shows a **Disc image** button in the lower left corner that opens the selection
-  screen. The screen takes the path of a local file, checks it and reports the outcome.
+  screen. The screen takes the path of a local file, checks it and reports the outcome. The button
+  stands above the two lines of the version of the game and of the loader that the main menu
+  writes into its lower left corner, so that it never covers them.
 - While no verified disc image is configured, the main menu does not open either. It is replaced
   by the selection screen, which cannot be dismissed: there is no back button, the escape key does
   nothing and the main menu it replaces never opens. The only ways out are a verified disc image,
@@ -255,6 +257,19 @@ The selection screen lets the player pick the disc image with the file chooser o
 soon as a file is picked, the check of that file starts on a worker thread; the screen shows how far
 the reading of the image has come and reports the outcome. There is no separate button that starts
 the check.
+
+The screen keeps its report - the path of the disc image, the outcome of its check and the state of
+the cache of the assets - in a panel that fills the room under its buttons. A report that is longer
+than the panel is not cut off: the panel is scrolled with the mouse wheel, so that every line of
+the report can be read, the long path of the image and the reason of a failure of the cache
+included. A bar at the right edge of the panel shows how far the report is scrolled, and the panel
+says that there is more to read. The places of the buttons, of the panel and of the drawing of the
+preview of the assets are held by `Rac1ScreenLayout`, which is checked by `Rac1ScreenLayoutTest`:
+the layout fits into the narrowest window of the game, 320 by 240 pixels at the GUI scale of 1, and
+the buttons of the mod in the main menu stand above the two lines of the version of the game and of
+the loader that the main menu writes into its lower left corner. The drawing of the preview of the
+assets is left out when the window is too small to hold it beside the report; the screen of the
+demo of the Blaster is not affected by that.
 
 The game itself turns the graphical user interface of Java off in its entry point with
 `java.awt.headless=true`, because the game does not need one. The file chooser does need one, so the
@@ -585,7 +600,7 @@ Thirty focused test classes exist today:
   class of the Blaster holds the chain of its muzzle, and the hero of the game holds the idle and
   the stance of the weapon with the lengths that the demo uses.
 
-The suite currently contains 257 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
+The suite currently contains 265 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in
 `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in
 `Rac1MediaManagerTest`, 8 in `Rac1MediaGateTest`, 8 in `WadDecoderTest`, 5 in `TieClassReaderTest`,
@@ -593,10 +608,12 @@ The suite currently contains 257 tests: 7 in `ModBootstrapMetadataTest`, 2 in `M
 `Rac1AnimationEvaluatorTest`, 7 in `Rac1CoordinateTransformTest`, 5 in `Rac1TextureReaderTest`,
 6 in `VifCommandListTest`, 10 in `Rac1CoreIndexTest`, 8 in `Rac1MeshRendererTest`, 8 in
 `Rac1BlasterDemoTest`, 15 in `Rac1CacheCodecTest`, 9 in `Rac1CacheStoreTest`, 18 in
-`Rac1CacheLocationTest`, 7 in `Rac1CacheInterruptionTest`, 8 in `Rac1AssetCacheManagerTest`, 17 in
-`RealDiscAssetTest`, 3 in `DiscFactsDiagnosticTest` and 1 in `RealDiscImageTest`. 236 of them pass,
-and twenty-one of them, the opt-in checks of a real disc image, are skipped unless they are asked
-for.
+`Rac1CacheLocationTest`, 7 in `Rac1CacheInterruptionTest`, 8 in `Rac1AssetCacheManagerTest`, 8 in
+`Rac1ScreenLayoutTest`, 17 in
+`RealDiscAssetTest`, 3 in `DiscFactsDiagnosticTest` and 1 in `RealDiscImageTest`. 243 of them pass,
+and twenty-two of them are skipped unless they are asked for: the twenty-one opt-in checks of a
+real disc image and the check of the cleanup of the staging files, which needs a system that can
+build a symbolic link.
 
 `RealDiscImageTest`, `RealDiscAssetTest` and `DiscFactsDiagnosticTest` are the opt-in checks of a
 real disc image. They are skipped unless the path of an image is given on the command line, and

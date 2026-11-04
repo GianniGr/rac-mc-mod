@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -148,11 +149,10 @@ class Rac1CacheInterruptionTest {
         Path target = tempDir.resolve("notes.txt");
         Files.writeString(target, "of the player");
         Path link = tempDir.resolve(stagingNameOf("a third disc"));
-        if (!createLink(link, target)) {
-            // A system without links cannot show the case; the check is kept for the systems
-            // that have them.
-            return;
-        }
+        // A system that cannot build a link cannot show the case. The check is then aborted and
+        // reported as skipped, so that it is never counted as a check that passed.
+        Assumptions.assumeTrue(canBuildLink(link, target),
+                "The system cannot build a symbolic link, so the case cannot be shown");
 
         store.store(KEY, SyntheticAssets.content(KEY));
 
@@ -171,11 +171,11 @@ class Rac1CacheInterruptionTest {
     /**
      * Builds a link, and holds whether the system was able to build one.
      */
-    private static boolean createLink(Path link, Path target) {
+    private static boolean canBuildLink(Path link, Path target) {
         try {
             Files.createSymbolicLink(link, target);
             return true;
-        } catch (IOException | UnsupportedOperationException exception) {
+        } catch (IOException | UnsupportedOperationException | SecurityException exception) {
             // A system without links cannot show the case; the other checks hold it anyway.
             return false;
         }
