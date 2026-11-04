@@ -8,6 +8,7 @@ import com.github.giannigr.racmc.asset.Rac1AnimatedAsset;
 import com.github.giannigr.racmc.asset.Rac1StaticAsset;
 import com.github.giannigr.racmc.cache.Rac1AssetCacheManager;
 import com.github.giannigr.racmc.cache.Rac1CacheContent;
+import com.github.giannigr.racmc.cache.Rac1CacheLocation;
 import com.github.giannigr.racmc.cache.Rac1CacheStore;
 import com.github.giannigr.racmc.cache.Rac1DiscIdentity;
 import com.github.giannigr.racmc.client.render.Rac1ClientTextures;
@@ -19,6 +20,7 @@ import com.github.giannigr.racmc.iso.Rac1MediaConfig;
 import com.github.giannigr.racmc.iso.Rac1MediaGate;
 import com.github.giannigr.racmc.iso.Rac1MediaManager;
 import com.github.giannigr.racmc.iso.Rac1MediaState;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
@@ -80,8 +82,11 @@ public final class RacMcClient {
     private static final Rac1MediaManager MEDIA =
             new Rac1MediaManager(VALIDATOR, mediaConfigurationFile());
 
+    /** The place the cache of the assets is kept, as it is configured. */
+    private static final Rac1CacheLocation CACHE_LOCATION = cacheLocation();
+
     private static final Rac1AssetCacheManager ASSETS = new Rac1AssetCacheManager(
-            new Rac1CacheStore(cacheDirectory()), VALIDATOR);
+            cacheStore(CACHE_LOCATION), VALIDATOR);
 
     /** The path of the disc image the cache was started for. */
     private static String assetsPath;
@@ -129,16 +134,66 @@ public final class RacMcClient {
      * @return the file of the configuration
      */
     private static Path mediaConfigurationFile() {
-        return Rac1MediaConfig.fileIn(FMLPaths.CONFIGDIR.get().resolve(RacMcConstants.MOD_ID));
+        return Rac1MediaConfig.fileIn(configDirectory());
     }
 
     /**
-     * The directory the cache of the assets is kept in.
+     * The configuration directory of the mod inside the configuration directory of the game.
      *
-     * @return the directory of the cache
+     * @return the directory
      */
-    private static Path cacheDirectory() {
-        return FMLPaths.CONFIGDIR.get().resolve(RacMcConstants.MOD_ID).resolve("cache");
+    private static Path configDirectory() {
+        return FMLPaths.CONFIGDIR.get().resolve(RacMcConstants.MOD_ID);
+    }
+
+    /**
+     * The place the cache of the assets is kept, as the file of its configuration says.
+     *
+     * <p>The file is written when there is none, so that the setting is discoverable. The value
+     * is read when the game starts, so a change of it is used the next time the game is started.
+     * A directory that cannot be used is reported in the log and is not replaced by the standard
+     * one: the cache then fails with the same message instead of being kept somewhere the player
+     * did not ask for.
+     *
+     * @return the location of the cache
+     */
+    private static Rac1CacheLocation cacheLocation() {
+        Path directory = configDirectory();
+        Path file = Rac1CacheLocation.fileIn(directory);
+        try {
+            Rac1CacheLocation.writeDefaultWhenMissing(file);
+        } catch (IOException exception) {
+            RacMcMod.LOGGER.warn("The cache configuration {} could not be written: {}", file,
+                    describe(exception));
+        }
+        Rac1CacheLocation location = Rac1CacheLocation.resolve(file, directory);
+        if (location.usable()) {
+            RacMcMod.LOGGER.info("The cache of the assets is kept in {}.", location.directory());
+        } else {
+            RacMcMod.LOGGER.error("{}", location.failure());
+        }
+        return location;
+    }
+
+    /**
+     * The store of the cache for a location.
+     *
+     * @param location the place the cache is kept
+     * @return the store, which cannot be used when the location cannot be used
+     */
+    private static Rac1CacheStore cacheStore(Rac1CacheLocation location) {
+        if (location.usable()) {
+            return new Rac1CacheStore(location.directory());
+        }
+        return Rac1CacheStore.unusable(location.failure());
+    }
+
+    private static String describe(Exception exception) {
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) {
+            return exception.getClass().getSimpleName();
+        }
+        return message;
     }
 
     /**

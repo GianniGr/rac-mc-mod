@@ -119,6 +119,15 @@ no rights to the assets of the game, which are never part of this repository.
 The converted assets are kept in a local cache file. The file is written by the player, into the
 cache directory of the mod, and it is never part of the repository.
 
+The cache directory is `config/racmc/cache` of the Minecraft instance by default. The player can
+change it in `config/racmc/racmc-cache.properties`, under the key `directory`: a blank value means
+the standard place, an absolute path is used as it is and a relative path is resolved against
+`config/racmc` of the instance - never against the working directory. The file is read line by line
+and needs no escaping, so a path is written exactly as it is. The value is read when the game
+starts, so a change is applied at the next start. A value that cannot be used is reported and
+the game stays closed; the mod never falls back to another directory on its own, and it never
+moves or deletes a cache that was written before. The README describes the setting in full.
+
 The file starts with the magic `RACM`, holds a header of 64 bytes, a table that names the sections
 and the sections themselves. Every integer is stored in the little endian order.
 
@@ -131,7 +140,7 @@ number of the class and the name of the asset, so that the cache says which asse
 | 0x04 | 2 | the version of the format |
 | 0x06 | 2 | the size of the header |
 | 0x08 | 4 | the version of the schema of the assets |
-| 0x0C | 4 | the flags of the file, zero |
+| 0x0C | 4 | the version of the converter that wrote the file |
 | 0x10 | 4 | the number of the bytes of the identity of the disc |
 | 0x14 | 4 | the number of the sections |
 | 0x18 | 4 | the offset of the table of the sections |
@@ -145,10 +154,42 @@ The identity of the disc is the name of the release, the product code of the dis
 the whole disc image. All three are public facts of the retail releases, so the cache says which
 disc it belongs to without giving away anything about the file of the player.
 
+### The manifest of the cache
+
+The header of the file **is** the manifest of the cache: it names the magic, the version of the
+format, the version of the schema of the assets, the version of the converter that wrote the file,
+the identity of the disc and the table of the sections with their checksums. Everything a reader
+needs in order to decide whether the file can be used is inside the file itself, so the cache needs
+no separate manifest file. The metadata of a cache therefore lives in the header of the cache file
+at the offsets above, and nowhere else.
+
+### The three versions and the policy for bumping them
+
+The file carries three different versions. They are three different contracts, and each of them is
+checked on its own:
+
+| Version | Where | What it means | When it is bumped |
+| --- | --- | --- | --- |
+| Format version (`Rac1CacheCodec.FORMAT_VERSION`, currently 2) | 0x04 | The layout of the container: the header, the table of the sections and the meaning of the words of the header | When a file of the old layout cannot be read any more. It is `2` because the word at 0x0C used to be the flags of the file and now holds the version of the converter |
+| Schema version (`Rac1CacheStore.SCHEMA_VERSION`, currently 3) | 0x08 | The layout of the bytes inside the sections - what the converter writes for the scenery, the hero and the Blaster | When the encoding of the assets changes, for example when a field is added to an asset |
+| Converter version (`Rac1CacheCodec.CONVERTER_VERSION`, currently 1) | 0x0C | The identity of the converter that wrote the file | When the conversion itself changes in a way that makes an older result unacceptable although the format and the schema are unchanged - a different level of detail, a different change of the axes or a different choice of the classes to convert |
+
+The converter version is not a copy of the schema version: a file can hold the current schema and
+still have been written by an older converter, and a file can hold the current converter version
+and still be refused because its schema is older. The three versions are never claimed to be the
+same number or the same thing.
+
+A cache that was written by an older converter - including a cache written before this field
+existed, which carries the converter version `0` - is refused with a message that names the version
+that was found, and the manager of the cache builds the file again. Such a cache is never used and
+never crashes the read: the header is read with its bounds and its checksums first, so an old,
+damaged or truncated file is refused before any asset is read out of it.
+
 A cache is only used when all of the following agree:
 
 * the magic and the version of the format,
 * the checksum of the header,
+* the version of the converter that wrote the file,
 * the version of the schema of the assets,
 * the identity of the disc,
 * the checksum of the payload,
@@ -171,7 +212,12 @@ is never used, so the game never works with assets that are missing or only half
 
 A new cache is written into a staging file, read back and checked, and only then moved onto the
 file of the cache. A game that is stopped while the cache is written therefore never sees a cache
-that holds only half of the assets.
+that holds only half of the assets, and the cache that was there before stays usable: the file of
+the cache is only replaced by a complete, checked file.
+
+A run that is interrupted leaves its staging file behind. Such a file is never read - the cache is
+only ever read from the file of the cache - and the staging files of this mod are removed when the
+cache is written again. No cache file and no file of the player is removed by that cleanup.
 
 ## The demo of the Blaster
 

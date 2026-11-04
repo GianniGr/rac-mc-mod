@@ -22,7 +22,7 @@ import java.util.zip.CRC32;
  * 0x04  2 bytes  the version of the format
  * 0x06  2 bytes  the size of the header
  * 0x08  4 bytes  the version of the schema of the assets
- * 0x0C  4 bytes  the flags of the file, zero
+ * 0x0C  4 bytes  the version of the converter that wrote the file
  * 0x10  4 bytes  the number of the bytes of the identity of the disc
  * 0x14  4 bytes  the number of the sections
  * 0x18  4 bytes  the offset of the table of the sections
@@ -37,6 +37,38 @@ import java.util.zip.CRC32;
  * is and the checksum of its bytes. A file is only used when its header, its table, the checksum of
  * its payload and the checksum of every one of its sections agree, and when the assets in it can
  * be read.
+ *
+ * <h2>The manifest of the cache</h2>
+ *
+ * <p>The header of the file is the manifest of the cache: it names the magic, the format, the
+ * schema of the assets, the converter that wrote the file, the identity of the disc and the table
+ * of the sections with their checksums. Everything a reader needs to decide whether the file can
+ * be used is in the file itself, so the cache needs no separate manifest file.
+ *
+ * <h2>The three versions and when they change</h2>
+ *
+ * <p>The file carries three different versions, and each of them is checked on its own:
+ *
+ * <ul>
+ *   <li>{@link #FORMAT_VERSION} is the layout of the container - the header, the table of the
+ *       sections and the meaning of the words of the header. It is bumped when a file of the old
+ *       layout cannot be read any more. It is {@code 2}: the word at {@code 0x0C} used to be the
+ *       flags of the file and now holds the version of the converter.</li>
+ *   <li>{@link Rac1CacheStore#SCHEMA_VERSION} is the layout of the bytes inside the sections -
+ *       what the converter writes for the scenery, the hero and the Blaster. It is bumped when the
+ *       encoding of the assets changes, for example when a field is added to an asset.</li>
+ *   <li>{@link #CONVERTER_VERSION} is the identity of the converter that wrote the file. It is
+ *       bumped when the conversion itself changes in a way that makes an older result
+ *       unacceptable, even though the format and the schema of the file are unchanged - a
+ *       different level of detail, a different change of the axes or a different choice of the
+ *       classes to convert. It is not a copy of the schema version: a file can hold the current
+ *       schema and still have been written by an older converter.</li>
+ * </ul>
+ *
+ * <p>The versions live in the header of the cache file, at the offsets above. That is where the
+ * manifest of the cache is; there is no second file that carries them. A file whose format,
+ * schema or converter version is not the current one is refused with a message that names the
+ * version that was found, and the manager of the cache builds the file again instead of using it.
  */
 public final class Rac1CacheCodec {
 
@@ -44,7 +76,13 @@ public final class Rac1CacheCodec {
     public static final byte[] MAGIC = { 'R', 'A', 'C', 'M' };
 
     /** The version of the format of the cache file. */
-    public static final int FORMAT_VERSION = 1;
+    public static final int FORMAT_VERSION = 2;
+
+    /** The version of the converter that writes cache files. */
+    public static final int CONVERTER_VERSION = 1;
+
+    /** The offset of the version of the converter in the header. */
+    private static final int CONVERTER_OFFSET = 12;
 
     /** The size of the header of a cache file in bytes. */
     public static final int HEADER_SIZE = 64;
@@ -92,6 +130,9 @@ public final class Rac1CacheCodec {
     /**
      * Writes the content of a cache into a file.
      *
+     * <p>The header of the file carries the format, the schema of the assets and the version of
+     * the converter, so the file says on its own what it needs to be read again.
+     *
      * @param content the content of the cache
      * @param schemaVersion the version of the schema of the assets
      * @return the bytes of the file
@@ -119,7 +160,7 @@ public final class Rac1CacheCodec {
         writeShort(file, 4, FORMAT_VERSION);
         writeShort(file, 6, HEADER_SIZE);
         writeInt(file, 8, schemaVersion);
-        writeInt(file, 12, 0);
+        writeInt(file, CONVERTER_OFFSET, CONVERTER_VERSION);
         writeInt(file, 16, discKey.length);
         writeInt(file, 20, sectionCount);
         writeInt(file, 24, tableOffset);
@@ -142,6 +183,10 @@ public final class Rac1CacheCodec {
 
     /**
      * Reads the content of a cache out of a file.
+     *
+     * <p>A file of another format, of another schema or of another converter is refused with a
+     * message that names the version that was found. The caller builds the cache again in that
+     * case; a file of an older version is therefore never used and never crashes the read.
      *
      * @param file the bytes of the file
      * @param expectedKey the identity of the disc the assets have to come from
@@ -170,6 +215,11 @@ public final class Rac1CacheCodec {
         }
         if (checksum(file, 0, 44) != readInt(file, 44)) {
             throw new IOException("The header of the cache file is damaged.");
+        }
+        int converterVersion = readInt(file, CONVERTER_OFFSET);
+        if (converterVersion != CONVERTER_VERSION) {
+            throw new IOException("The cache file was written by the converter version "
+                    + converterVersion + " instead of " + CONVERTER_VERSION + ".");
         }
         int fileSchema = readInt(file, 8);
         if (fileSchema != schemaVersion) {

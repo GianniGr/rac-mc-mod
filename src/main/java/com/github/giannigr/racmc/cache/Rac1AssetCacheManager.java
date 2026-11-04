@@ -180,6 +180,16 @@ public final class Rac1AssetCacheManager implements Closeable {
             return;
         }
         try {
+            // A directory that cannot be used is reported instead of being replaced by another
+            // one, so the game stays closed rather than using a cache of the wrong place.
+            store.verifyUsable();
+        } catch (IOException exception) {
+            error = describe(exception);
+            content = null;
+            state = Rac1CacheState.FAILED;
+            return;
+        }
+        try {
             Optional<Rac1CacheContent> cached = store.load(key);
             if (cached.isPresent()) {
                 content = cached.get();

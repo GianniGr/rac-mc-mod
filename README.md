@@ -69,6 +69,36 @@ The importer was checked against retail disc images of both supported revisions,
 permission of the project owner; the images themselves are not part of this repository and are
 never redistributed with it.
 
+## Where the converted assets are kept
+
+The assets that the mod converts out of the disc image are kept in a local cache file of the mod.
+The file holds converted assets only - never a part of the disc image - and it is never part of
+this repository.
+
+The standard place is `config/racmc/cache` of the Minecraft instance, next to the other
+configuration of the mod. It is a normal directory of the instance and never a file inside the mod
+jar. The mod creates it when the game starts if it does not exist yet.
+
+To keep the cache somewhere else, edit `config/racmc/racmc-cache.properties` and set the key
+`directory`. The mod writes that file with instructions the first time the game starts, so the
+setting can always be found:
+
+| Value | Meaning |
+| --- | --- |
+| blank, or no file | the standard place `config/racmc/cache` of the instance |
+| an absolute path, for example `D:\Games\racmc-cache` | that directory |
+| a relative path, for example `cache` or `..\shared-cache` | resolved against `config/racmc` of the instance, never against the working directory the game was started from |
+
+The file is read when the game starts, so **start the game again after a change**. Write the path
+exactly as it is: the file is read line by line and needs no escaping for backslashes or spaces.
+The value is normalized before it is used. A value that cannot be used - a path that the system does
+not accept, a value that names a file, or a directory that cannot be created or written to - is
+reported in the log and in the game with the file and the key to change; the cache then fails with
+that message and the game stays closed instead of falling back to another directory.
+
+Changing the setting never moves and never deletes a cache that was written before: the old cache
+stays where it is and comes back when the old value is set again.
+
 ## Building and running
 
 A Java 21 JDK is required; the Gradle wrapper downloads the pinned Gradle distribution itself.
