@@ -60,19 +60,20 @@ public final class Rac1AssetPreview {
                 this.blasterTextures = register(content.blaster());
                 this.staticTextures = registerStatic(content.staticAsset());
             }
-            float[] bounds = demo.bounds();
-            if (bounds == null) {
+            float[] framing = demo.framing();
+            if (framing == null) {
                 return;
             }
             // The model is measured and turned so that it stands in the middle of the area and
-            // fills it as far as the room allows.
-            float width = Math.max(0.001f, bounds[3] - bounds[0]);
-            float height = Math.max(0.001f, bounds[4] - bounds[1]);
-            float depth = Math.max(0.001f, bounds[5] - bounds[2]);
+            // fills it as far as the room allows. The box around the model is the same for every
+            // moment of the demo, so that the model does not move on the screen while it runs.
+            float width = Math.max(0.001f, framing[3] - framing[0]);
+            float height = Math.max(0.001f, framing[4] - framing[1]);
+            float depth = Math.max(0.001f, framing[5] - framing[2]);
             float scale = Math.min(areaWidth / Math.max(width, depth), areaHeight / height) * 0.85f;
-            float centreX = (bounds[0] + bounds[3]) * 0.5f;
-            float centreY = (bounds[1] + bounds[4]) * 0.5f;
-            float centreZ = (bounds[2] + bounds[5]) * 0.5f;
+            float centreX = (framing[0] + framing[3]) * 0.5f;
+            float centreY = (framing[1] + framing[4]) * 0.5f;
+            float centreZ = (framing[2] + framing[5]) * 0.5f;
 
             MultiBufferSource.BufferSource buffers =
                     Minecraft.getInstance().renderBuffers().bufferSource();
@@ -81,7 +82,20 @@ public final class Rac1AssetPreview {
             try {
                 pose.translate(areaX + areaWidth * 0.5f, areaY + areaHeight * 0.5f, 0.0f);
                 pose.scale(scale, scale, scale);
+                // The second axis of the screen of the game points down, and the second axis of
+                // the models of the game points up. The model is therefore turned around the
+                // first axis, so that the hero stands on his feet on the screen and faces the
+                // player. The turn is a proper turn, so it does not change the winding of the
+                // triangles.
+                pose.mulPose(com.mojang.math.Axis.XP.rotationDegrees(180.0f));
                 pose.mulPose(com.mojang.math.Axis.YP.rotationDegrees(angle));
+                // The screens of the game of blocks draw their pictures in a frame whose second
+                // axis points down and whose third axis points towards the player, so a model of
+                // the game would come out mirrored on the screen: the right hand of the hero
+                // would be on the left of the screen when he is seen from behind. The game of
+                // blocks turns the models of its own screens around their vertical axis for the
+                // same reason, so the third axis of the model is turned around here.
+                pose.scale(1.0f, 1.0f, -1.0f);
                 pose.translate(-centreX, -centreY, -centreZ);
                 Rac1MeshRenderer.render(pose, buffers, content.animatedAsset().mesh(),
                         demo.ratchetPositions(), demo.ratchetNormals(), this.heroTextures);

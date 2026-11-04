@@ -177,22 +177,41 @@ that holds only half of the assets.
 
 The mod shows the imported assets in the game: the hero holds his Blaster and fires it.
 
-* The hero is posed with one of his own imported animation sequences.
-* The Blaster is posed with its own imported firing sequence. The firing sequence of the Blaster
-  is the fourth one: the ReRAC project measured in the code of the game that the weapon blends
-  to its sequence 4 when it fires and back to its sequence 1 when it is held.
+* The hero is posed with one of his own imported animation sequences. The demo uses the stance of
+  the hero with the weapon in his hand, the sequence 56: the ReRAC project measured it in the
+  definitions of the items of the game, where the Blaster names the sequence 56 as the stance of
+  the hero, the sequence 57 as the layer of his arm and the sequence 62 as the layer of his arm
+  while he crouches. The idle of the hero is the fallback, and so is the first sequence of the
+  class, when the hero of the disc does not hold the stance.
+* A sequence that repeats itself repeats itself over its last key. The reader of the game adds a
+  key at the end of such a sequence, and that key holds the pose of the first key, so the frame
+  after the last one is the first one again. The evaluator of the mod takes the time back into the
+  cycle of the sequence at that point, so the pose of the hero is the same on both sides of the
+  end of the sequence and the hero does not jump. A cycle that was made longer would hold the
+  pose of the first key for a whole key interval at its end, and the hero would stand still once
+  per cycle.
+* The Blaster is posed with its own imported sequences. The weapon is held with the sequence 1,
+  which holds a single key, and it fires with the sequence 4: the ReRAC project measured in the
+  code of the game that the weapon blends to its sequence 4 when it fires and back to its
+  sequence 1 when it is held. The shot is played once every 2.5 seconds, over the length of the
+  sequence of the shot itself, and the weapon is blended into the shot and out of it again over
+  the first interval of that sequence.
 * The Blaster hangs on the joint of the skeleton of the hero that the game hangs the items of the
   hand on. That joint is read out of the class of the hero: the first list of its joint lists is
   the chain of the hand, and it ends at the joint 56, the joint of the OmniWrench. The converter
-  reads the chain instead of assuming the number of the joint.
+  reads the chain instead of assuming the number of the joint. The chain of the hand holds the
+  joints 52 to 56, the arm of the weapon, and the twelfth list of the class - the list that the
+  game evaluates for the layer of the arm of the hero - ends at the joint 52, the shoulder of the
+  same arm. The weapon of the hero is therefore in the right arm of the hero, and the check of a
+  real disc image holds these numbers.
 
-The game places the items of the hand with the pose of that joint **and** with a matrix of its own
-for every item, which holds the grip of the item. That matrix lives in the code of the game and
-not in the data of the disc, so the demo uses the place of the joint of the hand and turns the
-weapon into the frame of the model of the hero: the weapons of the game are modelled with their
-barrel along the way the hero faces and their back is up, so the weapon points the way the hero
-faces and follows the hand of the hero while the animation runs. The Blaster therefore sits in the
-hand of the hero without the grip of the game.
+The game places the items of the hand with the pose of the joint they hang on: the item brings
+the place of its grip with it, so the game adds no matrix of its own - the origin of the model of
+the item sits at the joint. The pose of the joint is the pose of its chain, without the scales
+that only reach the joint itself, because the game leaves those scales out of the place of the
+items of the hand. The demo does the same, so the Blaster sits in the hand of the hero the way
+the game draws it: in the stance of the weapon the third axis of the wrist of the hero points the
+way the hero faces, and the Blaster is 0.74 units long along that axis.
 
 The demo is reachable in three ways:
 
@@ -202,7 +221,11 @@ The demo is reachable in three ways:
 * the key **B** opens the demo screen while a world is played.
 
 The screen measures the model and draws it in the middle of the area above the text, so that the
-whole hero and the whole weapon are visible and the text never covers them.
+whole hero and the whole weapon are visible and the text never covers them. The box around the
+model is measured at the keys of the sequences of the hero and of the Blaster, over the whole
+cycle of the sequence of the hero and over the whole firing sequence of the Blaster, so that the
+model stands still on the screen while the demo runs. A box that is measured in every frame would
+move the model on the screen, because the Blaster moves in the hand of the hero while it fires.
 
 ## The preview
 
@@ -216,6 +239,14 @@ holds one buffer for every kind of triangle and closes a buffer as soon as anoth
 triangle is written to it, so the renderer of the mod groups the triangles by their material and
 writes every kind of triangle in one run.
 
+The kinds of triangles of the game of blocks are drawn in quads and not in triangles: they take
+four vertices for every triangle and cut them into two triangles. The renderer of the mod writes
+every triangle of the mesh as a quad of four vertices, whose first vertex is written a second
+time. A triangle that is written as a list of three vertices only would be cut in two by the
+renderer of the game of blocks, and the second triangle of the quad would join the last vertex of
+that triangle with the first vertex of the next triangle of the mesh: the model would be covered
+with thin shards.
+
 ## Known limits
 
 * Only the assets of the first level are converted: one piece of scenery, the hero and his
@@ -224,8 +255,10 @@ writes every kind of triangle in one run.
 * The animation of the hero is evaluated on the processor of the game, without the pose layers and
   the joint modifiers that the game builds while it runs. The pose of the hero is therefore the
   pose of the disc and not the pose the game builds out of it.
-* The items of the hand are placed at the place of the joint of the hand and turned into the frame
-  of the model of the hero. The grip of every item is in the code of the game and not in the data
-  of the disc, so the demo does not use it.
+* The items of the hand are placed with the pose of the joint of the hand and with no matrix of
+  their own, the way the game places them: the item brings the place of its grip with it. The
+  attach word of every item - the joint of the hero that an item hangs on - is in the code of the
+  game and not in the data of the disc, so the demo uses the joint of the hand of the hero, the
+  joint 56, for the Blaster.
 * The cache holds the assets of the first level only. A cache of another level would need another
   schema version.

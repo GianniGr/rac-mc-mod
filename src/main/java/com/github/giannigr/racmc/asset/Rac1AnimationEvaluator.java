@@ -11,6 +11,11 @@ package com.github.giannigr.racmc.asset;
  * <p>The game works in the row vectors: the rows of a matrix are the images of the axes. The
  * evaluator works in the column vectors of the game of blocks, so the matrices of the disc are
  * read the other way around.
+ *
+ * <p>A sequence that repeats itself repeats itself over its last key: the reader of the game adds
+ * a key at the end of such a sequence that holds the pose of the first key, so the frame after the
+ * last one is the first one again. The evaluator takes the time back into the cycle of the
+ * sequence at that point, and the pose on both sides of the end of the cycle is the same.
  */
 public final class Rac1AnimationEvaluator {
 
@@ -93,10 +98,22 @@ public final class Rac1AnimationEvaluator {
         float[] times = animation.times();
         int lower = 0;
         int upper = 0;
+        float factor = 0.0f;
         if (keyCount == 1) {
             lower = 0;
             upper = 0;
         } else {
+            float last = times[keyCount - 1];
+            if (animation.loop() && last > 0.0f && time >= last) {
+                // The reader of the game adds a key at the end of a sequence that repeats itself:
+                // it holds the pose of the first key, so the cycle of the sequence ends with it
+                // and the frame after the last one is the first one again. The cycle of the
+                // sequence is therefore as long as its last key, and the time is taken back into
+                // it. A cycle that was made longer would hold the pose of the first key for a
+                // whole key interval at its end, and the hero would stand still at the end of
+                // every cycle.
+                time = time % last;
+            }
             upper = keyCount - 1;
             for (int index = 0; index < keyCount - 1; index++) {
                 if (time >= times[index] && time <= times[index + 1]) {
@@ -116,7 +133,6 @@ public final class Rac1AnimationEvaluator {
                 upper = keyCount - 1;
             }
         }
-        float factor = 0.0f;
         if (upper != lower) {
             float span = times[upper] - times[lower];
             factor = span > 0.0f ? (time - times[lower]) / span : 0.0f;
@@ -345,6 +361,22 @@ public final class Rac1AnimationEvaluator {
         matrix[13] = translations[joint * 3 + 1];
         matrix[14] = translations[joint * 3 + 2];
         return matrix;
+    }
+
+    /**
+     * Multiplies two matrices of the game of blocks.
+     *
+     * <p>The matrices of the game of blocks are stored in the order of their columns, and the
+     * product of two matrices is the matrix of the first one times the matrix of the second one.
+     *
+     * @param left the first matrix, sixteen floats
+     * @param right the second matrix, sixteen floats
+     * @return the product of the matrices, sixteen floats
+     */
+    public static float[] multiply(float[] left, float[] right) {
+        float[] result = new float[MATRIX_SIZE];
+        multiply(left, 0, right, 0, result, 0);
+        return result;
     }
 
     private static void multiply(float[] left, int leftAt, float[] right, int rightAt,

@@ -39,8 +39,12 @@ public final class Rac1ClientTextures {
                 image.setPixelRGBA(x, y, abgr(texture.pixel(x, y)));
             }
         }
-        dynamic.setFilter(false, false);
+        // The textures of the game are drawn small on the screen, so the image has to be filtered,
+        // the way the game draws them. The filter has to be set after the image was put into the
+        // graphics card, because the upload of the image sets the filter back to the nearest
+        // neighbour.
         dynamic.upload();
+        dynamic.setFilter(true, false);
         // A texture that is registered again - because the screen that drew it was built again -
         // must not be left in the texture manager of the game.
         release(location);

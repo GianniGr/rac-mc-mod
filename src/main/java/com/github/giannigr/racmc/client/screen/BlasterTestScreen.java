@@ -88,7 +88,8 @@ public class BlasterTestScreen extends Screen {
         int textHeight = TEXT_LINES * 10 + 8;
         int areaTop = 34;
         int areaBottom = this.height - textHeight - 44;
-        this.preview.draw(graphics, this.content, this.demo, (this.time * 20.0f) % 360.0f, 20,
+        float angle = (this.time * 20.0f) % 360.0f;
+        this.preview.draw(graphics, this.content, this.demo, angle, 20,
                 areaTop, this.width - 40, Math.max(40, areaBottom - areaTop));
         if (this.preview.failure() != null) {
             graphics.drawCenteredString(this.font,

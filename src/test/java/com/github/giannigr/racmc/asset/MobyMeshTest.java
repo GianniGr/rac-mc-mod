@@ -210,6 +210,99 @@ class MobyMeshTest {
     }
 
     /**
+     * The triangles of a packet come out in the order of its strip.
+     */
+    @Test
+    @DisplayName("The triangles of a packet come out in the order of its strip")
+    void theTrianglesComeOutInTheOrderOfTheStrip() throws AssetFormatException {
+        // A strip of five vertices makes three triangles that follow each other, and their
+        // facing alternates: the game draws them on both sides.
+        MobyClassReader reader = MobyClassReader.of(stripBlob());
+
+        MobyClassReader.Mesh mesh = reader.readMesh();
+
+        assertEquals(3, mesh.triangleCount(), "A strip of five vertices makes three triangles");
+        assertEquals(0, mesh.indices()[0]);
+        assertEquals(1, mesh.indices()[1]);
+        assertEquals(2, mesh.indices()[2]);
+        assertEquals(1, mesh.indices()[3]);
+        assertEquals(2, mesh.indices()[4]);
+        assertEquals(3, mesh.indices()[5]);
+        assertEquals(2, mesh.indices()[6]);
+        assertEquals(3, mesh.indices()[7]);
+        assertEquals(4, mesh.indices()[8]);
+    }
+
+    /**
+     * Builds a class with one packet whose strip holds five vertices.
+     *
+     * <p>The list of the indices of the packet ends with the trailer of the game, three times the
+     * first vertex and the end of the list, so that the last three indices are dropped.
+     *
+     * @return the bytes of the class
+     */
+    private static byte[] stripBlob() {
+        byte[] blob = new byte[0x1000];
+        int packetTable = 0x48;
+        writeInt(blob, 0x00, packetTable);
+        blob[0x04] = 1;
+        blob[0x08] = 1;
+        writeInt(blob, 0x14, 0x800);
+        writeInt(blob, 0x18, 0x880);
+        writeFloat(blob, 0x24, 1.0f);
+
+        int list = 0x900;
+        int vertexAt = 0xB00;
+        int vertices = 5;
+        int coordinates = vertices * 4;
+        int indices = 16;
+        int materials = 64;
+        int listSize = (16 + coordinates + indices + materials + 15) / 16;
+        writeInt(blob, packetTable, list);
+        writeShort(blob, packetTable + 4, listSize);
+        writeInt(blob, packetTable + 8, vertexAt);
+        blob[packetTable + 0x0C] = (byte) ((VERTEX_TABLE_HEADER + (vertices + 1) * 0x10) / 16);
+        blob[packetTable + 0x0F] = (byte) vertices;
+
+        // The unpack of the coordinates of the texture.
+        writeCommand(blob, list, 0x65, vertices, 0, coordinates);
+        for (int vertex = 0; vertex < vertices; vertex++) {
+            writeShort(blob, list + 4 + vertex * 4, vertex * 100);
+            writeShort(blob, list + 4 + vertex * 4 + 2, vertex * 200);
+        }
+        // The unpack of the indices: the five vertices of the strip and the trailer of the game.
+        int indexAt = list + 4 + coordinates;
+        writeCommand(blob, indexAt, 0x6E, 4, 0, indices);
+        blob[indexAt + 4 + 2] = 0;
+        for (int index = 0; index < vertices; index++) {
+            blob[indexAt + 8 + index] = (byte) (index + 1);
+        }
+        for (int index = 0; index < 3; index++) {
+            blob[indexAt + 8 + vertices + index] = 1;
+        }
+        blob[indexAt + 8 + vertices + 3] = 0;
+        // The unpack of the materials: one block with the texture zero.
+        int materialAt = indexAt + 4 + indices;
+        writeCommand(blob, materialAt, 0x6C, 4, 0, materials);
+        writeInt(blob, materialAt + 4 + 0x20, 0);
+
+        // The table of the vertices of the packet.
+        writeInt(blob, vertexAt + 0x0C, vertices);
+        writeInt(blob, vertexAt + 0x14, vertices);
+        writeInt(blob, vertexAt + 0x18, VERTEX_TABLE_HEADER);
+        writeInt(blob, vertexAt + 0x1C, VERTEX_TABLE_HEADER + (vertices + 1) * 0x10);
+        for (int vertex = 0; vertex < vertices; vertex++) {
+            int at = vertexAt + VERTEX_TABLE_HEADER + vertex * 0x10;
+            blob[at + 8] = 0;
+            blob[at + 9] = 64;
+            writeShort(blob, at + 0x0A, vertex * 100);
+            writeShort(blob, at + 0x0C, 0);
+            writeShort(blob, at + 0x0E, 0);
+        }
+        return blob;
+    }
+
+    /**
      * Writes a command of a command list of the graphics chip.
      *
      * @param list the list of the commands

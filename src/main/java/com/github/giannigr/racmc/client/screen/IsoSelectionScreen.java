@@ -142,11 +142,14 @@ public class IsoSelectionScreen extends Screen {
                 left, top - 26, 0xFFAA00);
         drawWrapped(graphics, describeState(), left, top + 78, BAR_WIDTH, 0xFFFFFF);
         drawProgress(graphics, left, top + 40);
-        drawPreview(graphics, partialTick);
+        drawPreview(graphics);
     }
 
     @Override
     public void tick() {
+        // The preview of the assets moves with the clock of the game, so that the animation of
+        // the hero runs at the same speed whatever the number of pictures per second is.
+        this.previewTime += 0.05f;
         reportResult();
         if (this.pickButton != null) {
             // Only one check runs at a time.
@@ -373,7 +376,7 @@ public class IsoSelectionScreen extends Screen {
      * Blaster. A failure of the drawing is reported once by the preview and the screen stays
      * usable.
      */
-    private void drawPreview(GuiGraphics graphics, float partialTick) {
+    private void drawPreview(GuiGraphics graphics) {
         if (RacMcClient.assets().state() != Rac1CacheState.READY) {
             return;
         }
@@ -381,7 +384,6 @@ public class IsoSelectionScreen extends Screen {
         if (content.isEmpty()) {
             return;
         }
-        this.previewTime += partialTick / 20.0f;
         this.demo.update(content.get(), this.previewTime);
         // The model is drawn in the area under the text of the screen, so that the text never
         // covers it.

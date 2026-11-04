@@ -268,4 +268,79 @@ class Rac1AnimationEvaluatorTest {
                 "The joint was not turned in the first key");
         assertEquals(1.0f, second[16], TOLERANCE, "The joint was still turned in the second key");
     }
+
+    /**
+     * A sequence that repeats itself, as the reader of the game reads it.
+     *
+     * <p>The reader of the game adds a key at the end of a sequence that repeats itself, and that
+     * key holds the pose of the first key, so the frame after the last one is the first one again.
+     * The keys of the sequence of the checks are at the times 0, 0.25 and 0.5 seconds, the last
+     * one holds the pose of the first one, and the second joint is turned a little more in every
+     * key.
+     *
+     * @return the sequence
+     */
+    private static Rac1Animation loop() {
+        int keyLength = JOINTS * 4;
+        float[] rotations = new float[3 * keyLength];
+        for (int key = 0; key < 3; key++) {
+            rotations[key * keyLength + 3] = 1.0f;
+            float angle = (float) Math.toRadians(30.0f * key);
+            rotations[key * keyLength + keyLength - 2] = (float) Math.sin(angle * 0.5);
+            rotations[key * keyLength + keyLength - 1] = (float) Math.cos(angle * 0.5);
+        }
+        return new Rac1Animation("test", new float[] { 0.0f, 0.25f, 0.5f }, true, rotations,
+                new int[0], new int[0], new float[0], new int[0], new int[0], new float[0],
+                new boolean[0]);
+    }
+
+    @Test
+    @DisplayName("A sequence that repeats itself repeats itself over its last key")
+    void aSequenceThatRepeatsItselfRepeatsItselfOverItsLastKey() {
+        // The cycle of the sequence is as long as its last key, because the key at the end of the
+        // sequence holds the pose of the first key.
+        float[] inside = Rac1AnimationEvaluator.evaluate(skeleton(), loop(), 0.05f, 1.0f);
+        float[] afterTheEnd = Rac1AnimationEvaluator.evaluate(skeleton(), loop(), 0.55f, 1.0f);
+
+        for (int index = 0; index < inside.length; index++) {
+            assertEquals(inside[index], afterTheEnd[index], TOLERANCE,
+                    "The pose is not the same after a whole cycle of the sequence");
+        }
+    }
+
+    @Test
+    @DisplayName("A sequence that repeats itself does not stand still at the end of its cycle")
+    void aSequenceThatRepeatsItselfDoesNotStandStillAtTheEndOfItsCycle() {
+        // A cycle that was made longer than the sequence would hold the pose of the first key for
+        // a whole key interval at its end.
+        float previous = Rac1AnimationEvaluator.evaluate(skeleton(), loop(), 0.45f, 1.0f)[16];
+        float current = Rac1AnimationEvaluator.evaluate(skeleton(), loop(), 0.475f, 1.0f)[16];
+
+        assertTrue(Math.abs(previous - current) > TOLERANCE,
+                "The joint stands still at the end of the cycle of the sequence");
+    }
+
+    @Test
+    @DisplayName("A sequence that does not repeat itself holds its last key")
+    void aSequenceThatDoesNotRepeatItselfHoldsItsLastKey() {
+        // The key at the end of the sequence turns the second joint, the keys before it do not.
+        int keyLength = JOINTS * 4;
+        float[] rotations = new float[2 * keyLength];
+        rotations[3] = 1.0f;
+        rotations[keyLength + 3] = 1.0f;
+        float half = (float) Math.sqrt(0.5);
+        rotations[keyLength - 2] = half;
+        rotations[keyLength - 1] = half;
+        Rac1Animation animation = new Rac1Animation("test", new float[] { 0.0f, 1.0f }, false,
+                rotations, new int[0], new int[0], new float[0], new int[0], new int[0],
+                new float[0], new boolean[0]);
+
+        float[] last = Rac1AnimationEvaluator.evaluate(skeleton(), animation, 1.0f, 1.0f);
+        float[] afterTheEnd = Rac1AnimationEvaluator.evaluate(skeleton(), animation, 5.0f, 1.0f);
+
+        for (int index = 0; index < last.length; index++) {
+            assertEquals(last[index], afterTheEnd[index], TOLERANCE,
+                    "The sequence does not hold its last key");
+        }
+    }
 }

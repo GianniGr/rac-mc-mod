@@ -27,6 +27,13 @@ import net.minecraft.resources.ResourceLocation;
  * was written to it cannot be used any more - it throws {@code IllegalStateException: Not
  * building!}. The renderer therefore groups the triangles by their material, so that every kind
  * of triangle is written in one run, and it flushes the run before it writes the next one.
+ *
+ * <p>The kinds of triangles of the game of blocks are drawn in quads and not in triangles, so every
+ * triangle of the mesh is written as a quad of four vertices, whose first vertex is written twice.
+ * A triangle that is written as a list of three vertices only would be cut in two by the renderer
+ * of the game of blocks: the first triangle of the quad would be the triangle of the mesh, but
+ * the second one would join the last vertex of that triangle with the first vertex of the next
+ * triangle of the mesh, and the model would be covered with thin shards.
  */
 public final class Rac1MeshRenderer {
 
@@ -34,8 +41,8 @@ public final class Rac1MeshRenderer {
     public static final int FULL_LIGHT = 0xF000F0;
 
     /** The kind of triangle that is used when a material has no texture. */
-    private static final RenderType MISSING = RenderType.ENTITY_CUTOUT
-            .apply(ResourceLocation.withDefaultNamespace("missing"));
+    private static final RenderType MISSING = RenderType.entityCutoutNoCull(
+            ResourceLocation.withDefaultNamespace("missing"));
 
     /**
      * The kinds of triangles of the textures of the game.
@@ -154,21 +161,45 @@ public final class Rac1MeshRenderer {
                 if (!writable(indices, triangle, vertices)) {
                     continue;
                 }
-                for (int corner = 0; corner < 3; corner++) {
-                    int vertex = indices[triangle * 3 + corner];
-                    consumer.addVertex(pose.last(), positions[vertex * 3], positions[vertex * 3 + 1],
-                            positions[vertex * 3 + 2])
-                            .setColor(255, 255, 255, 255)
-                            .setUv(uvs[vertex * 2], uvs[vertex * 2 + 1])
-                            .setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
-                            .setLight(FULL_LIGHT)
-                            .setNormal(pose.last(), normals[vertex * 3], normals[vertex * 3 + 1],
-                                    normals[vertex * 3 + 2]);
-                }
+                writeTriangle(consumer, pose, positions, normals, uvs, indices, triangle);
             }
             // The run is finished, so the buffer can be closed before the next kind of triangle
             // is written.
             buffers.endBatch(type);
+        }
+    }
+
+    /**
+     * Writes the vertices of one triangle of a mesh into a buffer.
+     *
+     * <p>The kinds of triangles of the game of blocks are drawn in quads: they take four vertices
+     * for every triangle of the mesh and cut them into two triangles, the first one out of the
+     * vertices one, two and three, the second one out of the vertices three, four and one. The
+     * mesh of the game is a list of triangles, so the first vertex of the triangle is written a
+     * second time to close the quad. The second triangle of the quad then has the first vertex
+     * of the triangle twice and is flat, and it is not seen.
+     *
+     * @param consumer the buffer the vertices are written into
+     * @param pose the place of the mesh
+     * @param positions the places of the vertices
+     * @param normals the normals of the vertices
+     * @param uvs the texture coordinates of the vertices
+     * @param indices the indices of the vertices of the triangles
+     * @param triangle the number of the triangle
+     */
+    static void writeTriangle(VertexConsumer consumer, PoseStack pose, float[] positions,
+                               float[] normals, float[] uvs, int[] indices, int triangle) {
+        for (int corner = 0; corner < 4; corner++) {
+            int source = corner % 3;
+            int vertex = indices[triangle * 3 + source];
+            consumer.addVertex(pose.last(), positions[vertex * 3], positions[vertex * 3 + 1],
+                    positions[vertex * 3 + 2])
+                    .setColor(255, 255, 255, 255)
+                    .setUv(uvs[vertex * 2], uvs[vertex * 2 + 1])
+                    .setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
+                    .setLight(FULL_LIGHT)
+                    .setNormal(pose.last(), normals[vertex * 3], normals[vertex * 3 + 1],
+                            normals[vertex * 3 + 2]);
         }
     }
 
@@ -197,6 +228,11 @@ public final class Rac1MeshRenderer {
     /**
      * The kind of triangle of a texture.
      *
+     * <p>The game does not throw away the back faces of its geometry: the triangles of the
+     * classes come out of the strips of the packets in the order of the strips, and their facing
+     * is not consistent. The renderer therefore draws the triangles on both sides, the way the
+     * game draws them.
+     *
      * @param texture the place of the texture, or {@code null} when the material has none
      * @return the kind of the triangle
      */
@@ -204,6 +240,7 @@ public final class Rac1MeshRenderer {
         if (texture == null) {
             return MISSING;
         }
-        return TYPES.computeIfAbsent(texture, location -> RenderType.ENTITY_CUTOUT.apply(location));
+        return TYPES.computeIfAbsent(texture,
+                location -> RenderType.entityCutoutNoCull(location));
     }
 }

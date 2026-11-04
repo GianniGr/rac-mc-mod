@@ -111,15 +111,17 @@ rac-mc-mod/
     │   ├── Rac1TextureReaderTest.java # Focused checks for the reader of the textures
     │   ├── TieClassReaderTest.java   # Focused checks for the reader of the scenery
     │   ├── VifCommandListTest.java   # Focused checks for the commands of the graphics chip
-    │   └── RealDiscAssetTest.java    # The opt-in check of the conversion of a real disc image
+    │   ├── RealDiscAssetTest.java    # The opt-in check of the conversion of a real disc image
+    │   └── DiscFactsDiagnosticTest.java # The opt-in check of the facts the demo of the Blaster uses
     ├── cache/
     │   ├── SyntheticAssets.java       # The assets that the checks of the cache use
     │   ├── Rac1CacheCodecTest.java    # Focused checks for the format of the cache file
     │   ├── Rac1CacheStoreTest.java    # Focused checks for the place of the cache
     │   └── Rac1AssetCacheManagerTest.java # Focused checks for the life of the cache
     ├── client/
+    │   ├── Rac1BlasterDemoTest.java   # Focused checks for the pose of the demo of the Blaster
     │   └── render/
-    │       └── Rac1MeshRendererTest.java # Focused checks for the grouping of the triangles
+    │       └── Rac1MeshRendererTest.java # Focused checks for the way the triangles are written
     ├── disc/
     │   └── Rac1CoreIndexTest.java     # Focused checks for the reader of the core index
     ├── wad/
@@ -336,11 +338,13 @@ moby class 0, with his skeleton and his 88 animation sequences) and his Blaster 
 168, which is a compressed stream of its own in the core data of the level).
 
 The mod shows the imported assets in the game. The demo screen draws the hero with his Blaster in
-his hand: the hero is posed with one of his own imported animation sequences, the Blaster with
-its own imported firing sequence (the fourth one, as the ReRAC project measured in the code of the
-game), and the Blaster hangs on the joint of the skeleton of the hero that the game hangs the
-items of the hand on. That joint is read out of the class of the hero, from the first list of its
-joint lists, whose chain ends at the joint 56.
+his hand: the hero is posed with his stance of the weapon, the sequence 56, which the ReRAC project
+measured in the definitions of the items of the game, and the Blaster with its own imported
+sequences - the sequence 1 for the pose it is held in and the sequence 4 for the shot, the sequence
+the game blends to when the weapon fires. The Blaster hangs on the joint of the skeleton of the hero
+that the game hangs the items of the hand on. That joint is read out of the class of the hero, from
+the first list of its joint lists, whose chain ends at the joint 56, and the weapon is placed with
+the pose of that joint and with no matrix of its own, the way the game places it.
 
 The demo is reachable in three ways: the setup screen, which the client shows when it starts,
 draws the hero with the Blaster as long as the cache holds the assets; the main menu has a
@@ -488,7 +492,11 @@ Nine focused test classes exist today:
   vertices that follow it, the chain of the joints is followed, a scale that only reaches the joint
   itself does not reach its children and the pose of the chain of the hand does not hold it. The
   checks spell out the convention of the game of the disc, so that a change of the convention in
-  the evaluator is noticed.
+  the evaluator is noticed. The cycle of a sequence that repeats itself is held as well: the cycle
+  is as long as the last key of the sequence, the pose is the same after a whole cycle, the joint
+  does not stand still at the end of the cycle and a sequence that does not repeat itself holds its
+  last key. The check fails when the cycle is made longer, which would hold the pose of the first
+  key for a whole key interval at the end of every cycle.
 - `Rac1CoordinateTransformTest` verifies the change of the coordinate systems: the up axis of the
   game becomes the up axis of the game of blocks, the change of the axes keeps the length of a
   direction, a direction is not scaled and a point is scaled with the size of a unit.
@@ -504,29 +512,46 @@ Nine focused test classes exist today:
   size of the core data and the size of the blocks of it, and the indexes that are refused because
   they are too short, because they have no size or because one of their tables points outside of
   them.
-- `Rac1MeshRendererTest` verifies the grouping of the triangles of the renderer: the triangles of a
-  mesh are grouped by their material, the triangles of a run keep their order, and a material that
-  is out of range does not make the renderer read outside of the array of the textures.
+- `Rac1MeshRendererTest` verifies the way the renderer writes the triangles of a mesh into the
+  buffer of the game: a triangle is written as a quad of four vertices, whose fourth vertex is the
+  first vertex of the triangle, because the kinds of triangles of the game of blocks are drawn in
+  quads and a triangle of three vertices would be cut in two.
+- `Rac1BlasterDemoTest` verifies the pose of the demo of the Blaster: the hero moves while his
+  sequence runs, the pose of the hero is the same after a whole cycle of his sequence, the hero does
+  not stand still at the end of his cycle and he is not torn apart when his sequence repeats itself.
+  The weapon is placed on the pose of the joint of the hand and on no matrix of its own, it is held
+  with the sequence of the held weapon, it plays the sequence of the shot once and it is blended
+  into the shot and out of it again. The checks fail when the cycle of the sequence is made longer,
+  when the weapon is moved by a matrix of its own or when the sequence of the shot is played over
+  and over again.
 - `RealDiscAssetTest` is the opt-in check of the conversion of the assets of a real disc image: the
   scenery, the hero and the Blaster are converted with the numbers of the vertices, of the
   triangles, of the joints, of the sequences and of the textures that were measured on the disc,
   every vertex of the hero and of the Blaster is used by a triangle of it, the triangles of the
   hero and of the Blaster cover the whole model, the chain of the hand of the hero ends at the
-  joint 56 and the skinning does not tear the model of the hero apart.
+  joint 56 and the skinning does not tear the model of the hero apart. The joint lists of the hero,
+  the arm of the weapon, the facing of the hero, the sequences of the held weapon and of the shot
+  and the direction of the wrist of the hero in the stance of the weapon are held as well.
+- `DiscFactsDiagnosticTest` is the opt-in check of the facts of a real disc image that the demo of
+  the Blaster relies on: the joint lists of the class of the hero name the arm of the weapon, the
+  class of the Blaster holds the chain of its muzzle, and the hero of the game holds the idle and
+  the stance of the weapon with the lengths that the demo uses.
 
-The suite currently contains 188 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
+The suite currently contains 216 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in
 `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in
 `Rac1MediaManagerTest`, 8 in `Rac1MediaGateTest`, 8 in `WadDecoderTest`, 5 in `TieClassReaderTest`,
-5 in `MobyClassReaderTest`, 7 in `MobySequenceReaderTest`, 8 in `Rac1AnimationEvaluatorTest`,
-7 in `Rac1CoordinateTransformTest`, 5 in `Rac1TextureReaderTest`, 6 in `VifCommandListTest`,
-10 in `Rac1CoreIndexTest`, 5 in `Rac1MeshRendererTest`, 10 in `Rac1CacheCodecTest`, 7 in
-`Rac1CacheStoreTest` and 6 in `Rac1AssetCacheManagerTest`. Eight of them, the opt-in checks of a
-real disc image, are skipped unless they are asked for.
+5 in `MobyClassReaderTest`, 7 in `MobySequenceReaderTest`, 6 in `MobyMeshTest`, 11 in
+`Rac1AnimationEvaluatorTest`, 7 in `Rac1CoordinateTransformTest`, 5 in `Rac1TextureReaderTest`,
+6 in `VifCommandListTest`, 10 in `Rac1CoreIndexTest`, 3 in `Rac1MeshRendererTest`, 8 in
+`Rac1BlasterDemoTest`, 10 in `Rac1CacheCodecTest`, 7 in `Rac1CacheStoreTest`, 6 in
+`Rac1AssetCacheManagerTest`, 17 in `RealDiscAssetTest`, 3 in `DiscFactsDiagnosticTest` and 1 in
+`RealDiscImageTest`. Twenty-one of them, the opt-in checks of a real disc image, are skipped
+unless they are asked for.
 
-`RealDiscImageTest` and `RealDiscAssetTest` are further, opt-in checks of a real disc image. They
-are skipped unless the path of an image is given on the command line, and they are described in the
-section about the disc importer above.
+`RealDiscImageTest`, `RealDiscAssetTest` and `DiscFactsDiagnosticTest` are the opt-in checks of a
+real disc image. They are skipped unless the path of an image is given on the command line, and
+they are described in the section about the disc importer above.
 
 No test needs a game disc image to run. The images used by the tests are built by `SyntheticIso`
 and contain no game data.
@@ -544,9 +569,9 @@ tree.
 | --- | --- |
 | `gradlew.bat tasks` | Listed the task groups reproduced above; the configuration succeeded with ModDevGradle 2.0.148 and NeoForge 21.1.265. |
 | `gradlew.bat build` | `BUILD SUCCESSFUL`. Produced `build/libs/racmc-0.1.0.jar` containing `META-INF/neoforge.mods.toml` and the mod classes. The first run of the foundation downloaded and decompiled the Minecraft 1.21.1 artifacts (about 83 s of tool time, plus the 787 MiB asset download for the run configurations). |
-| `gradlew.bat test` | `BUILD SUCCESSFUL`, 185 of 185 tests passed, the twelve opt-in checks of a real disc image were skipped. |
-| `gradlew.bat test --rerun` | `BUILD SUCCESSFUL`, 185 of 185 tests passed with the test task forced to re-execute. |
-| `gradlew.bat clean build` | `BUILD SUCCESSFUL`, the same 185 of 185 tests passed after a clean. |
+| `gradlew.bat test` | `BUILD SUCCESSFUL`, 189 of 189 tests passed, the twelve opt-in checks of a real disc image were skipped. |
+| `gradlew.bat test --rerun` | `BUILD SUCCESSFUL`, 189 of 189 tests passed with the test task forced to re-execute. |
+| `gradlew.bat clean build` | `BUILD SUCCESSFUL`, the same 189 of 189 tests passed after a clean. |
 | `CI=true .\gradlew.bat --no-daemon build` | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. |
 | `gradlew.bat runClient` | The client window opened (title `Minecraft NeoForge* 1.21.1`). With no disc image configured the main menu did not open: the log shows `The disc image gate keeps the main menu closed until a disc image is configured.` and `The disc image picker was opened and cannot be dismissed.`, and the screen shows the selection screen with the button *Pick disc image* and without a back button. The escape key was sent to the window and the log shows `The disc image picker ignored the escape key.`; the screen stayed open and no world was prepared. The client was closed through its own window, which logged `Stopping!` and ended the Gradle task with `BUILD SUCCESSFUL`. |
 | `gradlew.bat runClient` and the *Pick disc image* button | The file chooser of the system opened in its own window (`The file chooser of the system is opened.`, `headless=false`). A retail disc image was picked in it, the check of the whole image ran on a worker thread and the log shows `The disc image was verified: PAL v2.00.`. The path of the image and the facts about it were written to `run/config/racmc/racmc-media.properties` with the keys `path`, `revision`, `imageSize`, `imageSha1` and `modifiedTime`; the file holds no part of the image. |
@@ -557,8 +582,13 @@ tree.
 | `CI=true gradlew.bat --no-daemon clean build` | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. The first cold run took about 40 s; a run with a warm Gradle build cache took 5 s. |
 | `CI=true gradlew.bat --no-daemon test --rerun` | `BUILD SUCCESSFUL`, 11 of 11 tests passed with the test task forced to re-execute on the foundation, before the importer was added. |
 | `gradlew.bat test --rerun -Dracmc.isoImage=<path> -Dracmc.isoExpectedRevision=<revision>` | `BUILD SUCCESSFUL`, the opt-in check of the real disc image passed for the European PAL v2.00 release and for the North American NTSC-U v1.00 release. Both images were read in place, were accepted and were identified with the expected revision. The size and the SHA-1 digest of each image matched the values of the Redump record of the disc. The images were not copied into the repository and are not part of it. |
-| `gradlew.bat test --rerun -Dracmc.isoImage=<NTSC-U v1.00> -Dracmc.isoExpectedRevision="NTSC-U v1.00"` | `BUILD SUCCESSFUL`, 197 of 197 tests passed, the twelve opt-in checks of the real disc image included: the scenery, the hero and the Blaster are converted with the numbers of the vertices, of the triangles, of the joints, of the sequences and of the textures that were measured on the disc, every vertex of the hero and of the Blaster is used by a triangle, the triangles cover the whole model, the chain of the hand of the hero ends at the joint 56 and the skinning holds the size of the model. |
+| `gradlew.bat test --rerun -Dracmc.isoImage=<NTSC-U v1.00> -Dracmc.isoExpectedRevision="NTSC-U v1.00"` | `BUILD SUCCESSFUL`, 201 of 201 tests passed, the twelve opt-in checks of the real disc image included: the scenery, the hero and the Blaster are converted with the numbers of the vertices, of the triangles, of the joints, of the sequences and of the textures that were measured on the disc, every vertex of the hero and of the Blaster is used by a triangle, the triangles cover the whole model, the chain of the hand of the hero ends at the joint 56 and the skinning holds the size of the model. |
 | `gradlew.bat runClient` with the disc image of the NTSC-U v1.00 release configured | The client window opened (GL 4.6, NVIDIA GeForce RTX 5090). The log shows `The disc image gate keeps the main menu closed until the disc image is verified and the assets are in the cache.`, `The disc image picker was opened and cannot be dismissed.`, `The disc image was verified: NTSC-U v1.00.` and `The cache of the assets is started for the disc image.`. The cache was written (`racm-4fe30dba….racm`, 5,653,069 bytes) and the main menu opened with the button *Blaster test* on it. The screen of the demo of the Blaster was opened and left open for two minutes: the log holds no error and no warning of the mod, so the renderer of the meshes wrote the triangles of the hero, of the Blaster and of the scenery in every frame without the failure of the buffer of the renderer of the game of blocks. A picture of the screen was taken by the game itself (`Saved screenshot as 2026-11-02_21.04.22.png`): it shows the whole textured hero standing in the middle of the screen with the textured Blaster in his hand, the text of the screen under the model and the button under the text. The mouse and the keyboard of the session of the agent do not reach the window of the game, so the picture was taken by the game itself and not by a key of the keyboard; the worker that verifies the tree can take its own picture. |
+| `gradlew.bat test --rerun` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`, 216 of 216 tests passed, the twenty-one opt-in checks of a real disc image were skipped. |
+| `gradlew.bat test --rerun -Dracmc.isoImage=<NTSC-U v1.00> -Dracmc.isoExpectedRevision="NTSC-U v1.00"` | `BUILD SUCCESSFUL`, 216 of 216 tests passed with the twenty-one opt-in checks of the real disc image included: the joint lists of the hero name the arm of the weapon, the hero faces the first axis, the weapon holds a sequence for the pose it is held in and one for the shot, the third axis of the wrist of the hero points the way the hero faces in the stance of the weapon, and the chain of the muzzle of the Blaster holds seven joints. |
+| `gradlew.bat clean build` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`, the same 216 of 216 tests passed after a clean, and `build/libs/racmc-0.1.0.jar` was built again. |
+| `CI=true .\gradlew.bat --no-daemon build` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. |
+| `gradlew.bat runClient` on the tree of the demo of the Blaster | The client window opened, the disc image of the NTSC-U v1.00 release was verified again, the cache of the assets was used, and the screen of the demo of the Blaster was drawn. The pictures of the demo were taken by the game itself (`p03-front-0-t0.1.png` up to `p03-front-20-t2.9.png` under `run/screenshots`): they show the hero facing the player with the Blaster in his right hand, the barrel of the weapon pointing the way the hero faces, the weapon playing the sequence of the shot once every 2.5 seconds and the hero playing his stance of the weapon without a jump. The log holds the moment of the demo, the view of the model and the box around the hero and around the weapon of every picture. The client was stopped afterwards, because the mouse and the keyboard of the session of the agent do not reach the window of the game. |
 
 All of the measurements above were taken on Windows. The Linux and macOS build and test runs are
 covered by the CI matrix but have not been executed yet, and the client and dedicated server
