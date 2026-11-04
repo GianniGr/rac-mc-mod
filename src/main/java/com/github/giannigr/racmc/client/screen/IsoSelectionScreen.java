@@ -41,6 +41,13 @@ import net.minecraft.util.FormattedCharSequence;
  * image, the settings of the game and quitting the game. In the other mode, which is used to
  * change or check the image that is already configured, the screen can be left with the back
  * button.
+ *
+ * <p>The report of the screen - the path of the disc image, the outcome of its check and the
+ * state of the cache of the assets - stands in a panel that fills the room under the buttons. A
+ * report that is too long for the panel is not cut off: the panel scrolls, so that every line of
+ * the report, the long path of the image and the reason of a failure included, can be read. The
+ * places of the buttons, of the panel and of the drawing of the preview are held by
+ * {@link Rac1ScreenLayout}, so that they fit into the narrowest window of the game.
  */
 public class IsoSelectionScreen extends Screen {
 
@@ -49,6 +56,9 @@ public class IsoSelectionScreen extends Screen {
 
     /** The height of the progress bar, in pixels. */
     private static final int BAR_HEIGHT = 10;
+
+    /** The number of lines the report is scrolled by one step of the mouse wheel. */
+    private static final int SCROLL_LINES = 3;
 
     private final boolean mandatory;
 
@@ -65,6 +75,30 @@ public class IsoSelectionScreen extends Screen {
 
     /** The moment of the animation of the preview, in seconds. */
     private float previewTime;
+
+    /** The width of the text of the screen. */
+    private int contentWidth;
+
+    /** The left edge of the text of the screen. */
+    private int contentLeft;
+
+    /** The upper edge of the title of the screen. */
+    private int titleTop;
+
+    /** The upper edge of the hint of the screen. */
+    private int hintTop;
+
+    /** The upper edge of the line that tells why the screen cannot be left. */
+    private int mandatoryTop;
+
+    /** The lower edge of the last button of the screen. */
+    private int buttonsBottom;
+
+    /** The line of the report that is shown first. */
+    private int reportScroll;
+
+    /** The places of the last frame. */
+    private Rac1ScreenLayout.Layout layout = Rac1ScreenLayout.layout(0, 0, 0, 0, false);
 
     /**
      * Creates the screen in the mode that can be left with the back button.
@@ -88,61 +122,147 @@ public class IsoSelectionScreen extends Screen {
 
     @Override
     protected void init() {
-        int left = (this.width - BAR_WIDTH) / 2;
-        int top = this.height / 2 - 30;
+        this.contentWidth = Rac1ScreenLayout.contentWidth(this.width);
+        this.contentLeft = Rac1ScreenLayout.contentLeft(this.width);
 
+        int y = Rac1ScreenLayout.MARGIN;
+        this.titleTop = y;
+        y += 12;
+        this.hintTop = y;
+        y += linesOf(Component.translatable("screen.racmc.iso_selection.hint"))
+                * Rac1ScreenLayout.LINE_HEIGHT;
+        y += 2;
+        this.mandatoryTop = y;
+        y += linesOf(Component.translatable("screen.racmc.iso_selection.mandatory"))
+                * Rac1ScreenLayout.LINE_HEIGHT;
+        y += 6;
+
+        int row = y;
         this.pickButton = addRenderableWidget(Button.builder(
                         Component.translatable("screen.racmc.iso_selection.pick"),
                         button -> pickImage())
-                .bounds(left, top, 160, 20)
+                .bounds(this.contentLeft, row, Rac1ScreenLayout.PICK_BUTTON_WIDTH,
+                        Rac1ScreenLayout.BUTTON_HEIGHT)
                 .build());
 
+        boolean side = Rac1ScreenLayout.sideBySide(this.contentWidth);
+        int sideX = this.contentLeft + this.contentWidth - Rac1ScreenLayout.SIDE_BUTTON_WIDTH;
         if (this.mandatory) {
             // The screen cannot be left, so the player needs the settings of the game and a way
-            // to quit the game.
-            addRenderableWidget(Button.builder(
-                            Component.translatable("screen.racmc.iso_selection.options"),
-                            button -> this.minecraft.setScreen(
-                                    new OptionsScreen(this, this.minecraft.options)))
-                    .bounds(left + BAR_WIDTH - 100, top, 100, 20)
+            // to quit the game. The buttons stand in two rows, so that the report of the screen
+            // keeps its room in a small window.
+            if (side) {
+                addRenderableWidget(Button.builder(
+                                Component.translatable("screen.racmc.iso_selection.options"),
+                                button -> this.minecraft.setScreen(
+                                        new OptionsScreen(this, this.minecraft.options)))
+                        .bounds(sideX, row, Rac1ScreenLayout.SIDE_BUTTON_WIDTH,
+                                Rac1ScreenLayout.BUTTON_HEIGHT)
+                        .build());
+                row += Rac1ScreenLayout.BUTTON_HEIGHT + Rac1ScreenLayout.BUTTON_GAP;
+            } else {
+                row += Rac1ScreenLayout.BUTTON_HEIGHT + Rac1ScreenLayout.BUTTON_GAP;
+                addRenderableWidget(Button.builder(
+                                Component.translatable("screen.racmc.iso_selection.options"),
+                                button -> this.minecraft.setScreen(
+                                        new OptionsScreen(this, this.minecraft.options)))
+                        .bounds(this.contentLeft, row, Rac1ScreenLayout.SIDE_BUTTON_WIDTH,
+                                Rac1ScreenLayout.BUTTON_HEIGHT)
+                        .build());
+                row += Rac1ScreenLayout.BUTTON_HEIGHT + Rac1ScreenLayout.BUTTON_GAP;
+            }
+            addRenderableWidget(Button.builder(Component.translatable("menu.quit"),
+                            button -> this.minecraft.stop())
+                    .bounds(this.contentLeft, row, Rac1ScreenLayout.PICK_BUTTON_WIDTH,
+                            Rac1ScreenLayout.BUTTON_HEIGHT)
                     .build());
-            addRenderableWidget(Button.builder(Component.translatable("menu.quit"), button -> this.minecraft.stop())
-                    .bounds(left, top + 26, 160, 20)
-                    .build());
-            this.retryButton = addRenderableWidget(Button.builder(
-                            Component.translatable("screen.racmc.iso_selection.retry"),
-                            button -> {
-                                RacMcMod.LOGGER.info("The cache of the assets is built again.");
-                                RacMcClient.assets().retry();
-                            })
-                    .bounds(left, top + 52, 160, 20)
-                    .build());
+            if (side) {
+                this.retryButton = addRenderableWidget(Button.builder(
+                                Component.translatable("screen.racmc.iso_selection.retry"),
+                                button -> {
+                                    RacMcMod.LOGGER.info("The cache of the assets is built again.");
+                                    RacMcClient.assets().retry();
+                                })
+                        .bounds(sideX, row, Rac1ScreenLayout.SIDE_BUTTON_WIDTH,
+                                Rac1ScreenLayout.BUTTON_HEIGHT)
+                        .build());
+                row += Rac1ScreenLayout.BUTTON_HEIGHT;
+            } else {
+                row += Rac1ScreenLayout.BUTTON_HEIGHT + Rac1ScreenLayout.BUTTON_GAP;
+                this.retryButton = addRenderableWidget(Button.builder(
+                                Component.translatable("screen.racmc.iso_selection.retry"),
+                                button -> {
+                                    RacMcMod.LOGGER.info("The cache of the assets is built again.");
+                                    RacMcClient.assets().retry();
+                                })
+                        .bounds(this.contentLeft, row, Rac1ScreenLayout.PICK_BUTTON_WIDTH,
+                                Rac1ScreenLayout.BUTTON_HEIGHT)
+                        .build());
+                row += Rac1ScreenLayout.BUTTON_HEIGHT;
+            }
             this.retryButton.visible = false;
         } else {
-            addRenderableWidget(Button.builder(Component.translatable("gui.back"), button -> onClose())
-                    .bounds(left + BAR_WIDTH - 100, top, 100, 20)
-                    .build());
+            if (side) {
+                addRenderableWidget(Button.builder(Component.translatable("gui.back"),
+                                button -> onClose())
+                        .bounds(sideX, row, Rac1ScreenLayout.SIDE_BUTTON_WIDTH,
+                                Rac1ScreenLayout.BUTTON_HEIGHT)
+                        .build());
+                row += Rac1ScreenLayout.BUTTON_HEIGHT + Rac1ScreenLayout.BUTTON_GAP;
+            } else {
+                row += Rac1ScreenLayout.BUTTON_HEIGHT + Rac1ScreenLayout.BUTTON_GAP;
+                addRenderableWidget(Button.builder(Component.translatable("gui.back"),
+                                button -> onClose())
+                        .bounds(this.contentLeft, row, Rac1ScreenLayout.SIDE_BUTTON_WIDTH,
+                                Rac1ScreenLayout.BUTTON_HEIGHT)
+                        .build());
+                row += Rac1ScreenLayout.BUTTON_HEIGHT;
+            }
         }
+        this.buttonsBottom = row;
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics, mouseX, mouseY, partialTick);
+        // The buttons of the screen are drawn here. The text of the screen is drawn after them,
+        // because the screen of the game draws the background of the screen - and with it the
+        // blur of the background - once more while the buttons are drawn. Text that is drawn
+        // before that would end up in the blur and would not be readable.
         super.render(graphics, mouseX, mouseY, partialTick);
 
-        int left = (this.width - BAR_WIDTH) / 2;
-        int top = this.height / 2 - 30;
+        List<FormattedCharSequence> report = this.font.split(describeState(), reportWidth());
+        boolean progress = progressActive();
+        int reportTop = Rac1ScreenLayout.reportTop(this.buttonsBottom, progress);
+        this.layout = Rac1ScreenLayout.layout(this.width, this.height, reportTop,
+                report.size(), RacMcClient.assets().state() == Rac1CacheState.READY);
 
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, top - 58, 0xFFFFFF);
-        graphics.drawString(this.font,
-                Component.translatable("screen.racmc.iso_selection.hint"),
-                left, top - 38, 0xA0A0A0);
-        graphics.drawString(this.font,
-                Component.translatable("screen.racmc.iso_selection.mandatory"),
-                left, top - 26, 0xFFAA00);
-        drawWrapped(graphics, describeState(), left, top + 78, BAR_WIDTH, 0xFFFFFF);
-        drawProgress(graphics, left, top + 40);
+        drawHeader(graphics);
+        drawProgress(graphics);
+        drawReport(graphics, report);
         drawPreview(graphics);
+    }
+
+    /**
+     * Whether the bar of the progress is drawn under the buttons of the screen.
+     *
+     * <p>The room of the bar is only kept when there is a bar to draw, so that the report of the
+     * screen keeps the room of the bar in a small window.
+     *
+     * @return {@code true} while the disc image is read or the cache is built
+     */
+    private boolean progressActive() {
+        return RacMcClient.media().isChecking()
+                || RacMcClient.assets().state() == Rac1CacheState.BUILDING;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (scrollY != 0 && this.layout.report().contains(mouseX, mouseY)) {
+            this.reportScroll -= (int) Math.signum(scrollY) * SCROLL_LINES;
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override
@@ -341,32 +461,104 @@ public class IsoSelectionScreen extends Screen {
     }
 
     /**
+     * Draws the title of the screen, the hint of it and the line that tells why the screen cannot
+     * be left.
+     */
+    private void drawHeader(GuiGraphics graphics) {
+        graphics.drawCenteredString(this.font, this.title, this.width / 2, this.titleTop, 0xFFFFFF);
+        drawWrapped(graphics, Component.translatable("screen.racmc.iso_selection.hint"),
+                this.contentLeft, this.hintTop, this.contentWidth, 0xA0A0A0);
+        drawWrapped(graphics, Component.translatable("screen.racmc.iso_selection.mandatory"),
+                this.contentLeft, this.mandatoryTop, this.contentWidth, 0xFFAA00);
+    }
+
+    /**
      * Draws the progress of the running check and of the running build of the cache.
      */
-    private void drawProgress(GuiGraphics graphics, int x, int y) {
+    private void drawProgress(GuiGraphics graphics) {
         Rac1MediaManager media = RacMcClient.media();
+        int x = this.contentLeft;
+        int top = this.buttonsBottom + Rac1ScreenLayout.BUTTON_GAP;
+        int y = top + 12;
+        // The bar never reaches over the edge of the window.
+        int width = Math.min(BAR_WIDTH, this.contentWidth);
         if (media.isChecking()) {
             long total = media.bytesTotal();
-            int done = total > 0 ? (int) Math.min(BAR_WIDTH, media.bytesRead() * BAR_WIDTH / total) : 0;
-            graphics.fill(x, y, x + BAR_WIDTH, y + BAR_HEIGHT, 0xFF404040);
+            int done = total > 0 ? (int) Math.min(width, media.bytesRead() * width / total) : 0;
+            graphics.fill(x, y, x + width, y + BAR_HEIGHT, 0xFF404040);
             graphics.fill(x, y, x + done, y + BAR_HEIGHT, 0xFF55FF55);
             graphics.drawString(this.font,
                     Component.translatable("screen.racmc.iso_selection.status.progress",
                             percent(media.bytesRead(), total)),
-                    x, y - 12, 0xFFFFFF);
+                    x, this.buttonsBottom + Rac1ScreenLayout.BUTTON_GAP, 0xFFFFFF);
             return;
         }
         var cache = RacMcClient.assets();
         if (cache.state() != Rac1CacheState.BUILDING) {
             return;
         }
-        int done = cache.progress() * BAR_WIDTH / 100;
-        graphics.fill(x, y, x + BAR_WIDTH, y + BAR_HEIGHT, 0xFF404040);
+        int done = cache.progress() * width / 100;
+        graphics.fill(x, y, x + width, y + BAR_HEIGHT, 0xFF404040);
         graphics.fill(x, y, x + done, y + BAR_HEIGHT, 0xFF55FF55);
-        graphics.drawString(this.font,
-                Component.translatable("screen.racmc.iso_selection.assets.progress", cache.progress(),
-                        cache.step()),
-                x, y - 12, 0xFFFFFF);
+        graphics.drawString(this.font, Component.translatable("screen.racmc.iso_selection.assets.progress", cache.progress(),
+                cache.step()),
+                x, this.buttonsBottom + Rac1ScreenLayout.BUTTON_GAP, 0xFFFFFF);
+    }
+
+    /**
+     * Draws the report of the screen in its panel.
+     *
+     * <p>The panel shows the lines of the report that fit into it and scrolls them when the
+     * report is longer. The text is cut off by the frame of the panel, so that it never reaches
+     * over the buttons of the screen or over the drawing of the preview.
+     *
+     * @param graphics the graphics of the screen
+     * @param report the lines of the report
+     */
+    private void drawReport(GuiGraphics graphics, List<FormattedCharSequence> report) {
+        Rac1ScreenLayout.Area area = this.layout.report();
+        if (area.height() <= 0) {
+            return;
+        }
+        graphics.fill(area.left(), area.top(), area.right(), area.bottom(), 0xFF404040);
+        graphics.fill(area.left() + 1, area.top() + 1, area.right() - 1, area.bottom() - 1,
+                0xC0000000);
+
+        int scroll = Math.max(0, Math.min(this.reportScroll, this.layout.maxScroll()));
+        this.reportScroll = scroll;
+
+        graphics.enableScissor(area.left() + 1, area.top() + 1, area.right() - 1, area.bottom() - 1);
+        int y = area.top() + Rac1ScreenLayout.PADDING;
+        for (int line = 0; line < this.layout.visibleLines(); line++) {
+            int index = scroll + line;
+            if (index >= report.size()) {
+                break;
+            }
+            graphics.drawString(this.font, report.get(index),
+                    area.left() + Rac1ScreenLayout.PADDING, y, 0xFFFFFF);
+            y += Rac1ScreenLayout.LINE_HEIGHT;
+        }
+        graphics.disableScissor();
+
+        if (this.layout.maxScroll() > 0) {
+            // The report is longer than the panel, so the player is told that it can be scrolled
+            // and a bar shows how far the report is scrolled.
+            graphics.drawString(this.font,
+                    Component.translatable("screen.racmc.iso_selection.scroll"),
+                    area.left() + Rac1ScreenLayout.PADDING,
+                    area.bottom() - Rac1ScreenLayout.PADDING - Rac1ScreenLayout.LINE_HEIGHT + 2,
+                    0xA0A0A0);
+            int trackTop = area.top() + Rac1ScreenLayout.PADDING;
+            int trackHeight = area.height() - 2 * Rac1ScreenLayout.PADDING;
+            int thumbHeight = Math.max(6, trackHeight * this.layout.visibleLines()
+                    / Math.max(1, report.size()));
+            int thumbTop = trackTop + (trackHeight - thumbHeight) * scroll
+                    / Math.max(1, this.layout.maxScroll());
+            graphics.fill(area.right() - 3, trackTop, area.right() - 1,
+                    trackTop + trackHeight, 0xFF202020);
+            graphics.fill(area.right() - 3, thumbTop, area.right() - 1, thumbTop + thumbHeight,
+                    0xFFA0A0A0);
+        }
     }
 
     /**
@@ -374,9 +566,13 @@ public class IsoSelectionScreen extends Screen {
      *
      * <p>The preview shows the hero with his Blaster in his hand, the same pose as the demo of the
      * Blaster. A failure of the drawing is reported once by the preview and the screen stays
-     * usable.
+     * usable. The preview is only drawn when there is room for it beside the report of the
+     * screen, so that the two never cover each other.
      */
     private void drawPreview(GuiGraphics graphics) {
+        if (!this.layout.hasPreview()) {
+            return;
+        }
         if (RacMcClient.assets().state() != Rac1CacheState.READY) {
             return;
         }
@@ -384,12 +580,10 @@ public class IsoSelectionScreen extends Screen {
         if (content.isEmpty()) {
             return;
         }
+        Rac1ScreenLayout.Area area = this.layout.preview();
         this.demo.update(content.get(), this.previewTime);
-        // The model is drawn in the area under the text of the screen, so that the text never
-        // covers it.
-        int areaTop = this.height - 150;
         this.preview.draw(graphics, content.get(), this.demo, (this.previewTime * 20.0f) % 360.0f,
-                20, areaTop, this.width - 40, 120);
+                area.left(), area.top(), area.width(), area.height());
     }
 
     /**
@@ -403,6 +597,23 @@ public class IsoSelectionScreen extends Screen {
     }
 
     /**
+     * The number of lines of a text in the width of the text of the screen.
+     */
+    private int linesOf(Component text) {
+        return this.font.split(text, this.contentWidth).size();
+    }
+
+    /**
+     * The width of the lines of the report.
+     *
+     * <p>The width leaves room for the frame of the panel and for the bar that shows how far the
+     * report is scrolled.
+     */
+    private int reportWidth() {
+        return Math.max(20, this.contentWidth - 2 * Rac1ScreenLayout.PADDING - 4);
+    }
+
+    /**
      * Draws a text over several lines.
      */
     private void drawWrapped(GuiGraphics graphics, Component text, int x, int y, int width, int color) {
@@ -412,7 +623,7 @@ public class IsoSelectionScreen extends Screen {
         List<FormattedCharSequence> lines = this.font.split(text, width);
         int line = 0;
         for (FormattedCharSequence sequence : lines) {
-            graphics.drawString(this.font, sequence, x, y + line * 10, color);
+            graphics.drawString(this.font, sequence, x, y + line * Rac1ScreenLayout.LINE_HEIGHT, color);
             line++;
         }
     }

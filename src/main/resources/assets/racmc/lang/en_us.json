@@ -24,6 +24,7 @@
   "screen.racmc.iso_selection.assets.ready": "The assets of the game are ready.",
   "screen.racmc.iso_selection.assets.failed": "The assets of the game could not be converted: %s",
   "screen.racmc.iso_selection.retry": "Try again",
+  "screen.racmc.iso_selection.scroll": "Scroll for more.",
   "screen.racmc.blaster_test.title": "Ratchet and his Blaster",
   "screen.racmc.blaster_test.open": "Blaster test",
   "screen.racmc.blaster_test.waiting": "The assets of the game are not in the cache yet.",

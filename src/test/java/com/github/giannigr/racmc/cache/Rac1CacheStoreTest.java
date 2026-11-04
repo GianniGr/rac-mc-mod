@@ -2,6 +2,7 @@ package com.github.giannigr.racmc.cache;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -103,5 +104,40 @@ class Rac1CacheStoreTest {
         assertFalse(store.fileFor("one").equals(store.fileFor("other")),
                 "Two discs must not share a file");
         assertTrue(store.fileFor("one").getFileName().toString().endsWith(".racm"));
+    }
+
+    @Test
+    @DisplayName("A store whose directory cannot be used says so on every read and every write")
+    void aStoreThatCannotBeUsedSaysSo() {
+        Rac1CacheStore store = Rac1CacheStore.unusable(
+                "The cache directory cannot be used: it is a file. Change the key \"directory\".");
+
+        assertFalse(store.isUsable());
+        assertNull(store.directory());
+        IOException read = assertThrows(IOException.class, () -> store.load(KEY));
+        assertTrue(read.getMessage().contains("cannot be used"),
+                "The message has to say what is wrong: " + read.getMessage());
+        IOException write = assertThrows(IOException.class,
+                () -> store.store(KEY, SyntheticAssets.content(KEY)));
+        assertTrue(write.getMessage().contains("cannot be used"),
+                "The message has to say what is wrong: " + write.getMessage());
+        assertThrows(IOException.class, () -> store.discard(KEY));
+        assertThrows(IllegalStateException.class, () -> store.fileFor(KEY));
+    }
+
+    @Test
+    @DisplayName("A store checks that its directory can be used before it writes")
+    void aStoreChecksItsDirectoryBeforeItWrites() throws IOException {
+        Path blocked = tempDir.resolve("blocked");
+        Files.writeString(blocked, "not a directory");
+        Rac1CacheStore store = new Rac1CacheStore(blocked);
+
+        IOException failure = assertThrows(IOException.class, store::verifyUsable);
+        assertTrue(failure.getMessage().contains("is a file and not a directory"),
+                "The message has to say what is wrong: " + failure.getMessage());
+        assertThrows(IOException.class, () -> store.load(KEY));
+        assertThrows(IOException.class, () -> store.store(KEY, SyntheticAssets.content(KEY)));
+        assertFalse(Files.exists(store.fileFor(KEY)),
+                "Nothing may be written to a directory that cannot be used");
     }
 }

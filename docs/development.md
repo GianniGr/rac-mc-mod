@@ -58,8 +58,9 @@ rac-mc-mod/
 │   │   ├── VifCommandList.java       # Reads the command lists of the graphics chip of the console
 │   │   └── Rac1CoordinateTransform.java # The change from the axes of the game to the axes of the blocks
 │   ├── cache/
-│   │   ├── Rac1CacheCodec.java       # The format of the cache file
+│   │   ├── Rac1CacheCodec.java       # The format of the cache file and its three versions
 │   │   ├── Rac1CacheStore.java       # The place where the cache is kept
+│   │   ├── Rac1CacheLocation.java    # The configured place of the cache and its rules
 │   │   ├── Rac1AssetCacheManager.java # The life of the cache: read, build, fail, retry
 │   │   ├── Rac1CacheState.java       # The states of the cache
 │   │   ├── Rac1CacheContent.java      # The assets that a cache holds
@@ -118,6 +119,8 @@ rac-mc-mod/
     │   ├── SyntheticAssets.java       # The assets that the checks of the cache use
     │   ├── Rac1CacheCodecTest.java    # Focused checks for the format of the cache file
     │   ├── Rac1CacheStoreTest.java    # Focused checks for the place of the cache
+    │   ├── Rac1CacheLocationTest.java # Focused checks for the configured place of the cache
+    │   ├── Rac1CacheInterruptionTest.java # Focused checks for an interrupted write of a cache
     │   └── Rac1AssetCacheManagerTest.java # Focused checks for the life of the cache
     ├── client/
     │   ├── Rac1BlasterDemoTest.java   # Focused checks for the pose of the demo of the Blaster
@@ -235,7 +238,9 @@ The disc image is mandatory. The game cannot be entered before a verified disc i
 configured, and the selection screen belongs to the main menu:
 
 - The main menu shows a **Disc image** button in the lower left corner that opens the selection
-  screen. The screen takes the path of a local file, checks it and reports the outcome.
+  screen. The screen takes the path of a local file, checks it and reports the outcome. The button
+  stands above the two lines of the version of the game and of the loader that the main menu
+  writes into its lower left corner, so that it never covers them.
 - While no verified disc image is configured, the main menu does not open either. It is replaced
   by the selection screen, which cannot be dismissed: there is no back button, the escape key does
   nothing and the main menu it replaces never opens. The only ways out are a verified disc image,
@@ -252,6 +257,19 @@ The selection screen lets the player pick the disc image with the file chooser o
 soon as a file is picked, the check of that file starts on a worker thread; the screen shows how far
 the reading of the image has come and reports the outcome. There is no separate button that starts
 the check.
+
+The screen keeps its report - the path of the disc image, the outcome of its check and the state of
+the cache of the assets - in a panel that fills the room under its buttons. A report that is longer
+than the panel is not cut off: the panel is scrolled with the mouse wheel, so that every line of
+the report can be read, the long path of the image and the reason of a failure of the cache
+included. A bar at the right edge of the panel shows how far the report is scrolled, and the panel
+says that there is more to read. The places of the buttons, of the panel and of the drawing of the
+preview of the assets are held by `Rac1ScreenLayout`, which is checked by `Rac1ScreenLayoutTest`:
+the layout fits into the narrowest window of the game, 320 by 240 pixels at the GUI scale of 1, and
+the buttons of the mod in the main menu stand above the two lines of the version of the game and of
+the loader that the main menu writes into its lower left corner. The drawing of the preview of the
+assets is left out when the window is too small to hold it beside the report; the screen of the
+demo of the Blaster is not affected by that.
 
 The game itself turns the graphical user interface of Java off in its entry point with
 `java.awt.headless=true`, because the game does not need one. The file chooser does need one, so the
@@ -326,7 +344,19 @@ those facts come from.
 
 The converted assets are kept in a local cache file (`com.github.giannigr.racmc.cache`). The file
 is written by the player, into the cache directory of the mod, and it is never part of this
-repository.
+repository. The standard place of that directory is `config/racmc/cache` of the Minecraft instance
+- a directory of the instance, never a file inside the mod jar. `Rac1CacheLocation` reads the
+setting of it out of `config/racmc/racmc-cache.properties`, under the key `directory`: a blank
+value means the standard place, an absolute path is used as it is and a relative path is resolved
+against `config/racmc` of the instance and never against the working directory. The file is read
+line by line and needs no escaping, so a path is written exactly as it is. The value is read when
+the game starts, so a change is applied at the next start, and the mod writes the file with
+instructions when there is none. A value that cannot be used - a path the system does not accept, a
+value that names a file, or a directory that cannot be created or written to - is reported in the
+log and in the game with the file and the key to change, and the cache fails with that message
+instead of falling back to another directory. The setting never moves and never deletes a cache
+that was written before. The rules of the value are described in the README and in
+`docs/assets.md`.
 
 The cache is part of the gate: the game may only be entered when the disc image was verified **and**
 the cache holds all of the assets. A cache that is being built, a cache that failed and a cache that is
@@ -399,7 +429,7 @@ ModDevGradle's NeoForge aware unit test support is enabled (`neoForge { unitTest
 so the test source set has the mod and the Minecraft classes on its classpath and tests can use
 Minecraft types directly.
 
-Twenty-nine focused test classes exist today:
+Thirty-two focused test classes exist today:
 
 - `ModBootstrapMetadataTest` verifies that the mod id, mod name and mod version are identical in
   `gradle.properties`, in the generated `META-INF/neoforge.mods.toml` and in `RacMcConstants`, and
@@ -457,15 +487,41 @@ Twenty-nine focused test classes exist today:
   strip does not start where the graphics packet of the console says.
 - `Rac1CacheCodecTest` verifies the format of the cache file: a cache that was written can be read
   back, the file starts with the magic of the format, the identity of the disc is written into the
-  file, and a cache whose bytes were changed, that was cut short, that belongs to another disc,
-  that was written for another version of the schema or that is not a cache file at all is refused.
+  file, the file carries the version of the format, the version of the schema of the assets and the
+  version of the converter as three separate fields, and a cache whose bytes were changed, that was
+  cut short, that belongs to another disc, that was written for another version of the format, of
+  the schema or of the converter - an older converter version included - or that is not a cache
+  file at all is refused with a message that names the version or the damage that was found.
 - `Rac1CacheStoreTest` verifies the place where the cache is kept: a cache that was written can be
   read back, there is no cache before one was written, a written cache leaves no file of a half
   written cache behind, a damaged cache is refused, the cache of another disc is not used, a cache
-  can be thrown away and every disc gets a file of its own.
+  can be thrown away, every disc gets a file of its own, a store whose directory cannot be used
+  says so on every read and every write instead of using another directory, and a store checks
+  that its directory can be used before it writes.
+- `Rac1CacheLocationTest` verifies the configured place of the cache: without a configuration and
+  with a blank value the standard place `config/racmc/cache` of the instance is used, the file of
+  the configuration is written with a blank value when there is none and a value that was written
+  is not overwritten by it, a relative value is resolved against `config/racmc` of the instance
+  and not against the working directory - above it, normalized and in full as well - an absolute
+  value is used as it is, a value that is not a path of the system, that names a file, whose
+  directory cannot be created, a configuration that is not a file or cannot be read and a value
+  that would depend on the working directory of the drive are refused with a message that names
+  the file and the key to change, a changed location keeps the cache that was written before,
+  the configured directory is found again after a restart, and when the key is written more than
+  once the first value is the one that is used and the later ones are ignored.
+- `Rac1CacheInterruptionTest` verifies a run that is interrupted while it writes the cache: the
+  cache that was there before stays usable and is not replaced by half of a new one, half of a
+  cache is never exposed as a cache, a failure before the promotion leaves no staging file and no
+  file of a cache behind, and the staging files of interrupted runs are removed when the cache is
+  written again while every other file stays. The cleanup is narrow as well: a file of the player
+  whose name only looks like a staging file - a name whose digest is not 64 hexadecimal digits, a
+  name in upper case, a directory or a link - is never removed.
 - `Rac1AssetCacheManagerTest` verifies the life of the cache: a cache that holds all of the assets
   is used, a cache that is damaged is not used, a disc image that is missing or that is not a disc of
-  the game is reported, a failure can be tried again and the manager reports the step it is at.
+  the game is reported, a failure can be tried again, the manager reports the step it is at, a cache
+  directory that cannot be used is reported and never used - no content and no ready state comes
+  from it - and a file that a run left half written is not used while the cache that was there
+  before is.
 
 - `MobyClassReaderTest` verifies the reader of the classes of the characters with a class that was
   built by hand: the joint lists of the class, which name the chain of joints the items of the hero
@@ -532,6 +588,15 @@ Twenty-nine focused test classes exist today:
   the scenery was added, the scenery is drawn as large as its place allows, the box around a mesh
   counts only the vertices that a triangle uses, a mesh without triangles has no box, the box
   around the scenery does not change from frame to frame, and a mesh without a box has no size.
+- `Rac1ScreenLayoutTest` verifies the places of the screens of the mod inside the window of the
+  game: the text of a screen never reaches over the edge of the window, the two buttons of a row
+  fit next to each other or one under the other, the report of the screen of the disc image stands
+  between the buttons and the edge of the window, a report that is longer than its panel is
+  scrolled so that every line of it can be read, a report that fits is not scrolled, the drawing
+  of the preview of the assets never covers the report, the report keeps its room in the
+  narrowest window of the game, the room of the bar of the progress is only kept while there is a
+  bar, and the buttons of the mod in the main menu stand above the lines of the version of the
+  game that the main menu writes into its lower left corner.
 - `Rac1BlasterDemoTest` verifies the pose of the demo of the Blaster: the hero moves while his
   sequence runs, the pose of the hero is the same after a whole cycle of his sequence, the hero does
   not stand still at the end of his cycle and he is not torn apart when his sequence repeats itself.
@@ -555,17 +620,20 @@ Twenty-nine focused test classes exist today:
   class of the Blaster holds the chain of its muzzle, and the hero of the game holds the idle and
   the stance of the weapon with the lengths that the demo uses.
 
-The suite currently contains 236 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
+The suite currently contains 280 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in
 `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in
 `Rac1MediaManagerTest`, 8 in `Rac1MediaGateTest`, 8 in `WadDecoderTest`, 5 in `TieClassReaderTest`,
 5 in `MobyClassReaderTest`, 8 in `MobySequenceReaderTest`, 6 in `MobyMeshTest`, 12 in
 `Rac1AnimationEvaluatorTest`, 7 in `Rac1CoordinateTransformTest`, 5 in `Rac1TextureReaderTest`,
 6 in `VifCommandListTest`, 10 in `Rac1CoreIndexTest`, 12 in `Rac1MeshRendererTest`, 8 in
-`Rac1PreviewLayoutTest`, 8 in `Rac1BlasterDemoTest`, 10 in `Rac1CacheCodecTest`, 7 in
-`Rac1CacheStoreTest`, 6 in `Rac1AssetCacheManagerTest`, 18 in `RealDiscAssetTest`, 3 in
-`DiscFactsDiagnosticTest` and 1 in `RealDiscImageTest`. 214 of them pass, and twenty-two of them,
-the opt-in checks of a real disc image, are skipped unless they are asked for.
+`Rac1PreviewLayoutTest`, 8 in `Rac1BlasterDemoTest`, 15 in `Rac1CacheCodecTest`, 9 in
+`Rac1CacheStoreTest`, 18 in `Rac1CacheLocationTest`, 7 in `Rac1CacheInterruptionTest`, 8 in
+`Rac1AssetCacheManagerTest`, 10 in `Rac1ScreenLayoutTest`, 18 in
+`RealDiscAssetTest`, 3 in `DiscFactsDiagnosticTest` and 1 in `RealDiscImageTest`. 257 of them pass,
+and twenty-three of them are skipped unless they are asked for: the twenty-two opt-in checks of a
+real disc image and the check of the cleanup of the staging files, which needs a system that can
+build a symbolic link.
 
 `RealDiscImageTest`, `RealDiscAssetTest` and `DiscFactsDiagnosticTest` are the opt-in checks of a
 real disc image. They are skipped unless the path of an image is given on the command line, and
@@ -592,7 +660,10 @@ checks of a real disc image are the scope of the independent worker T03, and the
 directory of the disc image does hold the images of the two retail releases, so they are not
 independently verified here rather than impossible to run. The rows that name the tree of issue #6
 (branch `feature/m1-issue6-static-preview`, base `23e6235`) were measured on that tree by P08, and
-they include a run with a real disc image of each of the two releases.
+they include a run with a real disc image of each of the two releases. The rows that name the
+configuration of the cache directory and the five runs of the client that check it are the report
+of the implementation worker P09 on this tree; they were measured with the disc image of the NTSC-U
+v1.00 release of the authorized directory, which was only read.
 
 | Command | Result |
 | --- | --- |
@@ -624,7 +695,26 @@ they include a run with a real disc image of each of the two releases.
 | `gradlew.bat clean build` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`, the same 216 tests in all: 195 passed and 21 skipped after a clean, and `build/libs/racmc-0.1.0.jar` was built again. This is the report of P03 on the tree of the demo of the Blaster before this revision; the clean build of this revision was run again and is named in the rows of this revision. |
 | `CI=true .\gradlew.bat --no-daemon build` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. This is the report of P03 on the tree of the demo of the Blaster before this revision. |
 | `gradlew.bat runClient` on the tree of the demo of the Blaster | The client window opened, the disc image of the NTSC-U v1.00 release was verified again, the cache of the assets was used, and the screen of the demo of the Blaster was drawn. The pictures of the demo were taken by the game itself (`p03-front-0-t0.1.png` up to `p03-front-20-t2.9.png` under `run/screenshots`): they show the hero facing the player with the Blaster in his right hand, the barrel of the weapon pointing the way the hero faces, the weapon playing the sequence of the shot once every 2.5 seconds and the hero playing his stance of the weapon without a jump. The log holds the moment of the demo, the view of the model and the box around the hero and around the weapon of every picture. The client was stopped afterwards, because the mouse and the keyboard of the session of the agent do not reach the window of the game. This is the report of P03 on the tree of the demo of the Blaster before this revision; the client was not started again for this revision, because a run on a real disc image is the scope of the independent worker T03. |
+| `gradlew.bat test --rerun` on the revision `3d499ba` | `BUILD SUCCESSFUL`, 253 tests in all: 232 passed, 21 skipped, no failure and no error, counted from the XML reports of the test task over the thirty test classes. The twenty-one skipped tests are the opt-in checks of a real disc image. |
+| `gradlew.bat clean build --no-build-cache` on the revision `3d499ba` | `BUILD SUCCESSFUL` in 20 s with all eleven tasks executed - the build cache was switched off, so the tests really ran - and the same 253 tests with 232 passed and 21 skipped. `build/libs/racmc-0.1.0.jar` (176,767 bytes) was built again. |
+| `CI=true .\gradlew.bat --no-daemon clean build` on the revision `3d499ba` | `BUILD SUCCESSFUL` in 30 s with all eleven tasks executed and the same 253 tests with 232 passed and 21 skipped. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. |
+| `gradlew.bat test --rerun -Dracmc.isoImage=<NTSC-U v1.00> -Dracmc.isoExpectedRevision="NTSC-U v1.00"` on the revision `3d499ba` | `BUILD SUCCESSFUL` in 1 m 27 s, 253 of 253 tests passed, no failure and no error: the twenty-one opt-in checks of the real disc image included. The image was only read; it was not copied and is not part of this repository. |
+| `gradlew.bat javadoc` on the revision `3d499ba` | `BUILD SUCCESSFUL`. The four warnings it reports were already there before this revision (three default constructors and one field without a comment); none of them comes from `Rac1CacheLocation`. |
+| `gradlew.bat runClient` as a first start of the configuration, with `racmc-cache.properties` and `racmc-media.properties` removed before the start and with no disc image configured | The client window opened. The log holds `The cache of the assets is kept in <worktree>\run\config\racmc\cache.`, which is the standard place, then `The disc image gate keeps the main menu closed until the disc image is verified and the assets are in the cache.` and `The disc image picker was opened and cannot be dismissed.`: without a disc image the game stays closed. The mod wrote `run/config/racmc/racmc-cache.properties` itself, with the key `directory` blank and the comment `Where the cache of the converted assets of Ratchet & Clank: Getting Wood is kept.`, `Leave "directory" blank to keep it in the standard place of this Minecraft instance: config/racmc/cache.`, `An absolute path keeps it anywhere else. A relative path is resolved against config/racmc of this instance - never against the working directory - and may use "..".`, `Write the path exactly as it is; the file needs no escaping for backslashes.`, `The value is read when the game starts, so start the game again after a change.` and `Changing it never moves and never deletes a cache that was written before.` The client was closed through its own window; the log holds `Stopping!` and the task ended with `BUILD SUCCESSFUL in 1m 39s`. |
+| `gradlew.bat runClient` with `directory=custom-cache` in that file and the disc image of the NTSC-U v1.00 release configured | The log holds `The cache of the assets is kept in <worktree>\run\config\racmc\custom-cache.` - a relative value resolved against `config/racmc` of the instance and not against the working directory, which is the worktree itself - then the gate lines above, `The disc image was verified: NTSC-U v1.00.` and `The cache of the assets is started for the disc image.`. The cache was written into the configured directory (`custom-cache\racm-4fe30dba423460fa255a9379cf04933a2e05200e2e77adf4d4fee9300fe39685.racm`, 5,714,763 bytes) while the standard `cache` directory of the instance stayed empty, and no staging file was left behind. `BUILD SUCCESSFUL in 4m 9s`. |
+| `gradlew.bat runClient` again with the same configuration | The same directory was found again (`The cache of the assets is kept in ...custom-cache.`), the disc image was verified again and the cache file was **not** written again: its size and its time of the last change are the same as after the run before (5,714,763 bytes, `2026-11-04T17:09:48Z`), so the cache that was there was used instead of being built again. `BUILD SUCCESSFUL in 1m 55s`. |
+| `gradlew.bat runClient` with `directory=racmc-media.properties`, which names a file | The log holds the error `The cache directory cannot be used, configured as "racmc-media.properties": "...\config\racmc\racmc-media.properties" is a file and not a directory. Change the key "directory" in ...\config\racmc\racmc-cache.properties - leave it blank to use the standard place - and start the game again.` The disc image was verified, but no cache was written anywhere, no staging file appeared and the game stayed closed; the store does not fall back to another directory. `BUILD SUCCESSFUL in 2m 8s`. |
+| `gradlew.bat runClient` with `directory=` blank again | The standard place was found again (`The cache of the assets is kept in <worktree>\run\config\racmc\cache.`), the disc image was verified and a cache was written into it (`racm-4fe30dba...racm`, 5,714,763 bytes) while the file in `custom-cache` was left exactly where and how it was (5,714,763 bytes, `2026-11-04T17:09:48Z`): a change of the location never moves and never deletes a cache that was written before. `BUILD SUCCESSFUL in 2m 11s`. |
+| `gradlew.bat test --tests "com.github.giannigr.racmc.cache.Rac1CacheInterruptionTest" --rerun` on the revision `29119af` | `BUILD SUCCESSFUL`, 7 of 7 tests passed. The same command on the tree of the revision `3d499ba`, without the narrowing of the cleanup of the staging files, failed in two of them: the file of the player named `racm-orphan.racm.staging` was gone (`Rac1CacheInterruptionTest.java:122`) and the directory of the player whose name looks like a staging file was gone (`Rac1CacheInterruptionTest.java:140`). The check of the link holds only on a system that can build one; the machine of this report cannot build a link without administrator rights, so it returned without a check there. It is reported as a skipped test now, so that it is never counted as a check that ran. |
+| `gradlew.bat test --rerun` on the revision `29119af` | `BUILD SUCCESSFUL`, 257 tests in all: 236 passed, 21 skipped, no failure and no error, counted from the XML reports of the test task over the thirty test classes. The twenty-one skipped tests are the opt-in checks of a real disc image. |
+| `gradlew.bat clean build javadoc --no-build-cache` on the revision `29119af` | `BUILD SUCCESSFUL` in 24 s and the same 257 tests with 236 passed and 21 skipped; `build/libs/racmc-0.1.0.jar` (176,967 bytes) was built again. The javadoc task reports the four warnings that were already there before this revision (three default constructors and one field without a comment); none of them comes from `Rac1CacheStore` or from `Rac1CacheLocation`. |
 | `gradlew.bat test --tests "com.github.giannigr.racmc.client.render.Rac1MeshRendererTest" --tests "com.github.giannigr.racmc.client.render.Rac1PreviewLayoutTest" --rerun` on the tree of issue #6 | `BUILD SUCCESSFUL`, 20 of 20 tests passed: the 12 checks of the renderer - the 8 of the previous tree plus the 4 checks of the static draw path - and the 8 checks of the layout of the preview. |
+| `gradlew.bat test --tests "com.github.giannigr.racmc.client.screen.Rac1ScreenLayoutTest" --tests "com.github.giannigr.racmc.cache.Rac1CacheInterruptionTest" --rerun` on the merged tree of issue #8 | `BUILD SUCCESSFUL`, 17 tests in all: the ten checks of the places of the screens passed and the seven checks of an interrupted run passed except the one that needs a system that can build a symbolic link, which was skipped. Before the merge that check returned without a check and was counted as a pass. |
+| `gradlew.bat test --rerun` on the merged tree of issue #8 | `BUILD SUCCESSFUL`, 280 tests in all over 32 test classes: 257 passed, 23 skipped, no failure and no error, counted from the XML reports of the test task. The twenty-three skipped tests are the twenty-two opt-in checks of a real disc image and the check of the link that needs a system that can build a symbolic link. |
+| `gradlew.bat clean build javadoc --no-build-cache` on the merged tree of issue #8 | `BUILD SUCCESSFUL`, the same 280 tests with 257 passed and 23 skipped after a clean, and `build/libs/racmc-0.1.0.jar` (186,578 bytes) was built again. The javadoc task reports the four warnings that were already there before the merge (three default constructors and one field without a comment); none of them comes from `Rac1CacheStore`, from `Rac1CacheLocation` or from `Rac1ScreenLayout`. |
+| `gradlew.bat runClient` with `directory=racmc-media.properties` in `run/config/racmc/racmc-cache.properties` and the disc image of the NTSC-U v1.00 release configured, on the merged tree of issue #8 | The client window opened (1592 by 886 pixels at the GUI scale of 2) and the selection screen showed the whole error of the cache in the panel under its buttons: the path of the image, the outcome of its check and the whole message `The cache directory cannot be used, configured as "racmc-media.properties": "...\config\racmc\racmc-media.properties" is a file and not a directory. Change the key "directory" in ...\config\racmc\racmc-cache.properties - leave it blank to use the standard place - and start the game again.` None of the message is cut off by the edge of the window. The buttons *Pick disc image*, *Options*, *Quit Game* and *Try again* stand in two rows above the panel and are not covered by it. The picture was taken by the game itself, with the key F2 of its own window. |
+| the same client in the narrowest window of the game (320 by 240 pixels at the GUI scale of 1) | The report does not fit into the panel of the screen: the panel shows the first lines of it, says `Scroll for more.` and is scrolled with the mouse wheel, so that the whole message can be read. The buttons of the screen stay above the panel and the text of the screen never reaches over the edge of the window. |
+| `gradlew.bat runClient` with the key `directory` blank again | The standard place of the cache was found again, the cache of the assets was built and the main menu opened. The picture shows the buttons *Disc image* and *Blaster test* standing above the two lines of the version of the game and of the loader (`Minecraft 1.21.1` and `NeoForge 21.1.265 (3 mods)`), which are readable and are not covered by the buttons. On the tree of the revision `29119af` the button *Disc image* stood over the line of the version of the game, as the picture of the tree of issue #8 shows. |
 | `gradlew.bat test --rerun` on the tree of issue #6 | `BUILD SUCCESSFUL`, 236 tests in all over 29 test classes: 214 passed, 22 skipped, 0 failures and 0 errors, counted from the XML reports of the test task. The twenty-two skipped tests are the opt-in checks of a real disc image. |
 | `gradlew.bat test --rerun -Dracmc.isoImage=<NTSC-U v1.00> -Dracmc.isoExpectedRevision="NTSC-U v1.00"` on the tree of issue #6 | `BUILD SUCCESSFUL`, 236 of 236 tests passed over 29 test classes with no skip, the opt-in checks included: `RealDiscAssetTest` 18 of 18, `DiscFactsDiagnosticTest` 3 of 3 and `RealDiscImageTest` 1 of 1. The image was read in place under the authorized directory and was never copied. |
 | `gradlew.bat test --rerun -Dracmc.isoImage=<PAL v2.00> -Dracmc.isoExpectedRevision="PAL v2.00"` on the tree of issue #6 | `BUILD SUCCESSFUL`, 236 of 236 tests passed over 29 test classes with no skip, `RealDiscAssetTest` 18 of 18 included. The image was read in place under the authorized directory and was never copied. |

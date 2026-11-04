@@ -135,6 +135,52 @@ class Rac1AssetCacheManagerTest {
         }
     }
 
+    @Test
+    @DisplayName("A cache directory that cannot be used is reported and never used")
+    void aCacheDirectoryThatCannotBeUsedIsReported() {
+        Rac1CacheStore store = Rac1CacheStore.unusable("The cache directory cannot be used: "
+                + "\"file.iso\" is a file and not a directory. Change the key \"directory\" in "
+                + "racmc-cache.properties and start the game again.");
+        try (Rac1AssetCacheManager manager = new Rac1AssetCacheManager(store,
+                new Rac1DiscValidator())) {
+            manager.start(tempDir.resolve("missing.iso"), KEY);
+
+            waitFor(manager);
+            assertEquals(Rac1CacheState.FAILED, manager.state(),
+                    "The game has to stay closed when the directory cannot be used");
+            assertFalse(manager.isReady(), "No cache may be ready of a place that cannot be used");
+            assertTrue(manager.content().isEmpty(), "No content may come from such a place");
+            String error = manager.error().orElse("");
+            assertTrue(error.contains("cannot be used"),
+                    "The failure has to say what is wrong: " + error);
+            assertTrue(error.contains("start the game again"),
+                    "The failure has to say what to do: " + error);
+        }
+    }
+
+    @Test
+    @DisplayName("A cache that a run left half written is not used and the cache that was there is")
+    void aHalfWrittenFileIsNotUsed() throws IOException {
+        Rac1CacheStore store = new Rac1CacheStore(tempDir);
+        store.store(KEY, SyntheticAssets.content(KEY));
+        Path staging = store.fileFor(KEY)
+                .resolveSibling(store.fileFor(KEY).getFileName().toString() + ".staging");
+        byte[] file = Rac1CacheCodec.write(SyntheticAssets.content(KEY),
+                Rac1CacheStore.SCHEMA_VERSION);
+        Files.write(staging, java.util.Arrays.copyOf(file, file.length / 2));
+
+        try (Rac1AssetCacheManager manager = new Rac1AssetCacheManager(store,
+                new Rac1DiscValidator())) {
+            manager.start(tempDir.resolve("missing.iso"), KEY);
+
+            waitFor(manager);
+            assertEquals(Rac1CacheState.READY, manager.state(),
+                    "The cache that was there before has to be used");
+            assertTrue(manager.content().isPresent());
+            assertEquals(4, manager.content().get().staticAsset().mesh().vertexCount());
+        }
+    }
+
     /**
      * Waits until the manager is done.
      */

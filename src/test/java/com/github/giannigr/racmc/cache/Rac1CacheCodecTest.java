@@ -164,4 +164,104 @@ class Rac1CacheCodecTest {
 
         assertTrue(text.contains(KEY), "The file has to name the disc it belongs to");
     }
+
+    @Test
+    @DisplayName("The file carries the version of the format, of the schema and of the converter")
+    void theFileCarriesThreeDifferentVersions() throws IOException {
+        byte[] file = Rac1CacheCodec.write(SyntheticAssets.content(KEY),
+                Rac1CacheStore.SCHEMA_VERSION);
+
+        assertEquals(Rac1CacheCodec.FORMAT_VERSION, readShort(file, 4),
+                "The header has to name the version of the format");
+        assertEquals(Rac1CacheStore.SCHEMA_VERSION, readInt(file, 8),
+                "The header has to name the version of the schema of the assets");
+        assertEquals(Rac1CacheCodec.CONVERTER_VERSION, readInt(file, 12),
+                "The header has to name the version of the converter");
+    }
+
+    @Test
+    @DisplayName("A cache that was written for another version of the format is refused")
+    void aCacheOfAnotherFormatVersionIsRefused() throws IOException {
+        byte[] file = Rac1CacheCodec.write(SyntheticAssets.content(KEY),
+                Rac1CacheStore.SCHEMA_VERSION);
+        writeShort(file, 4, Rac1CacheCodec.FORMAT_VERSION - 1);
+
+        IOException failure = assertThrows(IOException.class,
+                () -> Rac1CacheCodec.read(file, KEY, Rac1CacheStore.SCHEMA_VERSION));
+        assertTrue(failure.getMessage().contains("format version"),
+                "The message has to say what is wrong: " + failure.getMessage());
+    }
+
+    @Test
+    @DisplayName("A cache that was written by an older converter is refused")
+    void aCacheOfAnOldConverterVersionIsRefused() throws IOException {
+        byte[] file = Rac1CacheCodec.write(SyntheticAssets.content(KEY),
+                Rac1CacheStore.SCHEMA_VERSION);
+        writeInt(file, 12, Rac1CacheCodec.CONVERTER_VERSION - 1);
+        writeInt(file, 44, Rac1CacheCodec.checksum(file, 0, 44));
+
+        IOException failure = assertThrows(IOException.class,
+                () -> Rac1CacheCodec.read(file, KEY, Rac1CacheStore.SCHEMA_VERSION));
+        assertTrue(failure.getMessage().contains("converter version"),
+                "The message has to say what is wrong: " + failure.getMessage());
+    }
+
+    @Test
+    @DisplayName("A cache that was written by another converter is refused")
+    void aCacheOfAnotherConverterVersionIsRefused() throws IOException {
+        byte[] file = Rac1CacheCodec.write(SyntheticAssets.content(KEY),
+                Rac1CacheStore.SCHEMA_VERSION);
+        writeInt(file, 12, Rac1CacheCodec.CONVERTER_VERSION + 1);
+        writeInt(file, 44, Rac1CacheCodec.checksum(file, 0, 44));
+
+        IOException failure = assertThrows(IOException.class,
+                () -> Rac1CacheCodec.read(file, KEY, Rac1CacheStore.SCHEMA_VERSION));
+        assertTrue(failure.getMessage().contains("converter version"),
+                "The message has to say what is wrong: " + failure.getMessage());
+    }
+
+    @Test
+    @DisplayName("A damaged version of the converter is refused by the checksum of the header")
+    void aDamagedConverterVersionIsRefusedByTheHeaderChecksum() throws IOException {
+        byte[] file = Rac1CacheCodec.write(SyntheticAssets.content(KEY),
+                Rac1CacheStore.SCHEMA_VERSION);
+        file[12] ^= 0x40;
+
+        IOException failure = assertThrows(IOException.class,
+                () -> Rac1CacheCodec.read(file, KEY, Rac1CacheStore.SCHEMA_VERSION));
+        assertTrue(failure.getMessage().contains("header"),
+                "The message has to say what is wrong: " + failure.getMessage());
+    }
+
+    /**
+     * Writes a short in the little endian order, the way the file holds it.
+     */
+    private static void writeShort(byte[] data, int offset, int value) {
+        data[offset] = (byte) (value & 0xFF);
+        data[offset + 1] = (byte) ((value >> 8) & 0xFF);
+    }
+
+    /**
+     * Writes an int in the little endian order, the way the file holds it.
+     */
+    private static void writeInt(byte[] data, int offset, int value) {
+        for (int index = 0; index < 4; index++) {
+            data[offset + index] = (byte) ((value >> (index * 8)) & 0xFF);
+        }
+    }
+
+    /**
+     * Reads a short in the little endian order, the way the file holds it.
+     */
+    private static int readShort(byte[] data, int offset) {
+        return (data[offset] & 0xFF) | ((data[offset + 1] & 0xFF) << 8);
+    }
+
+    /**
+     * Reads an int in the little endian order, the way the file holds it.
+     */
+    private static int readInt(byte[] data, int offset) {
+        return (data[offset] & 0xFF) | ((data[offset + 1] & 0xFF) << 8)
+                | ((data[offset + 2] & 0xFF) << 16) | ((data[offset + 3] & 0xFF) << 24);
+    }
 }
