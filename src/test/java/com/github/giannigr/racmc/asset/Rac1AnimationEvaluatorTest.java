@@ -16,6 +16,10 @@ import org.junit.jupiter.api.Test;
  * <p>The game of the disc keeps the rows of its matrices, and the row 0 of a matrix is the image
  * of its first axis. The checks use that convention, so that a change of the convention in the
  * evaluator is noticed.
+ *
+ * <p>One of the checks uses a sequence that is built by hand by {@link SyntheticMobySequence} and
+ * read by the reader of the game, so that the whole path from the data of the disc to the pose is
+ * checked. No data of the game is used anywhere.
  */
 class Rac1AnimationEvaluatorTest {
 
@@ -318,6 +322,48 @@ class Rac1AnimationEvaluatorTest {
 
         assertTrue(Math.abs(previous - current) > TOLERANCE,
                 "The joint stands still at the end of the cycle of the sequence");
+    }
+
+    /**
+     * A sequence that repeats itself and holds the records of the channels, as the reader of the
+     * game reads it.
+     *
+     * <p>The sequence is built by hand by {@link SyntheticMobySequence}: its first key holds a
+     * translation of two units and a scale of one and a half, its second key holds a translation
+     * of five units and a scale of three, and the key at the end of the sequence holds the pose
+     * of the first key.
+     *
+     * @return the sequence
+     * @throws AssetFormatException when the sequence cannot be read
+     */
+    private static Rac1Animation loopWithChannels() throws AssetFormatException {
+        byte[] blob = SyntheticMobySequence.sequence(new float[] { 0.125f, 0.125f },
+                new float[] { 2.0f, 5.0f }, new float[] { 1.5f, 3.0f });
+        MobySequenceReader.Keys keys = MobySequenceReader.read(blob, 0, JOINTS);
+        return new Rac1Animation("test", keys.times(), keys.loop(), keys.rotations(),
+                keys.translationKeys(), keys.translationJoints(), keys.translationValues(),
+                keys.scaleKeys(), keys.scaleJoints(), keys.scaleValues(), keys.scaleInherited());
+    }
+
+    @Test
+    @DisplayName("The pose at the end of the cycle of a sequence is the pose at its start")
+    void thePoseAtTheEndOfTheCycleIsThePoseAtItsStart() throws AssetFormatException {
+        Rac1Animation animation = loopWithChannels();
+        float last = animation.times()[animation.keyCount() - 1];
+
+        float[] start = Rac1AnimationEvaluator.evaluatePose(skeleton(), animation, 0.0f);
+        float[] beforeTheEnd = Rac1AnimationEvaluator.evaluatePose(skeleton(), animation,
+                last - 1.0e-5f);
+
+        // The pose of the end of the cycle is the pose of the start of the cycle. The reader of
+        // the game used to leave the key at the end of the sequence without the records of the
+        // channels, so the pose was a unit away in the translation and half a unit away in the
+        // scale at the end of the cycle.
+        for (int index = 0; index < start.length; index++) {
+            assertEquals(start[index], beforeTheEnd[index], 1.0e-2f,
+                    "The pose jumps at the end of the cycle of the sequence, at the number "
+                            + index);
+        }
     }
 
     @Test

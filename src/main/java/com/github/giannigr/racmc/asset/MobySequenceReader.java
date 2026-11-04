@@ -292,8 +292,18 @@ public final class MobySequenceReader {
             float step = rateOverride != 0.0f ? rateOverride : rate;
             if (key + 1 == frameCount) {
                 if (frameCount > 1 && step > 0.0f && Float.isFinite(step)) {
+                    // The reader of the game adds a key at the end of such a sequence, and
+                    // that key holds the pose of the first key, so that the frame after the
+                    // last one is the first one again. The rotation of every joint is
+                    // copied above; the translation and the scale of the joints that differ
+                    // from the rest pose are copied here, so that the pose of the first key
+                    // is whole and the sequence does not jump at the end of its cycle.
+                    int endpoint = times.size();
                     times.add(tick + 1.0f / step);
                     rotations.add(rotationArray[0]);
+                    copyTranslations(translationKeys, translationJoints, translationValues, 0,
+                            endpoint);
+                    copyScales(scaleKeys, scaleJoints, scaleValues, scaleInherited, 0, endpoint);
                     loop = true;
                 }
             } else if (!(step > 0.0f) || Float.isNaN(step)) {
@@ -365,6 +375,60 @@ public final class MobySequenceReader {
             if (records.get(index) > key) {
                 records.set(index, records.get(index) - 1);
             }
+        }
+    }
+
+    /**
+     * Copies the records of the translations of one key to another key.
+     *
+     * @param keys the key of every record
+     * @param joints the joint of every record
+     * @param values the value of every record, three numbers each
+     * @param from the key the records are copied from
+     * @param to the key the records are copied to
+     */
+    private static void copyTranslations(List<Integer> keys, List<Integer> joints,
+            List<Float> values, int from, int to) {
+        List<Integer> sources = new ArrayList<>();
+        for (int index = 0; index < keys.size(); index++) {
+            if (keys.get(index) == from) {
+                sources.add(index);
+            }
+        }
+        for (int index : sources) {
+            keys.add(to);
+            joints.add(joints.get(index));
+            values.add(values.get(index * 3));
+            values.add(values.get(index * 3 + 1));
+            values.add(values.get(index * 3 + 2));
+        }
+    }
+
+    /**
+     * Copies the records of the scales of one key to another key.
+     *
+     * @param keys the key of every record
+     * @param joints the joint of every record
+     * @param values the value of every record, three numbers each
+     * @param inherited whether the scale of every record reaches the children of its joint
+     * @param from the key the records are copied from
+     * @param to the key the records are copied to
+     */
+    private static void copyScales(List<Integer> keys, List<Integer> joints, List<Float> values,
+            List<Boolean> inherited, int from, int to) {
+        List<Integer> sources = new ArrayList<>();
+        for (int index = 0; index < keys.size(); index++) {
+            if (keys.get(index) == from) {
+                sources.add(index);
+            }
+        }
+        for (int index : sources) {
+            keys.add(to);
+            joints.add(joints.get(index));
+            values.add(values.get(index * 3));
+            values.add(values.get(index * 3 + 1));
+            values.add(values.get(index * 3 + 2));
+            inherited.add(inherited.get(index));
         }
     }
 

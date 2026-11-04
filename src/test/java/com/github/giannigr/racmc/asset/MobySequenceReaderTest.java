@@ -10,14 +10,15 @@ import org.junit.jupiter.api.Test;
 /**
  * Focused checks for the reader of the animation sequences of the game.
  *
- * <p>The sequences that are read are built by hand: a header, the pointers of the keys and the
- * keys themselves with the quaternions of the joints and the records of the joints whose
- * translation or scale differ from the rest pose. No data of the game is used anywhere.
+ * <p>The sequences that are read are built by hand by {@link SyntheticMobySequence}: a header, the
+ * pointers of the keys and the keys themselves with the quaternions of the joints and the records of
+ * the joints whose translation or scale differ from the rest pose. No data of the game is used
+ * anywhere.
  */
 class MobySequenceReaderTest {
 
     /** The number of the joints of the skeleton of the checks. */
-    private static final int JOINTS = 2;
+    private static final int JOINTS = SyntheticMobySequence.JOINTS;
 
     /**
      * Builds a sequence with the given keys.
@@ -30,54 +31,7 @@ class MobySequenceReaderTest {
      * @return the bytes of the sequence
      */
     private static byte[] sequence(float[] rates) {
-        int frames = rates.length;
-        int quaternionBytes = JOINTS * 8;
-        int scales = 1;
-        int translations = 1;
-        int quadwords = (quaternionBytes + scales * 8 + translations * 8 + 15) / 16;
-        int frameSize = MobySequenceReader.FRAME_HEADER_SIZE + quadwords * 16;
-        byte[] blob = new byte[MobySequenceReader.SEQUENCE_HEADER_SIZE + frames * 4
-                + frames * frameSize];
-        blob[offset(0) + 0x10] = (byte) frames;
-        for (int frame = 0; frame < frames; frame++) {
-            int at = MobySequenceReader.SEQUENCE_HEADER_SIZE + frame * 4;
-            writeInt(blob, at, MobySequenceReader.SEQUENCE_HEADER_SIZE + frames * 4 + frame * frameSize);
-            int frameAt = MobySequenceReader.SEQUENCE_HEADER_SIZE + frames * 4 + frame * frameSize;
-            writeFloat(blob, frameAt, rates[frame]);
-            writeShort(blob, frameAt + 6, quadwords);
-            writeShort(blob, frameAt + 8, quaternionBytes);
-            writeShort(blob, frameAt + 0x0A, scales);
-            writeShort(blob, frameAt + 0x0C, quaternionBytes + scales * 8);
-            writeShort(blob, frameAt + 0x0E, translations);
-            int payloadAt = frameAt + MobySequenceReader.FRAME_HEADER_SIZE;
-            // The quaternions of the joints are the identity.
-            for (int joint = 0; joint < JOINTS; joint++) {
-                writeShort(blob, payloadAt + joint * 8 + 6, 0x7FFF);
-            }
-            // The scale of the joint 0 is one and a half.
-            writeShort(blob, payloadAt + quaternionBytes, 0x1800);
-            writeShort(blob, payloadAt + quaternionBytes + 2, 0x1800);
-            writeShort(blob, payloadAt + quaternionBytes + 4, 0x1800);
-            blob[payloadAt + quaternionBytes + 6] = 0;
-            blob[payloadAt + quaternionBytes + 7] = (byte) 0x80;
-            // The translation of the joint 1 is one unit.
-            int translationAt = payloadAt + quaternionBytes + scales * 8;
-            writeShort(blob, translationAt, 0);
-            writeShort(blob, translationAt + 2, 0);
-            writeShort(blob, translationAt + 4, 0x0400);
-            blob[translationAt + 6] = 1;
-        }
-        return blob;
-    }
-
-    /**
-     * The offset of the header of the sequence of the checks.
-     *
-     * @param index the number of the key
-     * @return the offset
-     */
-    private static int offset(int index) {
-        return 0;
+        return SyntheticMobySequence.sequence(rates);
     }
 
     @Test
@@ -105,7 +59,7 @@ class MobySequenceReaderTest {
 
         MobySequenceReader.Keys keys = MobySequenceReader.read(blob, 0, JOINTS);
 
-        assertEquals(2, keys.scaleKeys().length, "Every key of the sequence holds a scale");
+        assertEquals(3, keys.scaleKeys().length, "Every key of the sequence holds a scale");
         for (int index = 0; index < keys.scaleKeys().length; index++) {
             assertTrue(keys.scaleKeys()[index] < keys.times().length,
                     "The scale belongs to a key of the sequence");
@@ -115,6 +69,38 @@ class MobySequenceReaderTest {
         assertEquals(1.5f, keys.scaleValues()[0], 1.0e-5f);
         assertEquals(1, keys.translationJoints()[0]);
         assertEquals(1.0f, keys.translationValues()[2], 1.0e-5f);
+    }
+
+    @Test
+    @DisplayName("The key at the end of a sequence holds the pose of the first key")
+    void theKeyAtTheEndHoldsThePoseOfTheFirstKey() throws AssetFormatException {
+        // The first key holds a translation of two units and a scale of one and a half, the
+        // second one holds a translation of five units and a scale of three.
+        byte[] blob = SyntheticMobySequence.sequence(new float[] { 0.125f, 0.125f },
+                new float[] { 2.0f, 5.0f }, new float[] { 1.5f, 3.0f });
+
+        MobySequenceReader.Keys keys = MobySequenceReader.read(blob, 0, JOINTS);
+
+        assertEquals(3, keys.times().length, "The sequence holds two keys and the key it loops to");
+        assertEquals(3, keys.translationKeys().length,
+                "Every key of the sequence holds a translation");
+        assertEquals(2, keys.translationKeys()[2],
+                "The translation of the last key belongs to the key at the end of the sequence");
+        assertEquals(1, keys.translationJoints()[2], "The translation belongs to the second joint");
+        assertEquals(2.0f, keys.translationValues()[2 * 3 + 2], 1.0e-5f,
+                "The key at the end of the sequence holds the translation of the first key");
+        assertEquals(3, keys.scaleKeys().length, "Every key of the sequence holds a scale");
+        assertEquals(2, keys.scaleKeys()[2],
+                "The scale of the last key belongs to the key at the end of the sequence");
+        assertEquals(0, keys.scaleJoints()[2], "The scale belongs to the first joint");
+        assertEquals(1.5f, keys.scaleValues()[2 * 3 + 2], 1.0e-5f,
+                "The key at the end of the sequence holds the scale of the first key");
+        assertTrue(keys.scaleInherited()[2], "The scale of the record reaches the children");
+        // The second key keeps the records of its own.
+        assertEquals(5.0f, keys.translationValues()[1 * 3 + 2], 1.0e-5f,
+                "The translation of the second key is the one of the sequence");
+        assertEquals(3.0f, keys.scaleValues()[1 * 3 + 2], 1.0e-5f,
+                "The scale of the second key is the one of the sequence");
     }
 
     @Test
@@ -182,9 +168,5 @@ class MobySequenceReaderTest {
     private static void writeShort(byte[] data, int offset, int value) {
         data[offset] = (byte) (value & 0xFF);
         data[offset + 1] = (byte) ((value >> 8) & 0xFF);
-    }
-
-    private static void writeFloat(byte[] data, int offset, float value) {
-        writeInt(data, offset, Float.floatToRawIntBits(value));
     }
 }
