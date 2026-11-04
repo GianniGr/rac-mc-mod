@@ -202,8 +202,10 @@ The mod shows the imported assets in the game: the hero holds his Blaster and fi
   reads the chain instead of assuming the number of the joint. The chain of the hand holds the
   joints 52 to 56, the arm of the weapon, and the twelfth list of the class - the list that the
   game evaluates for the layer of the arm of the hero - ends at the joint 52, the shoulder of the
-  same arm. The weapon of the hero is therefore in the right arm of the hero, and the check of a
-  real disc image holds these numbers.
+  same arm. The hero faces the first axis - the toes of his feet point along it - and stands
+  upright, so the side of the third axis that the arm of the weapon reaches is his right side.
+  The weapon of the hero is therefore in his right hand, and the check of a real disc image holds
+  these numbers.
 
 The game places the items of the hand with the pose of the joint they hang on: the item brings
 the place of its grip with it, so the game adds no matrix of its own - the origin of the model of
