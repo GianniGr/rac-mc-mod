@@ -398,7 +398,7 @@ ModDevGradle's NeoForge aware unit test support is enabled (`neoForge { unitTest
 so the test source set has the mod and the Minecraft classes on its classpath and tests can use
 Minecraft types directly.
 
-Nine focused test classes exist today:
+Twenty-eight focused test classes exist today:
 
 - `ModBootstrapMetadataTest` verifies that the mod id, mod name and mod version are identical in
   `gradle.properties`, in the generated `META-INF/neoforge.mods.toml` and in `RacMcConstants`, and
@@ -427,11 +427,6 @@ Nine focused test classes exist today:
 - `ModLicenseTest` verifies that the `LICENSE` file holds the MIT licence, that `mod_license` and
   the `license` field of the generated metadata hold `MIT`, that the placeholder of the foundation
   is gone and that the licence only covers the source code.
-- `Rac1DiscValidatorTest` verifies the validation of candidate disc images with synthetic ISO 9660
-  images: the accepted revisions, the refused revisions of the game, discs of other games, files
-  that are not ISO 9660 images, container formats such as CHD, unusable paths, a boot executable
-  with the wrong size, a modified boot executable, malformed directory records, a directory record
-  whose name could escape a directory and a directory that points outside of the image.
 - `IsoPathSafetyTest` verifies the handling of paths: the paths of the files inside an image may
   not be absolute, may not contain a `..` segment, an empty segment, a drive separator or a control
   character, and a file of an image is read completely and only up to its own size.
@@ -515,7 +510,11 @@ Nine focused test classes exist today:
 - `Rac1MeshRendererTest` verifies the way the renderer writes the triangles of a mesh into the
   buffer of the game: a triangle is written as a quad of four vertices, whose fourth vertex is the
   first vertex of the triangle, because the kinds of triangles of the game of blocks are drawn in
-  quads and a triangle of three vertices would be cut in two.
+  quads and a triangle of three vertices would be cut in two. The grouping of the triangles by
+  their material is held as well: the triangles of a mesh are grouped into one run per material,
+  the triangles of a run keep their order, a material that is out of range does not read outside
+  of the textures, a mesh without triangles has no run, and a material that is missing is held in
+  the run of the missing texture instead of reading outside of the array of the textures.
 - `Rac1BlasterDemoTest` verifies the pose of the demo of the Blaster: the hero moves while his
   sequence runs, the pose of the hero is the same after a whole cycle of his sequence, the hero does
   not stand still at the end of his cycle and he is not torn apart when his sequence repeats itself.
@@ -537,17 +536,17 @@ Nine focused test classes exist today:
   class of the Blaster holds the chain of its muzzle, and the hero of the game holds the idle and
   the stance of the weapon with the lengths that the demo uses.
 
-The suite currently contains 216 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
+The suite currently contains 221 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in
 `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in
 `Rac1MediaManagerTest`, 8 in `Rac1MediaGateTest`, 8 in `WadDecoderTest`, 5 in `TieClassReaderTest`,
 5 in `MobyClassReaderTest`, 7 in `MobySequenceReaderTest`, 6 in `MobyMeshTest`, 11 in
 `Rac1AnimationEvaluatorTest`, 7 in `Rac1CoordinateTransformTest`, 5 in `Rac1TextureReaderTest`,
-6 in `VifCommandListTest`, 10 in `Rac1CoreIndexTest`, 3 in `Rac1MeshRendererTest`, 8 in
+6 in `VifCommandListTest`, 10 in `Rac1CoreIndexTest`, 8 in `Rac1MeshRendererTest`, 8 in
 `Rac1BlasterDemoTest`, 10 in `Rac1CacheCodecTest`, 7 in `Rac1CacheStoreTest`, 6 in
 `Rac1AssetCacheManagerTest`, 17 in `RealDiscAssetTest`, 3 in `DiscFactsDiagnosticTest` and 1 in
-`RealDiscImageTest`. Twenty-one of them, the opt-in checks of a real disc image, are skipped
-unless they are asked for.
+`RealDiscImageTest`. 200 of them pass, and twenty-one of them, the opt-in checks of a real disc
+image, are skipped unless they are asked for.
 
 `RealDiscImageTest`, `RealDiscAssetTest` and `DiscFactsDiagnosticTest` are the opt-in checks of a
 real disc image. They are skipped unless the path of an image is given on the command line, and
@@ -564,6 +563,15 @@ committed wrapper). The machine wide default Java was not changed; `JAVA_HOME` w
 Java 21 installation for the Gradle process only. The build, the test suite, the CI command and
 both game launches were additionally reproduced by an independent verification worker on the same
 tree.
+
+Every row of the table names the tree it was measured on. The rows of the foundation were
+measured on the tree of the foundation, before the importer and the demo of the Blaster were
+added. The rows of the tree of the demo of the Blaster are the report of the implementation
+worker P03 of that tree, except the rows that name this revision, which were measured on it. The
+rows that name a run with a real disc image were not repeated for this revision: the directory of
+the disc image that the owner authorized for this project held no image on 2026-11-04, when the
+independent worker T03 looked at it, so the opt-in checks of a real disc image could not be run
+again and are not independently verified here.
 
 | Command | Result |
 | --- | --- |
@@ -584,11 +592,14 @@ tree.
 | `gradlew.bat test --rerun -Dracmc.isoImage=<path> -Dracmc.isoExpectedRevision=<revision>` | `BUILD SUCCESSFUL`, the opt-in check of the real disc image passed for the European PAL v2.00 release and for the North American NTSC-U v1.00 release. Both images were read in place, were accepted and were identified with the expected revision. The size and the SHA-1 digest of each image matched the values of the Redump record of the disc. The images were not copied into the repository and are not part of it. |
 | `gradlew.bat test --rerun -Dracmc.isoImage=<NTSC-U v1.00> -Dracmc.isoExpectedRevision="NTSC-U v1.00"` | `BUILD SUCCESSFUL`, 201 of 201 tests passed, the twelve opt-in checks of the real disc image included: the scenery, the hero and the Blaster are converted with the numbers of the vertices, of the triangles, of the joints, of the sequences and of the textures that were measured on the disc, every vertex of the hero and of the Blaster is used by a triangle, the triangles cover the whole model, the chain of the hand of the hero ends at the joint 56 and the skinning holds the size of the model. |
 | `gradlew.bat runClient` with the disc image of the NTSC-U v1.00 release configured | The client window opened (GL 4.6, NVIDIA GeForce RTX 5090). The log shows `The disc image gate keeps the main menu closed until the disc image is verified and the assets are in the cache.`, `The disc image picker was opened and cannot be dismissed.`, `The disc image was verified: NTSC-U v1.00.` and `The cache of the assets is started for the disc image.`. The cache was written (`racm-4fe30dba….racm`, 5,653,069 bytes) and the main menu opened with the button *Blaster test* on it. The screen of the demo of the Blaster was opened and left open for two minutes: the log holds no error and no warning of the mod, so the renderer of the meshes wrote the triangles of the hero, of the Blaster and of the scenery in every frame without the failure of the buffer of the renderer of the game of blocks. A picture of the screen was taken by the game itself (`Saved screenshot as 2026-11-02_21.04.22.png`): it shows the whole textured hero standing in the middle of the screen with the textured Blaster in his hand, the text of the screen under the model and the button under the text. The mouse and the keyboard of the session of the agent do not reach the window of the game, so the picture was taken by the game itself and not by a key of the keyboard; the worker that verifies the tree can take its own picture. |
-| `gradlew.bat test --rerun` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`, 216 of 216 tests passed, the twenty-one opt-in checks of a real disc image were skipped. |
-| `gradlew.bat test --rerun -Dracmc.isoImage=<NTSC-U v1.00> -Dracmc.isoExpectedRevision="NTSC-U v1.00"` | `BUILD SUCCESSFUL`, 216 of 216 tests passed with the twenty-one opt-in checks of the real disc image included: the joint lists of the hero name the arm of the weapon, the hero faces the first axis, the weapon holds a sequence for the pose it is held in and one for the shot, the third axis of the wrist of the hero points the way the hero faces in the stance of the weapon, and the chain of the muzzle of the Blaster holds seven joints. |
-| `gradlew.bat clean build` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`, the same 216 of 216 tests passed after a clean, and `build/libs/racmc-0.1.0.jar` was built again. |
-| `CI=true .\gradlew.bat --no-daemon build` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. |
-| `gradlew.bat runClient` on the tree of the demo of the Blaster | The client window opened, the disc image of the NTSC-U v1.00 release was verified again, the cache of the assets was used, and the screen of the demo of the Blaster was drawn. The pictures of the demo were taken by the game itself (`p03-front-0-t0.1.png` up to `p03-front-20-t2.9.png` under `run/screenshots`): they show the hero facing the player with the Blaster in his right hand, the barrel of the weapon pointing the way the hero faces, the weapon playing the sequence of the shot once every 2.5 seconds and the hero playing his stance of the weapon without a jump. The log holds the moment of the demo, the view of the model and the box around the hero and around the weapon of every picture. The client was stopped afterwards, because the mouse and the keyboard of the session of the agent do not reach the window of the game. |
+| `gradlew.bat test --rerun` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`, 216 of 216 tests passed, the twenty-one opt-in checks of a real disc image were skipped. This is the measurement of the tree of the demo of the Blaster before this revision; the independent worker T03 counted the same 216 tests on the exact commit `88d9453` (195 passed, 21 skipped, no failure and no error). |
+| `gradlew.bat test --tests "com.github.giannigr.racmc.client.render.Rac1MeshRendererTest"` on this revision | `BUILD SUCCESSFUL`, 8 of 8 tests passed: the three checks of the writing of a triangle as a quad of four vertices and the five restored checks of the grouping of the triangles by their material. |
+| `gradlew.bat test --rerun` on this revision | `BUILD SUCCESSFUL`, 221 tests in all: 200 passed, 21 skipped, no failure and no error, counted from the XML reports of the test task. The twenty-one skipped tests are the opt-in checks of a real disc image. |
+| `gradlew.bat build` on this revision | `BUILD SUCCESSFUL`. The test task of the build was up to date and held the same 221 tests with 200 passed and 21 skipped that `gradlew.bat test --rerun` had measured. `gradlew.bat jar --rerun` built `build/libs/racmc-0.1.0.jar` (169,303 bytes) again. |
+| `gradlew.bat test --rerun -Dracmc.isoImage=<NTSC-U v1.00> -Dracmc.isoExpectedRevision="NTSC-U v1.00"` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`, 216 of 216 tests passed with the twenty-one opt-in checks of the real disc image included: the joint lists of the hero name the arm of the weapon, the hero faces the first axis, the weapon holds a sequence for the pose it is held in and one for the shot, the third axis of the wrist of the hero points the way the hero faces in the stance of the weapon, and the chain of the muzzle of the Blaster holds seven joints. This is the report of P03; the run was not repeated for this revision, because the authorized directory of the disc image held no image, so the result is not independently verified here. |
+| `gradlew.bat clean build` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`, the same 216 of 216 tests passed after a clean, and `build/libs/racmc-0.1.0.jar` was built again. This is the report of P03 on the tree of the demo of the Blaster before this revision; the clean build of this revision was not run again. |
+| `CI=true .\gradlew.bat --no-daemon build` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. This is the report of P03 on the tree of the demo of the Blaster before this revision. |
+| `gradlew.bat runClient` on the tree of the demo of the Blaster | The client window opened, the disc image of the NTSC-U v1.00 release was verified again, the cache of the assets was used, and the screen of the demo of the Blaster was drawn. The pictures of the demo were taken by the game itself (`p03-front-0-t0.1.png` up to `p03-front-20-t2.9.png` under `run/screenshots`): they show the hero facing the player with the Blaster in his right hand, the barrel of the weapon pointing the way the hero faces, the weapon playing the sequence of the shot once every 2.5 seconds and the hero playing his stance of the weapon without a jump. The log holds the moment of the demo, the view of the model and the box around the hero and around the weapon of every picture. The client was stopped afterwards, because the mouse and the keyboard of the session of the agent do not reach the window of the game. This is the report of P03 on the tree of the demo of the Blaster before this revision; the client was not started again for this revision, because the authorized directory of the disc image held no image. |
 
 All of the measurements above were taken on Windows. The Linux and macOS build and test runs are
 covered by the CI matrix but have not been executed yet, and the client and dedicated server
