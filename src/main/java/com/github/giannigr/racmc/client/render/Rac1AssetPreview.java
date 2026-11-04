@@ -20,6 +20,12 @@ import net.minecraft.resources.ResourceLocation;
  * <p>The drawing is framed: the model is measured and turned so that it stands in the middle of
  * the area it is drawn in, whatever its size is.
  *
+ * <p>Two models are drawn: the hero with his Blaster in his hand, and the piece of the scenery of
+ * the game. They stand next to each other, in two places of their own, and every model is framed
+ * on its own: the hero keeps his size, and the scenery is drawn as large as its place allows.
+ * The places and the boxes around the models do not change from frame to frame, so neither model
+ * moves on the screen while the demo runs.
+ *
  * <p>A failure of the drawing is reported once and remembered: the screen stays usable and the
  * failure is not hidden, but it is not written into the log again and again either.
  */
@@ -34,11 +40,17 @@ public final class Rac1AssetPreview {
     /** The textures of the scenery, when they were registered. */
     private ResourceLocation[] staticTextures;
 
+    /** The box around the scenery, when it was measured. */
+    private float[] staticFraming;
+
+    /** The scenery the box around it was measured for. */
+    private Rac1StaticAsset staticSource;
+
     /** The failure of the drawing, when there was one. */
     private String failure;
 
     /**
-     * Draws the hero with the Blaster in his hand.
+     * Draws the hero with the Blaster in his hand and the scenery of the game next to him.
      *
      * @param graphics the graphics of the screen
      * @param content the content of the cache of the assets
@@ -64,23 +76,32 @@ public final class Rac1AssetPreview {
             if (framing == null) {
                 return;
             }
-            // The model is measured and turned so that it stands in the middle of the area and
-            // fills it as far as the room allows. The box around the model is the same for every
-            // moment of the demo, so that the model does not move on the screen while it runs.
-            float width = Math.max(0.001f, framing[3] - framing[0]);
-            float height = Math.max(0.001f, framing[4] - framing[1]);
-            float depth = Math.max(0.001f, framing[5] - framing[2]);
-            float scale = Math.min(areaWidth / Math.max(width, depth), areaHeight / height) * 0.85f;
-            float centreX = (framing[0] + framing[3]) * 0.5f;
-            float centreY = (framing[1] + framing[4]) * 0.5f;
-            float centreZ = (framing[2] + framing[5]) * 0.5f;
+            Rac1StaticAsset scenery = content.staticAsset();
+            boolean withScenery = scenery != null && scenery.mesh().triangleCount() > 0;
+            Rac1PreviewLayout.View heroView = Rac1PreviewLayout.heroView(areaX, areaY, areaWidth,
+                    areaHeight, withScenery);
+            Rac1PreviewLayout.View sceneryView = withScenery
+                    ? Rac1PreviewLayout.sceneryView(areaX, areaY, areaWidth, areaHeight)
+                    : null;
 
             MultiBufferSource.BufferSource buffers =
                     Minecraft.getInstance().renderBuffers().bufferSource();
             PoseStack pose = graphics.pose();
+
+            // The model is measured and turned so that it stands in the middle of its place and
+            // fills it as far as the room allows. The box around the model is the same for every
+            // moment of the demo, so that the model does not move on the screen while it runs.
+            float scale = Rac1PreviewLayout.scale(framing, heroView.width(), heroView.height());
+            // The hero is never drawn larger than he was drawn before the scenery was added to
+            // the preview, so that the scenery does not change the way the hero looks.
+            scale = Math.min(scale, Rac1PreviewLayout.scale(framing, areaWidth, areaHeight));
+            float centreX = (framing[0] + framing[3]) * 0.5f;
+            float centreY = (framing[1] + framing[4]) * 0.5f;
+            float centreZ = (framing[2] + framing[5]) * 0.5f;
+
             pose.pushPose();
             try {
-                pose.translate(areaX + areaWidth * 0.5f, areaY + areaHeight * 0.5f, 0.0f);
+                pose.translate(heroView.centreX(), heroView.y() + heroView.height() * 0.5f, 0.0f);
                 pose.scale(scale, scale, scale);
                 // The second axis of the screen of the game points down, and the second axis of
                 // the models of the game points up. The model is therefore turned around the
@@ -104,11 +125,78 @@ public final class Rac1AssetPreview {
             } finally {
                 pose.popPose();
             }
+
+            if (withScenery) {
+                drawScenery(pose, buffers, scenery, angle, sceneryView);
+                // A thin line between the two places, so that the player sees that the preview
+                // holds two models and not one.
+                graphics.fill(sceneryView.x(), sceneryView.y(), sceneryView.x() + 1,
+                        sceneryView.bottomY(), 0x40FFFFFF);
+            }
         } catch (RuntimeException | LinkageError exception) {
             this.failure = exception.toString();
             RacMcMod.LOGGER.error("The assets of the game could not be drawn. The preview is "
                     + "not drawn again.", exception);
         }
+    }
+
+    /**
+     * Draws the piece of the scenery of the game.
+     *
+     * <p>The scenery has no skeleton and no animation: its geometry is already the geometry of
+     * the game, so it is drawn with the same renderer as the hero and with the same turn of the
+     * view. It stands on the lower edge of its place, the way a piece of the scenery of the game
+     * stands on the ground, and the box around it is measured once, so that it does not move on
+     * the screen.
+     *
+     * @param pose the place of the models
+     * @param buffers the buffers the triangles are written into
+     * @param scenery the scenery
+     * @param angle the turn of the view in degrees
+     * @param view the place the scenery is drawn in
+     */
+    private void drawScenery(PoseStack pose, MultiBufferSource.BufferSource buffers,
+                              Rac1StaticAsset scenery, float angle,
+                              Rac1PreviewLayout.View view) {
+        float[] framing = framingOf(scenery);
+        if (framing == null) {
+            return;
+        }
+        float scale = Rac1PreviewLayout.scale(framing, view.width(), view.height());
+        float centreX = (framing[0] + framing[3]) * 0.5f;
+        float centreZ = (framing[2] + framing[5]) * 0.5f;
+        pose.pushPose();
+        try {
+            pose.translate(view.centreX(), view.bottomY(), 0.0f);
+            pose.scale(scale, scale, scale);
+            pose.mulPose(com.mojang.math.Axis.XP.rotationDegrees(180.0f));
+            pose.mulPose(com.mojang.math.Axis.YP.rotationDegrees(angle));
+            pose.scale(1.0f, 1.0f, -1.0f);
+            // The scenery stands on the lower edge of its place, so the box is turned around the
+            // middle of its width and around its lowest point.
+            pose.translate(-centreX, -framing[1], -centreZ);
+            Rac1MeshRenderer.render(pose, buffers, scenery.mesh(), this.staticTextures);
+        } finally {
+            pose.popPose();
+        }
+    }
+
+    /**
+     * The box around the scenery.
+     *
+     * <p>The box is measured once for every scenery, so that the scenery does not move on the
+     * screen from frame to frame.
+     *
+     * @param scenery the scenery
+     * @return the smallest and the greatest place of every axis, or {@code null} when the scenery
+     *         has no triangle
+     */
+    private float[] framingOf(Rac1StaticAsset scenery) {
+        if (this.staticFraming == null || this.staticSource != scenery) {
+            this.staticSource = scenery;
+            this.staticFraming = Rac1PreviewLayout.box(scenery.mesh());
+        }
+        return this.staticFraming;
     }
 
     /**

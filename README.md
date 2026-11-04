@@ -4,11 +4,14 @@ A community-made Minecraft Java Edition mod project inspired by **Ratchet & Clan
 
 ## Project status
 
-**Foundation and disc importer started.** The Minecraft mod project is set up and buildable, and the
-first milestone (M1) covers the asset import pipeline and the first rendering of original assets.
-The local disc importer is now in place up to the point where a validated disc image can be read;
-the game keeps the disc image mandatory and asks for it in the main menu. Extracting the assets
-themselves and rendering them is not implemented yet.
+**Foundation, disc importer and graphical user interface rendering started.** The Minecraft mod
+project is set up and buildable, and the first milestone (M1) covers the asset import pipeline and
+the first rendering of original assets. The local disc importer reads and verifies a validated disc
+image, and the game keeps the disc image mandatory and asks for it in the main menu. The assets of
+the first level are converted out of the image and kept in a local cache, and the graphical user
+interface draws them with the renderer of the game: the static piece of the scenery next to the
+animated hero holding his Blaster, with the original textures and the original animation. Rendering
+inside a world and the weapon gameplay are not implemented yet.
 
 ## Vision
 

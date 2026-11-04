@@ -3,10 +3,17 @@ package com.github.giannigr.racmc.client.render;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.github.giannigr.racmc.asset.Rac1Mesh;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -184,11 +191,96 @@ class Rac1MeshRendererTest {
         }
     }
 
+    @Test
+    @DisplayName("The triangles of the scenery are written as quads of four vertices")
+    void theTrianglesOfTheSceneryAreWrittenAsQuads() {
+        RecordingBuffer buffers = new RecordingBuffer();
+        PoseStack pose = new PoseStack();
+
+        Rac1MeshRenderer.render(pose, buffers, scenery(new int[] { 0, 0 }),
+                new ResourceLocation[] { texture(0) });
+
+        assertEquals(8, buffers.vertices().size(),
+                "The two triangles of the scenery are not written as two quads of four vertices");
+    }
+
+    @Test
+    @DisplayName("The triangles of the scenery keep the texture coordinates of the mesh")
+    void theTrianglesOfTheSceneryKeepTheirTextureCoordinates() {
+        RecordingBuffer buffers = new RecordingBuffer();
+        PoseStack pose = new PoseStack();
+
+        Rac1MeshRenderer.render(pose, buffers, scenery(new int[] { 0, 0 }),
+                new ResourceLocation[] { texture(0) });
+
+        for (float[] vertex : buffers.vertices()) {
+            assertTrue(vertex[3] >= 0.0f && vertex[3] <= 1.0f,
+                    "The texture coordinate of the vertex is not the one of the mesh");
+            assertTrue(vertex[4] >= 0.0f && vertex[4] <= 1.0f,
+                    "The texture coordinate of the vertex is not the one of the mesh");
+        }
+    }
+
+    @Test
+    @DisplayName("The triangles of the scenery are grouped by their material")
+    void theTrianglesOfTheSceneryAreGroupedByTheirMaterial() {
+        RecordingBuffer buffers = new RecordingBuffer();
+        PoseStack pose = new PoseStack();
+
+        // Two triangles of two different materials: the scenery of the game holds one texture,
+        // but the renderer of the mod has to group the triangles of every material of a mesh.
+        Rac1MeshRenderer.render(pose, buffers, scenery(new int[] { 0, 1 }),
+                new ResourceLocation[] { texture(0), texture(1) });
+
+        assertEquals(2, buffers.runs().size(),
+                "The two materials of the scenery do not have a run of their own");
+        for (List<float[]> run : buffers.runs()) {
+            assertEquals(4, run.size(),
+                    "A run of the scenery does not hold the four vertices of its triangle");
+        }
+    }
+
+    @Test
+    @DisplayName("The buffer of the scenery is closed when its run is finished")
+    void theBufferOfTheSceneryIsClosedWhenItsRunIsFinished() {
+        RecordingBuffer buffers = new RecordingBuffer();
+        PoseStack pose = new PoseStack();
+
+        Rac1MeshRenderer.render(pose, buffers, scenery(new int[] { 0, 1 }),
+                new ResourceLocation[] { texture(0), texture(1) });
+
+        assertEquals(2, buffers.closed().size(),
+                "The buffer of the scenery is not closed after every run of a material");
+    }
+
+    /**
+     * The place of a texture of the checks.
+     *
+     * @param index the number of the texture
+     * @return the place
+     */
+    private static ResourceLocation texture(int index) {
+        return ResourceLocation.fromNamespaceAndPath("racmc", "textures/tie_452_" + index + ".png");
+    }
+
+    /**
+     * A mesh of the scenery of the game with two triangles.
+     *
+     * @param materials the material of every triangle
+     * @return the mesh
+     */
+    private static Rac1Mesh scenery(int[] materials) {
+        float[] positions = { 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f };
+        float[] normals = { 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f };
+        float[] uvs = { 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f };
+        int[] indices = { 0, 1, 2, 0, 1, 2 };
+        return new Rac1Mesh(positions, normals, uvs, indices, materials);
+    }
+
     /**
      * A buffer that keeps the vertices that are written into it.
      */
     private static final class Recording implements VertexConsumer {
-
         /** The vertices that were written, five floats each. */
         private final List<float[]> vertices = new ArrayList<>();
 
@@ -224,6 +316,71 @@ class Rac1MeshRendererTest {
         @Override
         public VertexConsumer setNormal(float x, float y, float z) {
             return this;
+        }
+    }
+
+    /**
+     * The buffers of the game, without the game of blocks.
+     *
+     * <p>The class keeps the vertices that were written into the buffer of every kind of
+     * triangle, so that the way the renderer writes the triangles of a mesh can be checked
+     * without a graphics card.
+     */
+    private static final class RecordingBuffer extends MultiBufferSource.BufferSource {
+
+        /** The buffers of the kinds of the triangles, in the order they were asked for. */
+        private final Map<RenderType, Recording> buffers = new LinkedHashMap<>();
+
+        /** The kinds of the triangles whose buffer was closed. */
+        private final List<RenderType> closed = new ArrayList<>();
+
+        RecordingBuffer() {
+            super(new ByteBufferBuilder(1024), new LinkedHashMap<>());
+        }
+
+        @Override
+        public VertexConsumer getBuffer(RenderType type) {
+            return this.buffers.computeIfAbsent(type, key -> new Recording());
+        }
+
+        @Override
+        public void endBatch(RenderType type) {
+            this.closed.add(type);
+        }
+
+        /**
+         * The vertices that were written into the buffers of every kind of triangle.
+         *
+         * @return the vertices
+         */
+        List<float[]> vertices() {
+            List<float[]> vertices = new ArrayList<>();
+            for (Recording recording : this.buffers.values()) {
+                vertices.addAll(recording.vertices);
+            }
+            return vertices;
+        }
+
+        /**
+         * The vertices of every run of a material.
+         *
+         * @return the runs
+         */
+        List<List<float[]>> runs() {
+            List<List<float[]>> runs = new ArrayList<>();
+            for (Recording recording : this.buffers.values()) {
+                runs.add(recording.vertices);
+            }
+            return runs;
+        }
+
+        /**
+         * The kinds of the triangles whose buffer was closed.
+         *
+         * @return the kinds
+         */
+        List<RenderType> closed() {
+            return this.closed;
         }
     }
 }

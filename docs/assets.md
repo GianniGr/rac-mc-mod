@@ -253,6 +253,38 @@ renderer of the game of blocks, and the second triangle of the quad would join t
 that triangle with the first vertex of the next triangle of the mesh: the model would be covered
 with thin shards.
 
+## The renderer, its licence and the versions it was verified with
+
+The renderer that draws the converted meshes - `Rac1MeshRenderer`, together with
+`Rac1AssetPreview` and `Rac1PreviewLayout` for the preview - is source code of this repository and
+is covered by the MIT licence of the project. It draws the meshes with the render types of
+Minecraft itself (`RenderType.entityCutoutNoCull`):
+
+* no rendering library is part of this project. GemRender and Wrench are GPL, the `editor/`
+  directory of OpenRAC is MIT but imports GPL `tools/openrac_common`, and ReRAC is ISC, so none of
+  them was added as a dependency and no code of any of them was copied;
+* the MIT licence of this repository covers the source code only. It grants no rights to the
+  original Ratchet & Clank assets: those are read from the disc image of the player, converted on
+  the machine of the player, kept in a local cache that is never part of this repository and are
+  never redistributed;
+* the knowledge of the disc formats came from the public documentation of ReRAC (ISC) and OpenRAC,
+  which is attributed above. Facts were taken from it, no code.
+
+The versions the renderer is built and verified against are pinned, not ranged:
+
+| Component | Pinned version |
+| --- | --- |
+| Minecraft Java Edition | 1.21.1 |
+| NeoForge | 21.1.265 |
+| ModDevGradle | 2.0.148 |
+| Java | 21 |
+| Gradle wrapper | 8.14.5 |
+
+The evidence for that statement is the build, the test suite and the client runs of the exact tree
+they were measured on, on Windows only. The game has never been started on Linux or macOS, and
+nothing is claimed for another Minecraft or NeoForge version. The measured commands and their
+results are held in `docs/development.md`.
+
 ## Known limits
 
 * Only the assets of the first level are converted: one piece of scenery, the hero and his

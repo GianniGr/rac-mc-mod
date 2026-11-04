@@ -399,7 +399,7 @@ ModDevGradle's NeoForge aware unit test support is enabled (`neoForge { unitTest
 so the test source set has the mod and the Minecraft classes on its classpath and tests can use
 Minecraft types directly.
 
-Twenty-eight focused test classes exist today:
+Twenty-nine focused test classes exist today:
 
 - `ModBootstrapMetadataTest` verifies that the mod id, mod name and mod version are identical in
   `gradle.properties`, in the generated `META-INF/neoforge.mods.toml` and in `RacMcConstants`, and
@@ -522,7 +522,16 @@ Twenty-eight focused test classes exist today:
   their material is held as well: the triangles of a mesh are grouped into one run per material,
   the triangles of a run keep their order, a material that is out of range does not read outside
   of the textures, a mesh without triangles has no run, and a material that is missing is held in
-  the run of the missing texture instead of reading outside of the array of the textures.
+  the run of the missing texture instead of reading outside of the array of the textures. The same
+  is checked for a mesh without a skeleton, which is the way the scenery of the game is drawn: its
+  triangles are written as quads of four vertices, they keep the texture coordinates of the mesh,
+  they are grouped into one run per material and the buffer of every run is closed.
+- `Rac1PreviewLayoutTest` verifies the layout of the preview of the assets: the hero keeps the
+  whole area when there is no scenery to draw, the place of the hero and the place of the scenery
+  do not overlap and together they fill the area, the hero keeps the size he was drawn with before
+  the scenery was added, the scenery is drawn as large as its place allows, the box around a mesh
+  counts only the vertices that a triangle uses, a mesh without triangles has no box, the box
+  around the scenery does not change from frame to frame, and a mesh without a box has no size.
 - `Rac1BlasterDemoTest` verifies the pose of the demo of the Blaster: the hero moves while his
   sequence runs, the pose of the hero is the same after a whole cycle of his sequence, the hero does
   not stand still at the end of his cycle and he is not torn apart when his sequence repeats itself.
@@ -534,7 +543,9 @@ Twenty-eight focused test classes exist today:
 - `RealDiscAssetTest` is the opt-in check of the conversion of the assets of a real disc image: the
   scenery, the hero and the Blaster are converted with the numbers of the vertices, of the
   triangles, of the joints, of the sequences and of the textures that were measured on the disc,
-  every vertex of the hero and of the Blaster is used by a triangle of it, the triangles of the
+  the piece of the scenery of the first level has the size it was measured with on the disc (4.52
+  units high, 1.78 units wide and 0.69 units deep, standing a little below its own origin), every
+  vertex of the hero and of the Blaster is used by a triangle of it, the triangles of the
   hero and of the Blaster cover the whole model, the chain of the hand of the hero ends at the
   joint 56 and the skinning does not tear the model of the hero apart. The joint lists of the hero,
   the arm of the weapon, the facing of the hero, the sequences of the held weapon and of the shot
@@ -544,17 +555,17 @@ Twenty-eight focused test classes exist today:
   class of the Blaster holds the chain of its muzzle, and the hero of the game holds the idle and
   the stance of the weapon with the lengths that the demo uses.
 
-The suite currently contains 223 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
+The suite currently contains 236 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in
 `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in
 `Rac1MediaManagerTest`, 8 in `Rac1MediaGateTest`, 8 in `WadDecoderTest`, 5 in `TieClassReaderTest`,
 5 in `MobyClassReaderTest`, 8 in `MobySequenceReaderTest`, 6 in `MobyMeshTest`, 12 in
 `Rac1AnimationEvaluatorTest`, 7 in `Rac1CoordinateTransformTest`, 5 in `Rac1TextureReaderTest`,
-6 in `VifCommandListTest`, 10 in `Rac1CoreIndexTest`, 8 in `Rac1MeshRendererTest`, 8 in
-`Rac1BlasterDemoTest`, 10 in `Rac1CacheCodecTest`, 7 in `Rac1CacheStoreTest`, 6 in
-`Rac1AssetCacheManagerTest`, 17 in `RealDiscAssetTest`, 3 in `DiscFactsDiagnosticTest` and 1 in
-`RealDiscImageTest`. 202 of them pass, and twenty-one of them, the opt-in checks of a real disc
-image, are skipped unless they are asked for.
+6 in `VifCommandListTest`, 10 in `Rac1CoreIndexTest`, 12 in `Rac1MeshRendererTest`, 8 in
+`Rac1PreviewLayoutTest`, 8 in `Rac1BlasterDemoTest`, 10 in `Rac1CacheCodecTest`, 7 in
+`Rac1CacheStoreTest`, 6 in `Rac1AssetCacheManagerTest`, 18 in `RealDiscAssetTest`, 3 in
+`DiscFactsDiagnosticTest` and 1 in `RealDiscImageTest`. 214 of them pass, and twenty-two of them,
+the opt-in checks of a real disc image, are skipped unless they are asked for.
 
 `RealDiscImageTest`, `RealDiscAssetTest` and `DiscFactsDiagnosticTest` are the opt-in checks of a
 real disc image. They are skipped unless the path of an image is given on the command line, and
@@ -579,7 +590,9 @@ worker P03 of that tree, except the rows that name this revision, which were mea
 rows that name a run with a real disc image were not repeated for this revision: the opt-in
 checks of a real disc image are the scope of the independent worker T03, and the authorized
 directory of the disc image does hold the images of the two retail releases, so they are not
-independently verified here rather than impossible to run.
+independently verified here rather than impossible to run. The rows that name the tree of issue #6
+(branch `feature/m1-issue6-static-preview`, base `23e6235`) were measured on that tree by P08, and
+they include a run with a real disc image of each of the two releases.
 
 | Command | Result |
 | --- | --- |
@@ -611,6 +624,12 @@ independently verified here rather than impossible to run.
 | `gradlew.bat clean build` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`, the same 216 tests in all: 195 passed and 21 skipped after a clean, and `build/libs/racmc-0.1.0.jar` was built again. This is the report of P03 on the tree of the demo of the Blaster before this revision; the clean build of this revision was run again and is named in the rows of this revision. |
 | `CI=true .\gradlew.bat --no-daemon build` on the tree of the demo of the Blaster | `BUILD SUCCESSFUL`. This is the command the Windows CI job runs, with the environment variables that GitHub Actions sets. This is the report of P03 on the tree of the demo of the Blaster before this revision. |
 | `gradlew.bat runClient` on the tree of the demo of the Blaster | The client window opened, the disc image of the NTSC-U v1.00 release was verified again, the cache of the assets was used, and the screen of the demo of the Blaster was drawn. The pictures of the demo were taken by the game itself (`p03-front-0-t0.1.png` up to `p03-front-20-t2.9.png` under `run/screenshots`): they show the hero facing the player with the Blaster in his right hand, the barrel of the weapon pointing the way the hero faces, the weapon playing the sequence of the shot once every 2.5 seconds and the hero playing his stance of the weapon without a jump. The log holds the moment of the demo, the view of the model and the box around the hero and around the weapon of every picture. The client was stopped afterwards, because the mouse and the keyboard of the session of the agent do not reach the window of the game. This is the report of P03 on the tree of the demo of the Blaster before this revision; the client was not started again for this revision, because a run on a real disc image is the scope of the independent worker T03. |
+| `gradlew.bat test --tests "com.github.giannigr.racmc.client.render.Rac1MeshRendererTest" --tests "com.github.giannigr.racmc.client.render.Rac1PreviewLayoutTest" --rerun` on the tree of issue #6 | `BUILD SUCCESSFUL`, 20 of 20 tests passed: the 12 checks of the renderer - the 8 of the previous tree plus the 4 checks of the static draw path - and the 8 checks of the layout of the preview. |
+| `gradlew.bat test --rerun` on the tree of issue #6 | `BUILD SUCCESSFUL`, 236 tests in all over 29 test classes: 214 passed, 22 skipped, 0 failures and 0 errors, counted from the XML reports of the test task. The twenty-two skipped tests are the opt-in checks of a real disc image. |
+| `gradlew.bat test --rerun -Dracmc.isoImage=<NTSC-U v1.00> -Dracmc.isoExpectedRevision="NTSC-U v1.00"` on the tree of issue #6 | `BUILD SUCCESSFUL`, 236 of 236 tests passed over 29 test classes with no skip, the opt-in checks included: `RealDiscAssetTest` 18 of 18, `DiscFactsDiagnosticTest` 3 of 3 and `RealDiscImageTest` 1 of 1. The image was read in place under the authorized directory and was never copied. |
+| `gradlew.bat test --rerun -Dracmc.isoImage=<PAL v2.00> -Dracmc.isoExpectedRevision="PAL v2.00"` on the tree of issue #6 | `BUILD SUCCESSFUL`, 236 of 236 tests passed over 29 test classes with no skip, `RealDiscAssetTest` 18 of 18 included. The image was read in place under the authorized directory and was never copied. |
+| `gradlew.bat clean build --no-build-cache` on the tree of issue #6 | `BUILD SUCCESSFUL`, all 11 tasks executed (`compileJava`, `compileTestJava` and `test` ran rather than being restored from the build cache), the same 236 tests with 214 passed and 22 skipped, and `build/libs/racmc-0.1.0.jar` (173,514 bytes) was built. |
+| `gradlew.bat runClient` on the tree of issue #6 | The client window opened (`Minecraft NeoForge* 1.21.1`, 854x480 client area). The configured disc image was verified again (`The disc image was verified: NTSC-U v1.00.`), the cache of the assets was built for it (`The cache of the assets is started for the disc image.`) and the main menu opened with the *Blaster test* button on it. The screen of the demo of the Blaster was opened from the main menu and left open. The pictures the game saved under `run/screenshots` - `2026-11-04_16.04.25.png`, `2026-11-04_16.04.31.png`, `2026-11-04_16.04.34.png` and `2026-11-04_16.08.30.png` - show the hero with the Blaster in his hand in the left half of the area, the piece of the scenery standing on the lower edge of its own place in the right half, the thin line between the two places, and a different pose of the hero and a different side of the scenery in every picture, so the animation and the turn of the view run while the two places stay fixed. Neither model reaches the edge of its place, so neither is cut off, and the text and the button of the screen stay clear of the models. The setup screen was drawn as well (`2026-11-04_16.08.12.png`): it shows the same two models next to each other under the text of that screen. The log of the run holds no error and no warning of the mod, and the client was closed through its own window (`Stopping!`), which ended the Gradle task with `BUILD SUCCESSFUL` (13m 48s). |
 
 All of the measurements above were taken on Windows. The Linux and macOS build and test runs are
 covered by the CI matrix but have not been executed yet, and the client and dedicated server
@@ -689,6 +708,43 @@ The Windows form of the command is the one that was executed; the Linux and macO
 shell script variant of the same task and have not been run.
 **GitHub Actions has executed this workflow.** The first run of the matrix passed on Ubuntu,
 Windows and macOS. The game runtime is still not covered by it.
+
+## Renderer licence and version compatibility
+
+The renderer of the mod - `Rac1MeshRenderer`, `Rac1AssetPreview`, `Rac1ClientTextures` and
+`Rac1PreviewLayout` - is source code of this repository and is covered by the MIT licence of the
+project. It draws the converted meshes with the render types of Minecraft itself
+(`RenderType.entityCutoutNoCull`) and holds no code of another project:
+
+- no rendering library was added. GemRender and Wrench are GPL, the `editor/` directory of OpenRAC
+  is MIT but imports GPL `tools/openrac_common`, and ReRAC is ISC, so none of them is a dependency
+  of this project and no code of any of them was copied;
+- the knowledge of the disc formats came from the public documentation of ReRAC (ISC) and OpenRAC
+  (MIT/GPL), which is attributed in `docs/assets.md`. Only facts were taken from it, no code;
+- the MIT licence of this repository covers the source code only. It grants no rights to the
+  original Ratchet & Clank assets: those are read from the disc image of the player, converted on
+  the machine of the player at runtime, kept in a local cache that is never part of the repository
+  and never redistributed.
+
+The platform versions are pinned, not ranged:
+
+| Component | Pinned version |
+| --- | --- |
+| Minecraft Java Edition | 1.21.1 |
+| NeoForge | 21.1.265 |
+| ModDevGradle | 2.0.148 |
+| Java | 21 (Amazon Corretto 21.0.4 on the development machine, Temurin 21 in CI) |
+| Gradle wrapper | 8.14.5 |
+
+Evidence boundaries of this compatibility statement:
+
+- the build, the test suite and the graphical preview of the tree of issue #6 were measured on
+  Windows 11 only, on the machine named in "Verified commands and results" above;
+- the CI matrix builds and tests on Ubuntu, Windows and macOS, but the game itself has only ever
+  been launched on Windows;
+- the renderer uses the APIs of Minecraft/NeoForge of the 1.21.1 line only. Nothing is claimed for
+  another Minecraft or NeoForge version: moving the pin is a change that has to be built and
+  verified again, not assumed to work.
 
 ## Dependency licences
 

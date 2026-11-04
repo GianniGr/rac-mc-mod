@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.github.giannigr.racmc.client.render.Rac1PreviewLayout;
 import com.github.giannigr.racmc.disc.Rac1LevelAssets;
 import com.github.giannigr.racmc.iso.Rac1DiscValidator;
 import com.github.giannigr.racmc.iso.Rac1IsoSelectionResult;
@@ -74,6 +75,28 @@ class RealDiscAssetTest {
         assertEquals(1, asset.textures().length, "The class 452 holds one texture");
         assertEquals(128, asset.textures()[0].width());
         assertEquals(128, asset.textures()[0].height());
+    }
+
+    @Test
+    @DisplayName("The scenery of the first level has the size it was measured with")
+    void theSceneryHasTheMeasuredSize() throws Exception {
+        Rac1StaticAsset asset = Rac1AssetExtractor.readStaticAsset(level(), TIE_CLASS);
+
+        // The class 452 of the first level is a piece of the scenery of the level of Novalis:
+        // it is 4.52 units high, 1.78 units wide and 0.69 units deep, and its lowest point is
+        // a little below its own origin. The box around it is the box the preview of the assets
+        // measures, so the scenery is framed the way it was measured on the disc.
+        float[] box = Rac1PreviewLayout.box(asset.mesh());
+
+        assertNotNull(box, "The scenery of the first level has triangles");
+        assertEquals(1.7844f, box[3] - box[0], 0.05f,
+                "The scenery of the first level is not 1.78 units wide");
+        assertEquals(4.5177f, box[4] - box[1], 0.05f,
+                "The scenery of the first level is not 4.52 units high");
+        assertEquals(0.6876f, box[5] - box[2], 0.05f,
+                "The scenery of the first level is not 0.69 units deep");
+        assertTrue(box[1] > -0.5f && box[1] < 0.0f,
+                "The scenery of the first level does not stand below its own origin: " + box[1]);
     }
 
     @Test
