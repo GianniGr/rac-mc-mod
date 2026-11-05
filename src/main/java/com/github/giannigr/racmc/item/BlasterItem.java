@@ -41,11 +41,14 @@ public class BlasterItem extends Item {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
+        boolean fired = true;
         if (!level.isClientSide()) {
-            // The first shot of the burst leaves the weapon at once.
-            Rac1BlasterServer.fireFirstShot(level, player);
+            // The first shot of the burst leaves the weapon at once. When the mouth of the weapon
+            // is blocked, no shot is made and the weapon is not used at all, so that the shot is
+            // not drawn either.
+            fired = Rac1BlasterServer.fireFirstShot(level, player);
         }
-        if (!player.isUsingItem()) {
+        if (fired && !player.isUsingItem()) {
             // The weapon keeps being used, so that the shots of the burst follow. The state of
             // the use is sent to the other players by the game itself.
             player.startUsingItem(hand);

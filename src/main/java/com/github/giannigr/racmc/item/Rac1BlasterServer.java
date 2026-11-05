@@ -5,6 +5,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -12,9 +13,9 @@ import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.Arrow;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -74,20 +75,28 @@ public final class Rac1BlasterServer {
      *
      * @param level the level the player is in
      * @param player the player that pulled the trigger
+     * @return {@code false} when the mouth of the weapon is blocked and no shot was made
      */
-    public static void fireFirstShot(Level level, Player player) {
+    public static boolean fireFirstShot(Level level, Player player) {
         Rac1BurstState state = stateOf(player);
         state.beginPull();
         long now = level.getGameTime();
+        boolean fired;
         switch (Rac1FirePolicy.evaluate(modeOf(player), countArrows(player))) {
-            case FIRE_WITHOUT_AMMO -> fire(level, player, state, now, false);
-            case FIRE_WITH_AMMO -> fire(level, player, state, now, true);
-            case DRY_FIRE -> dryFire(level, player, state, now);
+            case FIRE_WITHOUT_AMMO -> fired = fire(level, player, state, now, false);
+            case FIRE_WITH_AMMO -> fired = fire(level, player, state, now, true);
+            case DRY_FIRE -> {
+                dryFire(level, player, state, now);
+                fired = false;
+            }
             case BLOCKED -> {
                 // The spectator mode never fires and never clicks.
+                fired = false;
             }
+            default -> fired = false;
         }
         saveState(player, state);
+        return fired;
     }
 
     /**
@@ -179,20 +188,25 @@ public final class Rac1BlasterServer {
      * @param state the bookkeeping of the burst
      * @param now the tick of the shot
      * @param withAmmo whether an ordinary arrow is consumed for the shot
+     * @return {@code true} when the shot was made
      */
-    private static void fire(Level level, Player player, Rac1BurstState state, long now,
-                             boolean withAmmo) {
+    private static boolean fire(Level level, Player player, Rac1BurstState state, long now,
+                                boolean withAmmo) {
         Arrow arrow = spawnArrow(level, player);
         if (arrow == null) {
-            return;
+            // The mouth of the weapon is blocked: no shot is made, no ammunition is used and the
+            // weapon stops being used, so that the shot is not drawn either.
+            player.stopUsingItem();
+            return false;
         }
         if (withAmmo && !consumeArrow(player)) {
             // The shot is only paid for when the ammunition is really there. The arrow is taken
             // out of the world again, so that no shot is given away.
             arrow.discard();
-            return;
+            return false;
         }
         state.recordShot(now);
+        return true;
     }
 
     /**
@@ -223,30 +237,32 @@ public final class Rac1BlasterServer {
      * it hits with the damage of the game, and it is never picked up.
      *
      * <p>The arrow leaves the mouth of the weapon and not the head of the shooter: the place of
-     * the mouth is built out of the place of the hand of the player and out of the place of the
-     * mouth in the weapon, and the shot goes to the place the player looks at.
+     * the mouth is built out of the frame of the weapon and out of the place of the player, and it
+     * is the same place the weapon is drawn at in the third person. When the mouth of the weapon
+     * stands inside a wall, or when the way from the eyes of the player to the mouth is blocked,
+     * no shot is made at all: the shot is not made through a wall, no ammunition is used and the
+     * weapon stops being used, so that the shot is not drawn either.
      *
      * @param level the level the player is in
      * @param player the player that fires
-     * @return the arrow, or {@code null} when it could not be spawned
+     * @return the arrow, or {@code null} when the shot is blocked
      */
     private static Arrow spawnArrow(Level level, Player player) {
         InteractionHand hand = handOf(player);
-        // The mouth of the weapon, in the world. The place is built out of the place of the hand
-        // of the player and out of the place of the mouth in the weapon, and it is the same place
-        // the weapon is drawn at in the third person.
+        // The mouth of the weapon, in the world. The place is built out of the frame of the
+        // weapon and out of the place of the player, and it is the same place the weapon is
+        // drawn at in the third person.
+        Rac1BlasterGrip.Look look = lookOf(player);
         Rac1BlasterGrip.Point muzzle = Rac1BlasterGrip.muzzle(player.getX(), player.getY(),
-                player.getZ(), player.getYRot(), Rac1BlasterGrip.ARM_POSE);
+                player.getZ(), look);
         Vec3 spawn = new Vec3(muzzle.x(), muzzle.y(), muzzle.z());
         Vec3 eyes = player.getEyePosition();
-        if (isSolid(level, spawn)) {
-            // The mouth of the weapon is inside a wall, which happens when the player stands
-            // close to it. The arrow is then created at the eyes of the player, so that a shot
-            // cannot be made through a wall.
-            spawn = eyes;
+        if (Rac1BlasterObstruction.blocked(worldOf(level, player), new double[] { eyes.x, eyes.y,
+                eyes.z }, new double[] { spawn.x, spawn.y, spawn.z })) {
+            return null;
         }
         Vec3 target = target(player, eyes);
-        Rac1BlasterGrip.Point direction = Rac1BlasterGrip.direction(spawn.x, spawn.y, spawn.z,
+        Rac1BlasterGrip.Direction direction = Rac1BlasterGrip.direction(spawn.x, spawn.y, spawn.z,
                 target.x, target.y, target.z);
         Arrow arrow = new Arrow(level, player, new ItemStack(Items.ARROW),
                 player.getItemInHand(hand));
@@ -265,6 +281,48 @@ public final class Rac1BlasterServer {
             return null;
         }
         return arrow;
+    }
+
+    /**
+     * The look of a player.
+     *
+     * <p>The weapon is held by the arm of the player, and the arm follows the body of the player.
+     * The turn of the head of the player around the body is therefore the turn that matters for
+     * the weapon, and the turn of the body of the player is the turn of the weapon in the world.
+     *
+     * @param player the player
+     * @return the look of the player
+     */
+    private static Rac1BlasterGrip.Look lookOf(Player player) {
+        return new Rac1BlasterGrip.Look(
+                Mth.wrapDegrees(player.getYRot() - player.yBodyRot), player.getXRot(),
+                player.yBodyRot);
+    }
+
+    /**
+     * The world a shot of the Blaster is made in.
+     *
+     * @param level the level the player is in
+     * @param player the player that fires
+     * @return the world
+     */
+    private static Rac1BlasterObstruction.World worldOf(Level level, Player player) {
+        return new Rac1BlasterObstruction.World() {
+
+            @Override
+            public boolean solidAt(double x, double y, double z) {
+                return isSolid(level, new Vec3(x, y, z));
+            }
+
+            @Override
+            public boolean pathBlocked(double fromX, double fromY, double fromZ, double toX,
+                                       double toY, double toZ) {
+                ClipContext context = new ClipContext(new Vec3(fromX, fromY, fromZ),
+                        new Vec3(toX, toY, toZ), ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
+                        player);
+                return level.clip(context).getType() != HitResult.Type.MISS;
+            }
+        };
     }
 
     /**

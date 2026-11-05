@@ -3,144 +3,221 @@ package com.github.giannigr.racmc.item;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Focused checks for the place the weapon of the game is held at.
+ * Focused checks for the place the weapon of the game is held at and for the place its mouth is
+ * in the world.
  *
- * <p>The places that are checked here are the ones that were measured out of the source of the
- * game of blocks: the chain of the transforms of the game, the turn of the joint of the arm of the
- * player and the place of the item in that joint. The numbers are the ones of the read only
- * probe of the chain, so that the contract and the game cannot drift apart.
+ * <p>The checks replay the chain of the transforms of the game of blocks with the classes of the
+ * game itself - the stack of the poses of the game, the turns of Mojang and the matrices of
+ * JOML - and compare the place of the mouth of the weapon with the contract of
+ * {@link Rac1BlasterGrip}. The two are built apart from each other: the chain follows the source
+ * of the game of blocks, of the version 1.21.1 with NeoForge 21.1.265, and the contract follows
+ * the frame of the weapon of the game.
  */
 class Rac1BlasterGripTest {
 
     /** The size of the tolerance of the checks. */
-    private static final double TOLERANCE = 1.0e-4;
+    private static final double TOLERANCE = 1.0e-3;
+
+    /** The place of the player in the checks. */
+    private static final double PLAYER_X = 0.5;
+
+    /** The place of the player in the checks. */
+    private static final double PLAYER_Y = 100.0;
+
+    /** The place of the player in the checks. */
+    private static final double PLAYER_Z = 0.5;
 
     @Test
-    @DisplayName("The place of the item in the joint of the arm is the place of the game")
-    void originInTheArmJointIsThePlaceOfTheGame() {
-        // The arm of the player at rest.
-        Rac1BlasterGrip.Point rest = Rac1BlasterGrip.originInModel(0.0);
-        assertEquals(-0.375, rest.x(), TOLERANCE);
-        assertEquals(0.75, rest.y(), TOLERANCE);
-        assertEquals(-0.125, rest.z(), TOLERANCE);
-        // The arm of the player holding an item.
-        Rac1BlasterGrip.Point item = Rac1BlasterGrip.originInModel(-18.0);
-        assertEquals(-0.375, item.x(), TOLERANCE);
-        assertEquals(0.6808, item.y(), 1.0e-3);
-        assertEquals(-0.3120, item.z(), 1.0e-3);
-        // The arm of the player drawn up.
-        Rac1BlasterGrip.Point drawn = Rac1BlasterGrip.originInModel(-90.0);
-        assertEquals(-0.375, drawn.x(), TOLERANCE);
-        assertEquals(0.0, drawn.y(), TOLERANCE);
-        assertEquals(-0.625, drawn.z(), TOLERANCE);
-    }
-
-    @Test
-    @DisplayName("The axes of the item follow the arm of the player")
-    void axesFollowTheArmOfThePlayer() {
-        double[][] axes = new double[3][];
-        Rac1BlasterGrip.axes(0.0, axes);
-        // At rest the first axis of the item is the side of the player, the second axis is the
-        // direction he looks at and the third axis points down.
-        assertEquals(1.0, Math.abs(axes[0][0]), TOLERANCE);
-        assertEquals(1.0, Math.abs(axes[1][2]), TOLERANCE);
-        assertEquals(1.0, Math.abs(axes[2][1]), TOLERANCE);
-        // The axes are at right angles to each other.
-        assertEquals(0.0, axes[0][0] * axes[1][0] + axes[0][1] * axes[1][1]
-                + axes[0][2] * axes[1][2], TOLERANCE);
-        assertEquals(0.0, axes[1][0] * axes[2][0] + axes[1][1] * axes[2][1]
-                + axes[1][2] * axes[2][2], TOLERANCE);
-    }
-
-    @Test
-    @DisplayName("The mouth of the weapon is in front of the hand of the player")
-    void mouthIsInFrontOfTheHand() {
-        Rac1BlasterGrip.Point hand = Rac1BlasterGrip.hand(0.0, 0.0, 0.0, 0.0, 0.0);
-        Rac1BlasterGrip.Point mouth = Rac1BlasterGrip.muzzle(0.0, 0.0, 0.0, 0.0, 0.0);
-        // The player looks into the direction of the third axis when he looks south, so the mouth
-        // of the weapon is in front of him.
-        assertTrue(mouth.z() > hand.z(), "The mouth of the weapon has to be in front of the hand");
-        assertEquals(hand.y() - 0.03, mouth.y(), 1.0e-3);
-    }
-
-    @Test
-    @DisplayName("The weapon points into the direction the player looks at")
-    void weaponPointsWhereThePlayerLooks() {
-        Rac1BlasterGrip.Point barrel = Rac1BlasterGrip.barrel(0.0, 0.0);
-        assertEquals(0.0, barrel.x(), TOLERANCE);
-        assertEquals(0.0, barrel.y(), TOLERANCE);
-        assertEquals(1.0, barrel.z(), TOLERANCE);
-        // The player turns to the west: the weapon turns with him.
-        Rac1BlasterGrip.Point west = Rac1BlasterGrip.barrel(0.0, 90.0);
-        assertEquals(-1.0, west.x(), TOLERANCE);
-        assertEquals(0.0, west.z(), TOLERANCE);
-    }
-
-    @Test
-    @DisplayName("The weapon tilts with the arm of the player")
-    void weaponTiltsWithTheArm() {
-        Rac1BlasterGrip.Point level = Rac1BlasterGrip.barrel(0.0, 0.0);
-        Rac1BlasterGrip.Point down = Rac1BlasterGrip.barrel(-30.0, 0.0);
-        Rac1BlasterGrip.Point up = Rac1BlasterGrip.barrel(30.0, 0.0);
-        assertTrue(down.y() < level.y(), "The weapon has to go down with the arm");
-        assertTrue(up.y() > level.y(), "The weapon has to go up with the arm");
-    }
-
-    @Test
-    @DisplayName("The mouth of the weapon is the same place as the drawn weapon")
-    void mouthIsTheSamePlaceAsTheDrawnWeapon() {
-        // The place of the mouth of the weapon in the item of the third person, in the model of
-        // the player, is the place of the origin of the item plus the mouth of the mesh, turned
-        // with the model of the item.
-        double[][] axes = new double[3][];
-        Rac1BlasterGrip.axes(-18.0, axes);
-        Rac1BlasterGrip.Point origin = Rac1BlasterGrip.originInModel(-18.0);
-        double[] mouth = { Rac1BlasterGrip.MUZZLE_X, Rac1BlasterGrip.MUZZLE_Y,
-                Rac1BlasterGrip.MUZZLE_Z };
-        // The turn of the model of the item of the third person.
-        double[] turned = { mouth[0], mouth[1], mouth[2] };
-        turnForTest(turned, Rac1BlasterGrip.THIRD_PERSON_ROTATION);
-        double[] model = new double[3];
-        for (int axis = 0; axis < 3; axis++) {
-            model[axis] = axes[axis][0] * turned[0] + axes[axis][1] * turned[1]
-                    + axes[axis][2] * turned[2];
+    @DisplayName("The mouth of the weapon is where the game of blocks draws it")
+    void mouthIsWhereTheGameOfBlocksDrawsIt() {
+        double[] bodyYaws = { 0.0, 37.0, 90.0, 180.0, -45.0 };
+        double[] headYaws = { 0.0, 37.0, 90.0, 180.0, -45.0 };
+        double[] pitches = { 0.0, 30.0, -30.0, 60.0 };
+        for (double bodyYaw : bodyYaws) {
+            for (double headYaw : headYaws) {
+                for (double pitch : pitches) {
+                    Rac1BlasterGrip.Look look = new Rac1BlasterGrip.Look(
+                            wrapDegrees(headYaw - bodyYaw), pitch, bodyYaw);
+                    Rac1BlasterGrip.ArmTurn arm = Rac1BlasterGrip.aim(look);
+                    PoseStack chain = chainOfTheGame(bodyYaw, arm);
+                    Vector3f drawn = transform(chain, Rac1BlasterGrip.BORE_X, Rac1BlasterGrip.BORE_Y,
+                            Rac1BlasterGrip.MUZZLE_Z);
+                    Rac1BlasterGrip.Point mouth = Rac1BlasterGrip.muzzle(PLAYER_X, PLAYER_Y, PLAYER_Z,
+                            look);
+                    assertEquals(drawn.x, mouth.x(), TOLERANCE,
+                            "The mouth of the weapon is at the wrong place along the first axis");
+                    assertEquals(drawn.y, mouth.y(), TOLERANCE,
+                            "The mouth of the weapon is at the wrong place along the second axis");
+                    assertEquals(drawn.z, mouth.z(), TOLERANCE,
+                            "The mouth of the weapon is at the wrong place along the third axis");
+                    // The bore of the weapon points the way the game of blocks draws it.
+                    Vector3f drawnTip = transform(chain, Rac1BlasterGrip.BORE_X,
+                            Rac1BlasterGrip.BORE_Y, Rac1BlasterGrip.MUZZLE_Z + 0.01);
+                    float length = (float) Math.sqrt(
+                            (drawnTip.x - drawn.x) * (drawnTip.x - drawn.x)
+                                    + (drawnTip.y - drawn.y) * (drawnTip.y - drawn.y)
+                                    + (drawnTip.z - drawn.z) * (drawnTip.z - drawn.z));
+                    Rac1BlasterGrip.Direction barrel = Rac1BlasterGrip.barrel(look);
+                    assertEquals((drawnTip.x - drawn.x) / length, barrel.x(), 1.0e-3,
+                            "The bore of the weapon points the wrong way along the first axis");
+                    assertEquals((drawnTip.y - drawn.y) / length, barrel.y(), 1.0e-3,
+                            "The bore of the weapon points the wrong way along the second axis");
+                    assertEquals((drawnTip.z - drawn.z) / length, barrel.z(), 1.0e-3,
+                            "The bore of the weapon points the wrong way along the third axis");
+                }
+            }
         }
-        assertEquals(origin.x() + model[0], origin.x() + model[0], TOLERANCE);
-        // The mouth of the weapon is in front of the hand of the player.
-        assertTrue(model[2] < 0.0, "The mouth of the weapon has to be in front of the hand");
+    }
+
+    @Test
+    @DisplayName("The mouth of the weapon is at the right hand of the player")
+    void mouthIsAtTheRightHandOfThePlayer() {
+        // The player stands at the origin of the world and looks into the direction of the third
+        // axis, which is the direction of the south.
+        Rac1BlasterGrip.Look look = new Rac1BlasterGrip.Look(0.0, 0.0, 0.0);
+        Rac1BlasterGrip.Point mouth = Rac1BlasterGrip.muzzle(0.0, 0.0, 0.0, look);
+        // The right hand of the player is at the negative first axis when the player looks into
+        // the direction of the third axis.
+        assertTrue(mouth.x() < 0.0,
+                "The mouth of the weapon has to stand at the right hand of the player");
+        // The mouth of the weapon stands in front of the player.
+        assertTrue(mouth.z() > 0.0, "The mouth of the weapon has to stand in front of the player");
+        // The mouth of the weapon stands at the height of the hand of the player, which is a little
+        // below the hips of the player and not at the height of his eyes.
+        assertTrue(mouth.y() > 0.5 && mouth.y() < 1.0,
+                "The mouth of the weapon has to stand at the height of the hand of the player");
+    }
+
+    @Test
+    @DisplayName("The bore of the weapon points at the place the player looks at")
+    void borePointsWhereThePlayerLooks() {
+        double[] headYaws = { 0.0, 37.0, 90.0, 180.0, -45.0 };
+        double[] pitches = { 0.0, 30.0, -30.0, 60.0 };
+        for (double bodyYaw : headYaws) {
+            for (double headYaw : headYaws) {
+                for (double pitch : pitches) {
+                    Rac1BlasterGrip.Look look = new Rac1BlasterGrip.Look(
+                            wrapDegrees(headYaw - bodyYaw), pitch, bodyYaw);
+                    Rac1BlasterGrip.Direction barrel = Rac1BlasterGrip.barrel(look);
+                    // The place the player looks at, in the world.
+                    double yaw = Math.toRadians(headYaw);
+                    double tilt = Math.toRadians(pitch);
+                    double x = -Math.sin(yaw) * Math.cos(tilt);
+                    double y = -Math.sin(tilt);
+                    double z = Math.cos(yaw) * Math.cos(tilt);
+                    assertEquals(x, barrel.x(), 1.0e-3,
+                            "The bore of the weapon does not follow the turn of the head");
+                    assertEquals(y, barrel.y(), 1.0e-3,
+                            "The bore of the weapon does not follow the turn of the head");
+                    assertEquals(z, barrel.z(), 1.0e-3,
+                            "The bore of the weapon does not follow the turn of the head");
+                }
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("The bore of the weapon is the one of the game")
+    void boreIsTheOneOfTheGame() {
+        // The axis of the bore of the weapon is the line of the joints 13 to 16 of the skeleton of
+        // the class 168 of the game, and the mouth of the barrel is the ring of the mesh of the
+        // game at the same place.
+        assertEquals(0.2305, Rac1BlasterGrip.BORE_X, 1.0e-6);
+        assertEquals(-0.0300, Rac1BlasterGrip.BORE_Y, 1.0e-6);
+        assertEquals(0.6335, Rac1BlasterGrip.MUZZLE_Z, 1.0e-6);
+    }
+
+    @Test
+    @DisplayName("The socket of the weapon is at the hand of the player")
+    void socketIsAtTheHandOfThePlayer() {
+        // The arm of the player hangs at the side of his body and the item of the game of blocks
+        // is held in the hand at the end of the arm.
+        Rac1BlasterGrip.Look look = new Rac1BlasterGrip.Look(0.0, 0.0, 0.0);
+        Rac1BlasterGrip.Point socket = Rac1BlasterGrip.grip(0.0, 0.0, 0.0, look);
+        assertTrue(socket.y() > 0.5 && socket.y() < 1.0,
+                "The socket of the weapon has to stand at the height of the hand of the player");
+        assertTrue(socket.z() > 0.0, "The socket of the weapon has to stand in front of the player");
+        assertTrue(socket.x() < 0.0, "The socket of the weapon has to stand at the right hand");
     }
 
     /**
-     * Turns a place with the turn of the model of the item, the way the game turns it.
+     * The chain of the transforms of the game of blocks, replayed with the classes of the game.
      *
-     * @param place the place that is turned
-     * @param rotation the turn in degrees
+     * <p>The chain is the chain of the version 1.21.1 with NeoForge 21.1.265: the renderer of the
+     * living entities turns the model of the player around the vertical axis by the turn of the
+     * body of the player, turns it around the vertical axis by a half a turn and turns it upside
+     * down, the layer of the item in the hand moves the joint of the arm of the player and turns
+     * it, and the model of the item turns the mesh of the weapon.
+     *
+     * @param bodyYaw the turn of the body of the player around the vertical axis, in degrees
+     * @param arm the turns of the arm of the player
+     * @return the stack of the poses of the game
      */
-    private static void turnForTest(double[] place, double[] rotation) {
-        double radians = Math.toRadians(rotation[2]);
-        double cos = Math.cos(radians);
-        double sin = Math.sin(radians);
-        double x = place[0];
-        double y = place[1];
-        place[0] = x * cos - y * sin;
-        place[1] = x * sin + y * cos;
-        radians = Math.toRadians(rotation[0]);
-        cos = Math.cos(radians);
-        sin = Math.sin(radians);
-        double y1 = place[1];
-        double z = place[2];
-        place[1] = y1 * cos - z * sin;
-        place[2] = y1 * sin + z * cos;
-        radians = Math.toRadians(rotation[1]);
-        cos = Math.cos(radians);
-        sin = Math.sin(radians);
-        double x1 = place[0];
-        double z1 = place[2];
-        place[0] = x1 * cos + z1 * sin;
-        place[2] = -x1 * sin + z1 * cos;
+    private static PoseStack chainOfTheGame(double bodyYaw, Rac1BlasterGrip.ArmTurn arm) {
+        PoseStack chain = new PoseStack();
+        chain.setIdentity();
+        chain.translate(PLAYER_X, PLAYER_Y, PLAYER_Z);
+        // The renderer of the living entities.
+        chain.mulPose(Axis.YP.rotationDegrees((float) (180.0 - bodyYaw)));
+        chain.scale(-1.0f, -1.0f, 1.0f);
+        chain.translate(0.0f, -1.501f, 0.0f);
+        // The layer of the item in the hand: the joint of the arm of the player.
+        chain.translate((float) Rac1BlasterGrip.ARM_JOINT_X, (float) Rac1BlasterGrip.ARM_JOINT_Y,
+                (float) Rac1BlasterGrip.ARM_JOINT_Z);
+        chain.mulPose(Axis.XP.rotationDegrees((float) arm.x()));
+        chain.mulPose(Axis.YP.rotationDegrees((float) arm.y()));
+        chain.mulPose(Axis.ZP.rotationDegrees(0.0f));
+        chain.mulPose(Axis.XP.rotationDegrees(-90.0f));
+        chain.mulPose(Axis.YP.rotationDegrees(180.0f));
+        chain.translate((float) Rac1BlasterGrip.ITEM_IN_JOINT_X,
+                (float) Rac1BlasterGrip.ITEM_IN_JOINT_Y,
+                (float) Rac1BlasterGrip.ITEM_IN_JOINT_Z);
+        // The model of the item, and the move of the cube of the item that the game of blocks
+        // makes and that the renderer of the Blaster takes back.
+        chain.mulPose(new Quaternionf().rotationXYZ(
+                (float) Math.toRadians(Rac1BlasterGrip.THIRD_PERSON_ROTATION[0]), 0.0f, 0.0f));
+        chain.translate(-0.5f, -0.5f, -0.5f);
+        chain.translate(0.5f, 0.5f, 0.5f);
+        return chain;
+    }
+
+    /**
+     * Moves a place of the mesh of the weapon with the stack of the poses of the game.
+     *
+     * @param chain the stack of the poses of the game
+     * @param x the place along the first axis
+     * @param y the place along the second axis
+     * @param z the place along the third axis
+     * @return the place in the world
+     */
+    private static Vector3f transform(PoseStack chain, double x, double y, double z) {
+        Vector4f place = new Vector4f((float) x, (float) y, (float) z, 1.0f).mul(chain.last().pose());
+        return new Vector3f(place.x, place.y, place.z);
+    }
+
+    /**
+     * Brings a turn into the turn of the game of blocks.
+     *
+     * @param degrees the turn in degrees
+     * @return the turn in degrees
+     */
+    private static double wrapDegrees(double degrees) {
+        double turned = degrees % 360.0;
+        if (turned >= 180.0) {
+            turned -= 360.0;
+        }
+        if (turned < -180.0) {
+            turned += 360.0;
+        }
+        return turned;
     }
 }

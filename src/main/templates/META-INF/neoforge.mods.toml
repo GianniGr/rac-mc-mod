@@ -34,6 +34,11 @@ displayName="${mod_name}" #mandatory
 # The authors of the mod, displayed in the mod UI.
 authors="GianniGr" #optional
 
+# The file that holds the new entry of the pose of the arm of the game of blocks. The path is
+# relative to the resources of the mod. The entry lets the arm of the player hold the Blaster
+# of the game at the place the player looks at.
+enumExtensions="META-INF/enumextensions.json"
+
 # The description text for the mod (multi line!) (#mandatory)
 description='''
 A community-made Minecraft Java Edition mod inspired by Ratchet & Clank.

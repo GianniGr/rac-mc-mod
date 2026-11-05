@@ -436,28 +436,52 @@ of the game keep their own life, and the life of the arrows of the game is not t
 ### Where the arrows leave the weapon
 
 The arrows leave the mouth of the weapon and not the head of the shooter. The place of the
-mouth is built out of two pieces that the server and the game both know:
+mouth is built out of the frame of the weapon of the game and out of the frame of the player,
+and the same contract is used by the server and by the renderer.
 
-- the place of the item in the joint of the arm of the player, which the game moves to the hand
-  of the player: a sixteenth of a block to the side, an eighth of a block up and five eighths
-  of a block back;
-- the place of the mouth of the weapon in the frame of the mesh of the weapon, which was measured
-  out of the mesh of the Blaster of the game: the barrel is the narrow part at the front of the
-  weapon, its bore runs along the third axis of the mesh, and the mouth is the ring at the end
-  of it.
+The frame of the weapon is the frame of the mesh of the Blaster of the game, as it was imported.
+The bore of the weapon was measured out of the class 168 of the disc:
 
-The class `Rac1BlasterGrip` holds the numbers and the arithmetic, and it holds no Minecraft
-types, so the place of the mouth can be checked on a plain virtual machine. The tests of it
-compare the place of the item in the joint of the arm with the numbers of the chain of the
-game, so that the contract and the game cannot drift apart.
+- the skeleton of the weapon holds a chain of four joints - the joints 13, 14, 15 and 16 - that
+  runs along the bore. All four of them stand at the same place along the first and the second
+  axis of the mesh: the first axis `0.2305` and the second axis `-0.0300`. The chain ends at the
+  joint 16, which stands at the third axis `0.6141`;
+- the mesh itself has a ring of twelve vertices at the third axis `0.6335` that stands around
+  the very same place, and the normals of that ring point into the bore. The ring is the mouth of
+  the barrel, and the joint 16 lies inside it.
+
+The origin of the mesh is the socket of the weapon: it is the root joint of the skeleton of the
+weapon, and the game hangs the weapon on the joint of the hand of the hero with it. The socket is
+therefore the place the hand of the player holds the weapon at.
+
+The place of the mouth in the world follows the chain of the game of blocks, which was read out
+of the source of the version 1.21.1 with NeoForge 21.1.265:
+
+1. The renderer of the living entities turns the model of the player around the vertical axis by
+   the turn of the body of the player, turns it around the vertical axis by a half a turn and
+   turns it upside down, and moves it down by 1.501 blocks.
+2. The layer of the item in the hand moves the joint of the arm of the player, turns it by a
+   quarter around the first axis and by half a turn around the second axis, and moves the item by
+   a sixteenth of a block to the side, by an eighth of a block up and by five eighths of a block
+   back.
+3. The model of the item turns the mesh of the weapon.
+
+The class `Rac1BlasterGrip` holds the numbers and the arithmetic of that chain, and it holds no
+Minecraft types, so the place of the mouth can be checked on a plain virtual machine. The tests
+of it replay the chain with the classes of the game itself - the stack of the poses of the game,
+the turns of Mojang and the matrices of JOML - and compare the result with the contract, so that
+the contract and the game cannot drift apart.
+
 
 The shot goes to the place the player looks at: the ray of his eyes is followed, and the shot
 goes from the mouth of the weapon to the place where the ray met something.
 
-When the mouth of the weapon is inside a wall, which happens when the player stands close to
-it, the arrow is created at the eyes of the player instead. A shot can therefore not be made
-through a wall. That place is a safety net and not the mouth of the weapon, and it is only used
-when the mouth is inside a block.
+When the mouth of the weapon stands inside a wall, which happens when the player stands close
+to it, or when the way from the eyes of the player to the mouth of the weapon is blocked, no
+shot is made at all: no arrow is created, no ammunition is used and the weapon stops being used,
+so that the shot is not drawn either. A shot is therefore never made through a wall. The rule
+is the class `Rac1BlasterObstruction`, and it asks the world two questions, so that it can be
+checked without a world.
 
 ### The animation of the weapon
 
@@ -530,11 +554,14 @@ is held.
 
 ### Known limits of the weapon
 
-- The arm of the player keeps the pose of the game for an item that is held, so the weapon
-  follows the turn of the body of the player and not the look of his head. The game of blocks
-  has no way to give an item a pose of the arm of its own in this version of NeoForge, so the
-  shot of the weapon goes to the place the player looks at while the weapon itself is held in
-  the pose of the game.
+- The arm of the player follows the look of his head: the pose of the arm is a new value of the
+  pose of the arm of the game of blocks, which NeoForge lets a mod add, and it is added with the
+  file `META-INF/enumextensions.json` of the mod. The turns of the arm are worked out of the
+  turn of the head around the body of the player and of the turn of the head around the side
+  axis, so that the bore of the weapon points at the crosshair of the screen. The turn of the
+  body of the player still moves the weapon with it, because the weapon is held by the arm.
+- The swing of the arms while the player walks is not shown while the weapon is held, because the
+  pose of the arm sets the turns of the arm itself.
 - The weapon is drawn with the imported geometry, which includes a wide and flat part around the
   middle of the weapon. The picture of the weapon in the lists of the game is therefore a long
   and flat shape, the shape of the weapon of the game.

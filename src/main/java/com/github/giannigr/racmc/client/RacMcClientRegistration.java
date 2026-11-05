@@ -4,9 +4,13 @@ import com.github.giannigr.racmc.RacMcConstants;
 import com.github.giannigr.racmc.client.render.BlasterItemRenderer;
 import com.github.giannigr.racmc.item.RacMcItems;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.EntityModelSet;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -34,7 +38,7 @@ public final class RacMcClientRegistration {
     }
 
     /**
-     * Gives the Blaster its own renderer.
+     * Gives the Blaster its own renderer and its own pose of the arm.
      *
      * @param event the event that registers the client side of the items
      */
@@ -45,6 +49,12 @@ public final class RacMcClientRegistration {
             @Override
             public BlockEntityWithoutLevelRenderer getCustomRenderer() {
                 return renderer();
+            }
+
+            @Override
+            public HumanoidModel.ArmPose getArmPose(LivingEntity entity, InteractionHand hand,
+                                                    ItemStack stack) {
+                return Rac1BlasterArmPose.aim();
             }
         }, RacMcItems.BLASTER.get());
     }

@@ -130,10 +130,11 @@ class Rac1BlasterAssetsTest {
     void weaponIsHeldAtTheHandOfThePlayer() {
         // The place of the item in the joint of the arm is the place of the game, and the turn of
         // the model of the item does not move it away from the hand.
-        Rac1BlasterGrip.Point rest = Rac1BlasterGrip.originInModel(0.0);
-        assertEquals(-0.375, rest.x(), TOLERANCE);
-        assertEquals(0.75, rest.y(), TOLERANCE);
-        assertEquals(-0.125, rest.z(), TOLERANCE);
+        double[] rest = Rac1BlasterGrip.inModel(new double[] { 0.0, 0.0, 0.0 },
+                new Rac1BlasterGrip.ArmTurn(0.0, 0.0));
+        assertEquals(-0.375, rest[0], TOLERANCE);
+        assertEquals(0.75, rest[1], TOLERANCE);
+        assertEquals(-0.125, rest[2], TOLERANCE);
     }
 
     /**
