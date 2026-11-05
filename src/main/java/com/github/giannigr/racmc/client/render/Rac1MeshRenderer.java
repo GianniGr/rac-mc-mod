@@ -127,7 +127,22 @@ public final class Rac1MeshRenderer {
     public static void render(PoseStack pose, MultiBufferSource.BufferSource buffers, Rac1Mesh mesh,
                                ResourceLocation[] textures) {
         render(pose, buffers, mesh.positions(), mesh.normals(), mesh.uvs(), mesh.indices(),
-                mesh.materials(), textures);
+                mesh.materials(), textures, FULL_LIGHT);
+    }
+
+    /**
+     * Draws a mesh with a light of its own.
+     *
+     * @param pose the place of the mesh
+     * @param buffers the buffers the triangles are written into
+     * @param mesh the mesh
+     * @param textures the place of the texture of every material
+     * @param light the light the mesh is drawn with
+     */
+    public static void render(PoseStack pose, MultiBufferSource.BufferSource buffers, Rac1Mesh mesh,
+                               ResourceLocation[] textures, int light) {
+        render(pose, buffers, mesh.positions(), mesh.normals(), mesh.uvs(), mesh.indices(),
+                mesh.materials(), textures, light);
     }
 
     /**
@@ -143,12 +158,30 @@ public final class Rac1MeshRenderer {
     public static void render(PoseStack pose, MultiBufferSource.BufferSource buffers, Rac1SkinnedMesh mesh,
                                float[] positions, float[] normals, ResourceLocation[] textures) {
         render(pose, buffers, positions, normals, mesh.uvs(), mesh.indices(), mesh.materials(),
-                textures);
+                textures, FULL_LIGHT);
+    }
+
+    /**
+     * Draws a mesh that follows the joints of a skeleton, with a light of its own.
+     *
+     * @param pose the place of the mesh
+     * @param buffers the buffers the triangles are written into
+     * @param mesh the mesh
+     * @param positions the places of the vertices
+     * @param normals the normals of the vertices
+     * @param textures the place of the texture of every material
+     * @param light the light the mesh is drawn with
+     */
+    public static void render(PoseStack pose, MultiBufferSource.BufferSource buffers, Rac1SkinnedMesh mesh,
+                               float[] positions, float[] normals, ResourceLocation[] textures,
+                               int light) {
+        render(pose, buffers, positions, normals, mesh.uvs(), mesh.indices(), mesh.materials(),
+                textures, light);
     }
 
     private static void render(PoseStack pose, MultiBufferSource.BufferSource buffers, float[] positions,
                                float[] normals, float[] uvs, int[] indices, int[] materials,
-                               ResourceLocation[] textures) {
+                               ResourceLocation[] textures, int light) {
         int vertices = positions.length / 3;
         for (MaterialRun run : materialRuns(indices, materials, textures.length)) {
             ResourceLocation texture = run.slot() < 0 ? null : textures[run.slot()];
@@ -161,7 +194,7 @@ public final class Rac1MeshRenderer {
                 if (!writable(indices, triangle, vertices)) {
                     continue;
                 }
-                writeTriangle(consumer, pose, positions, normals, uvs, indices, triangle);
+                writeTriangle(consumer, pose, positions, normals, uvs, indices, triangle, light);
             }
             // The run is finished, so the buffer can be closed before the next kind of triangle
             // is written.
@@ -189,6 +222,24 @@ public final class Rac1MeshRenderer {
      */
     static void writeTriangle(VertexConsumer consumer, PoseStack pose, float[] positions,
                                float[] normals, float[] uvs, int[] indices, int triangle) {
+        writeTriangle(consumer, pose, positions, normals, uvs, indices, triangle, FULL_LIGHT);
+    }
+
+    /**
+     * Writes the vertices of one triangle of a mesh into a buffer, with a light of its own.
+     *
+     * @param consumer the buffer the vertices are written into
+     * @param pose the place of the mesh
+     * @param positions the places of the vertices
+     * @param normals the normals of the vertices
+     * @param uvs the texture coordinates of the vertices
+     * @param indices the indices of the vertices of the triangles
+     * @param triangle the number of the triangle
+     * @param light the light the triangle is drawn with
+     */
+    static void writeTriangle(VertexConsumer consumer, PoseStack pose, float[] positions,
+                               float[] normals, float[] uvs, int[] indices, int triangle,
+                               int light) {
         for (int corner = 0; corner < 4; corner++) {
             int source = corner % 3;
             int vertex = indices[triangle * 3 + source];
@@ -197,7 +248,7 @@ public final class Rac1MeshRenderer {
                     .setColor(255, 255, 255, 255)
                     .setUv(uvs[vertex * 2], uvs[vertex * 2 + 1])
                     .setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
-                    .setLight(FULL_LIGHT)
+                    .setLight(light)
                     .setNormal(pose.last(), normals[vertex * 3], normals[vertex * 3 + 1],
                             normals[vertex * 3 + 2]);
         }

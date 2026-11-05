@@ -381,6 +381,169 @@ The demo is reachable in three ways: the setup screen, which the client shows wh
 draws the hero with the Blaster as long as the cache holds the assets; the main menu has a
 **Blaster test** button; and the key **B** opens the demo screen from anywhere in the game.
 
+## The Blaster as an item of the game
+
+The Blaster of the game is the first item of the mod. The item is registered under
+`racmc:blaster`, it holds one weapon per stack, and it has a tab of the creative mode of its
+own.
+
+### The tab of the creative mode
+
+The items of the mod have a tab of their own, so that they are easy to find. The tab is
+registered as `racmc:racmc`, it is named after the mod (the key `itemGroup.racmc`), and it
+shows the picture of the mod as its sign. The Blaster is the first item of the tab; every item
+that the mod gets later is added to the same tab.
+
+The picture of the sign is the picture the owner of the project gave for the tab. The game draws
+the sign of a tab as an item, so the picture is an item of its own (`racmc:tab_icon`), whose
+model is a plain item model with the picture as its texture. The item is a sign and nothing else:
+it is in no list of the creative mode and it has no use in a world. The picture itself is
+described in [`docs/assets.md`](assets.md).
+
+The tabs of the creative mode are spread over pages by the game, so the tab of the mod is
+reached with the arrows of the pages. The Blaster is also in the search of the creative mode.
+
+### The rules of the weapon
+
+| Way of play | Shots | Ammunition |
+| --- | --- | --- |
+| Creative | free | none is needed and none is consumed |
+| Survival | free | one ordinary arrow per shot, consumed |
+| Adventure | free | one ordinary arrow per shot, consumed |
+| Spectator | none | the weapon never fires |
+
+The weapon fires while the trigger is held. The first shot leaves the weapon at once, the shots
+of the burst follow every second tick, which is the ten shots per second of the game. The
+server decides everything: the client never spawns an arrow of its own, so a shot is never seen
+twice and never happens without the server.
+
+Only the ordinary arrows of the game are ammunition. The tipped arrows and the spectral arrows
+of the game are not.
+
+A weapon without ammunition clicks instead of firing: the click of the lever of the game is
+played on the server, so that the player that fires and the players around hear it. The click is
+played at most once for a pull of the trigger and at most once every ten ticks, so that a held
+trigger cannot spam it. The creative mode never clicks.
+
+The arrow of a shot is an arrow of the game: it flies with the gravity and the drag of the game
+and it hits with the damage of the game (two points of damage, the damage of an arrow of the
+game). It leaves the weapon at two blocks per tick and it never is picked up.
+
+The arrows of the Blaster fly for twelve ticks (about six tenths of a second, the life of the
+bolt of the game) and are then removed. Only the arrows of the Blaster are shortened: the arrows
+of the game keep their own life, and the life of the arrows of the game is not touched.
+
+### Where the arrows leave the weapon
+
+The arrows leave the mouth of the weapon and not the head of the shooter. The place of the
+mouth is built out of two pieces that the server and the game both know:
+
+- the place of the item in the joint of the arm of the player, which the game moves to the hand
+  of the player: a sixteenth of a block to the side, an eighth of a block up and five eighths
+  of a block back;
+- the place of the mouth of the weapon in the frame of the mesh of the weapon, which was measured
+  out of the mesh of the Blaster of the game: the barrel is the narrow part at the front of the
+  weapon, its bore runs along the third axis of the mesh, and the mouth is the ring at the end
+  of it.
+
+The class `Rac1BlasterGrip` holds the numbers and the arithmetic, and it holds no Minecraft
+types, so the place of the mouth can be checked on a plain virtual machine. The tests of it
+compare the place of the item in the joint of the arm with the numbers of the chain of the
+game, so that the contract and the game cannot drift apart.
+
+The shot goes to the place the player looks at: the ray of his eyes is followed, and the shot
+goes from the mouth of the weapon to the place where the ray met something.
+
+When the mouth of the weapon is inside a wall, which happens when the player stands close to
+it, the arrow is created at the eyes of the player instead. A shot can therefore not be made
+through a wall. That place is a safety net and not the mouth of the weapon, and it is only used
+when the mouth is inside a block.
+
+### The animation of the weapon
+
+The weapon is held with its sequence 1 and fires with its sequence 4. The weapon is blended into
+the shot over about two and a half ticks when a burst begins, and it is blended back into the
+pose of the held weapon over the same number of ticks when the trigger is released. The blend
+happens once for a burst, so that a burst of many shots does not stutter. The sequence of the
+shot repeats itself: its cycle is half a second long and holds five shots.
+
+The state of the weapon of a player is read out of the state of the use of the item, which the
+server sends to every client by itself, so that the players around see the weapon fire as well.
+The state of the use is forgotten by the game when the player changes the slot, when the player
+dies and when the player leaves and comes back, so the weapon stops firing in every one of these
+cases without anything else having to be done.
+
+### The size of the weapon and its transforms
+
+The size of the weapon is the size it was imported with. The mesh of the Blaster of the game
+measures 0.71 blocks in its width, 0.31 blocks in its height and 0.77 blocks in its length, and
+the mouth of the weapon is at the front of its long axis. The renderer does not change that: the
+weapon keeps its own size and its own proportions, and the point of the game that holds it -
+the origin of the mesh - stays where it is, so that the weapon hangs in the hand the way it
+hangs in the hand of the hero in the game.
+
+The chain of the game was read out of the source of the game of blocks, of the version 1.21.1
+with NeoForge 21.1.265:
+
+1. The model of the item is drawn in the cube of an item of the game. The transforms of the
+   model move that cube: the place in sixteenths of a block, the turn around the third axis,
+   then around the first, then around the second, and the size last.
+2. The game then moves the cube by half a block in every direction, because the cube stands in
+   the middle of the place of the item.
+3. The renderer of the item draws the weapon of the game.
+
+The weapon of the game does not use that cube, so the renderer of the Blaster takes the move of
+the game back, exactly, before it draws anything: the two moves cancel each other out and the
+places of the mesh of the weapon are the places of the game. There is no size in the moves, so
+nothing of the size of the weapon is changed by them.
+
+Out of that chain the frame of the item follows: in the third person the item is held by the
+joint of the arm of the player, the game turns that joint by a quarter around the first axis and
+by half a turn around the second axis, and the first axis of the item is the side of the
+player, the second axis is the direction he looks at and the third axis points down. The turn of
+the model of the item turns the mouth of the weapon into the second axis of the item, so that the
+weapon points into the direction the player looks at, and the point of the game that holds the
+weapon stays in the hand of the player.
+
+The first person and the third person have their own turns, because the item space of the
+first person is the space of the camera of the player and the item space of the third person is
+the space of the joint of the arm of the player. The turns of the model are held in the
+contract, and the tests compare them with the model of the item, so that the place of the
+weapon in the hand and the place of the mouth of the weapon stay the same on the server and in
+the game.
+
+The picture in the lists of the game is fitted on its own: the item space of the lists of the
+game is the space of the camera of the first person, so the picture of the weapon is turned
+there and is scaled up, and it is put in the middle of the place of the picture, so that the
+whole weapon is seen in the place of the list.
+
+The sizes of the first person and of the lists are a provisional reference and not a canonical
+one: they were looked at in the game and they are open to the review of the owner of the
+project. The size of the weapon in the world is the size of the game.
+
+### Trying the weapon out
+
+The weapon is in the tab of the creative mode of the mod. In the creative mode it fires without
+ammunition; in the survival mode and in the adventure mode it needs ordinary arrows, which can
+be taken out of the search of the creative mode. The weapon fires while the right mouse button
+is held.
+
+### Known limits of the weapon
+
+- The arm of the player keeps the pose of the game for an item that is held, so the weapon
+  follows the turn of the body of the player and not the look of his head. The game of blocks
+  has no way to give an item a pose of the arm of its own in this version of NeoForge, so the
+  shot of the weapon goes to the place the player looks at while the weapon itself is held in
+  the pose of the game.
+- The weapon is drawn with the imported geometry, which includes a wide and flat part around the
+  middle of the weapon. The picture of the weapon in the lists of the game is therefore a long
+  and flat shape, the shape of the weapon of the game.
+- Only the right hand is fitted. The left hand falls back to the transforms of the right hand,
+  and the weapon of the left hand is drawn as well.
+- The sound of the weapon is the click of the lever of the game. No sound of the game of Ratchet &
+  Clank is imported.
+- The weapon does not have a projectile of its own: it fires the arrows of the game.
+
 ## Gradle tasks
 
 `./gradlew tasks` lists the following groups (verified on this repository):
@@ -429,7 +592,7 @@ ModDevGradle's NeoForge aware unit test support is enabled (`neoForge { unitTest
 so the test source set has the mod and the Minecraft classes on its classpath and tests can use
 Minecraft types directly.
 
-Thirty-two focused test classes exist today:
+Forty-one focused test classes exist today:
 
 - `ModBootstrapMetadataTest` verifies that the mod id, mod name and mod version are identical in
   `gradle.properties`, in the generated `META-INF/neoforge.mods.toml` and in `RacMcConstants`, and
@@ -475,6 +638,39 @@ Thirty-two focused test classes exist today:
   world that was entered without one has to be left again, the screens that lead into a world or
   into a server are blocked while the main menu is not, and the cache of the assets has to be ready
   as well before the gate opens.
+- `Rac1FirePolicyTest` verifies the rules that decide whether the Blaster may fire: the creative
+  mode fires without ammunition and consumes none, the survival mode and the adventure mode fire
+  with one ordinary arrow and consume it, a weapon without ammunition clicks instead of firing,
+  the spectator mode never fires and never clicks, the weapon fires ten shots a second and the
+  click of the empty weapon is bound to two clicks a second. The rules hold no Minecraft types, so
+  they run on a plain virtual machine.
+- `Rac1BurstStateTest` verifies the bookkeeping of a burst: the first shot is due at once, the
+  shots of a burst follow every second tick, a burst of a second holds ten shots, the click of
+  the empty weapon is played once for a pull of the trigger and once every ten ticks, a held
+  trigger cannot spam it, the burst is forgotten when the trigger is released and it survives the
+  leaving of the player.
+- `Rac1ArrowLifetimeTest` verifies the life of the arrows of the Blaster: the arrows fly for
+  twelve ticks, they live while they fly and they are removed when their flight is over.
+- `Rac1BlasterGripTest` verifies the place the weapon of the game is held at: the place of the
+  item in the joint of the arm of the player is the place of the chain of the game of blocks, the
+  axes of the item follow the arm of the player, the mouth of the weapon is in front of the hand
+  of the player, and the weapon points into the direction the player looks at and tilts with the
+  arm of the player.
+- `Rac1BlasterAnimationTest` verifies the animation of the weapon: the blend takes two to three
+  ticks, the cycle of the shot is half a second long and holds five shots, the weapon is blended
+  into the shot once for a burst, a burst of many shots does not stutter it, and it is blended
+  back into the pose of the held weapon when the trigger is released.
+- `Rac1BlasterPoseTest` verifies the pose of the weapon as it is held: it is held with the
+  sequence of the held weapon, it fires with the sequence of the shot, the two are blended, the
+  weapon keeps the size it was imported with, and its size does not change while it fires.
+- `Rac1BlasterAssetsTest` verifies the files of the weapon in the resources of the mod: the
+  model of the weapon is the model of an item with a renderer of its own, it names a transform for
+  every context, every transform names a turn, a place and a size, the turns of the model are the
+  turns of the contract, the weapon has a name of its own, and the tab of the mod is named after
+  the mod.
+- `RacMcCreativeTabTest` verifies the tab of the creative mode of the mod with the mod loaded:
+  the tab is registered, it is named after the mod, its sign is the picture of the mod, it holds
+  the Blaster, and the Blaster is in no other tab of the game.
 - `WadDecoderTest` verifies the decoder of the compressed streams of the game with streams that
   were built by hand: literals, matches with little literals, the dummy packet and the block
   marker, and the streams that are refused because they hold two literal packets in a row, because

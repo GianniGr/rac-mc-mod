@@ -1,5 +1,7 @@
 package com.github.giannigr.racmc;
 
+import com.github.giannigr.racmc.item.RacMcCreativeTabs;
+import com.github.giannigr.racmc.item.RacMcItems;
 import com.mojang.logging.LogUtils;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -37,5 +39,9 @@ public class RacMcMod {
                 RacMcConstants.MOD_ID,
                 RacMcConstants.MOD_NAME,
                 modContainer.getModInfo().getVersion().toString());
+        // The items of the mod are registered with the event bus of the mod.
+        RacMcItems.register(modEventBus);
+        // The tab of the creative mode of the mod is registered with the same bus.
+        RacMcCreativeTabs.register(modEventBus);
     }
 }

@@ -35,6 +35,7 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RenderLivingEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 
 /**
@@ -301,13 +302,48 @@ public final class RacMcClient {
         startAssetsWhenReady();
         openDemoWhenAsked();
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || allowsWorldEntry()) {
+        if (minecraft.level == null) {
+            return;
+        }
+        updateBlasters();
+        if (allowsWorldEntry()) {
             return;
         }
         RacMcMod.LOGGER.info("The disc image gate leaves the world that was entered without a "
                 + "verified disc image or without the assets of the game.");
         minecraft.disconnect(new TitleScreen());
         minecraft.setScreen(new IsoSelectionScreen(true));
+    }
+
+    /**
+     * Brings the state of the Blasters of the players up to date.
+     */
+    private static void updateBlasters() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level != null) {
+            Rac1BlasterClient.update(minecraft.level);
+        }
+    }
+
+    /**
+     * Remembers the player that is drawn, so that the weapon of a player can be drawn with the
+     * animation of the shot.
+     *
+     * @param event the event that is fired before a living entity is drawn
+     */
+    @SubscribeEvent
+    public static void onRenderLivingPre(RenderLivingEvent.Pre<?, ?> event) {
+        Rac1BlasterClient.onRenderLivingPre(event);
+    }
+
+    /**
+     * Forgets the player that was drawn.
+     *
+     * @param event the event that is fired after a living entity was drawn
+     */
+    @SubscribeEvent
+    public static void onRenderLivingPost(RenderLivingEvent.Post<?, ?> event) {
+        Rac1BlasterClient.onRenderLivingPost(event);
     }
 
     /**
