@@ -141,6 +141,55 @@ public final class Rac1BlasterGrip {
      */
     public static final double[] GUI_ROTATION = { 0.0, 60.0, 90.0 };
 
+    /**
+     * The turn of the weapon in the third person while the weapon is only held, in degrees.
+     *
+     * <p>The turn is around the side of the weapon, in the frame of the model of the item. The
+     * game of blocks holds an item in the hand with the arm of the player hanging at the side of
+     * his body, and the weapon of the game stands in that hand with its bore along the arm. The
+     * turn was measured out of the chain of the transforms of the game of blocks: with it the bore
+     * of the weapon points down along the arm of the player, and the weapon follows the arm of
+     * the player while he walks.
+     *
+     * <p>The turn is only used while the weapon is not fired. The pose of the aim is the pose of
+     * the arm of the game of blocks and is not touched by this turn.
+     */
+    public static final double IDLE_ROTATION = -90.0;
+
+    /**
+     * The move of the drawn weapon in the first person, in blocks.
+     *
+     * <p>The move is the place of the drawn mouth of the weapon in the space of the camera, less
+     * the place of the true mouth of the weapon in the space of the camera. The true mouth is the
+     * place the shot of the weapon really leaves from, and it is the place the mouth of the
+     * weapon is drawn at in the third person. With this move the drawn mouth of the weapon stands
+     * at the place the shot of the weapon really leaves from, so that a shot of the weapon leaves
+     * the drawn weapon and not the empty air beside it.
+     *
+     * <p>The move is a move of the picture of the weapon only: the shot of the weapon still
+     * leaves the mouth of the weapon in the third person, and the shot still flies along the place
+     * the player looks at.
+     */
+    public static final double[] FIRST_PERSON_MOVE = { -0.198500, -0.245275, 0.309925 };
+
+    /**
+     * The greatest move of the drawn weapon in the first person, in blocks.
+     *
+     * <p>The move of the picture of the weapon is small: the picture of the weapon in the first
+     * person is a picture, and it may not be moved far away from the place the mouth of the
+     * weapon really is.
+     */
+    public static final double FIRST_PERSON_MOVE_LIMIT = 0.35;
+
+    /**
+     * The greatest place of the mouth of the weapon from the eye of the player, in blocks.
+     *
+     * <p>The mouth of the weapon may not be drawn behind the eye of the player and not far away
+     * from it either, so that the picture of the weapon stays a picture of a weapon in the hand
+     * of the player.
+     */
+    public static final double FIRST_PERSON_MOUTH_RANGE = 2.0;
+
     private Rac1BlasterGrip() {
         throw new UnsupportedOperationException("Utility class");
     }

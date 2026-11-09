@@ -30,6 +30,10 @@ import net.minecraft.world.phys.Vec3;
  * without ammunition, the survival mode and the adventure mode need one ordinary arrow for every
  * shot, and the spectator mode never fires. A weapon without ammunition clicks instead of firing.
  *
+ * <p>The weapon is fired with the main hand only. The shot leaves the mouth of the Blaster in the
+ * main hand, and the arrow of the game of blocks is made from that very stack of the Blaster, so
+ * that the arrow never carries an empty weapon.
+ *
  * <p>The arrows of the Blaster are the arrows of the game. They are marked in the data of the
  * entity, so that only they are removed after {@link Rac1ArrowLifetime#LIFETIME_TICKS} ticks. The
  * arrows of the game keep their own life, and the life of the arrows of the game is not touched.
@@ -73,16 +77,29 @@ public final class Rac1BlasterServer {
      * <p>The first shot is fired at once, when the trigger is pulled. The weapon keeps being used
      * afterwards, so that the shots of the burst follow.
      *
+     * <p>The weapon is fired with the main hand only. When the Blaster is not in the main hand,
+     * no shot is made and the weapon is not used.
+     *
      * @param level the level the player is in
      * @param player the player that pulled the trigger
      * @return {@code false} when the mouth of the weapon is blocked and no shot was made
      */
     public static boolean fireFirstShot(Level level, Player player) {
+        if (!blasterInMainHand(player)) {
+            // The Blaster is not in the main hand: no shot is made and the weapon is not used.
+            return false;
+        }
+        if (isFiring(player)) {
+            // The trigger was pulled again while the burst is already running. The shot of the
+            // burst is not fired twice, and the state of the burst is not touched.
+            return true;
+        }
         Rac1BurstState state = stateOf(player);
         state.beginPull();
         long now = level.getGameTime();
         boolean fired;
-        switch (Rac1FirePolicy.evaluate(modeOf(player), countArrows(player))) {
+        switch (Rac1FirePolicy.evaluate(modeOf(player), countArrows(player),
+                Rac1FirePolicy.Hand.MAIN)) {
             case FIRE_WITHOUT_AMMO -> fired = fire(level, player, state, now, false);
             case FIRE_WITH_AMMO -> fired = fire(level, player, state, now, true);
             case DRY_FIRE -> {
@@ -105,16 +122,24 @@ public final class Rac1BlasterServer {
      * <p>The method is called once per tick of the server. A shot is only fired when the time of
      * the shot is due, so that the weapon fires ten shots a second and not twenty.
      *
+     * <p>The burst only runs while the Blaster is used with the main hand. A burst that was
+     * started in the other hand never fires.
+     *
      * @param level the level the player is in
      * @param player the player that holds the trigger
      */
     public static void fireWhileHeld(Level level, Player player) {
+        if (!isFiring(player)) {
+            // The Blaster is not used with the main hand: the burst does not fire.
+            return;
+        }
         Rac1BurstState state = stateOf(player);
         long now = level.getGameTime();
         if (!state.shotDue(now)) {
             return;
         }
-        switch (Rac1FirePolicy.evaluate(modeOf(player), countArrows(player))) {
+        switch (Rac1FirePolicy.evaluate(modeOf(player), countArrows(player),
+                Rac1FirePolicy.Hand.MAIN)) {
             case FIRE_WITHOUT_AMMO -> fire(level, player, state, now, false);
             case FIRE_WITH_AMMO -> fire(level, player, state, now, true);
             case DRY_FIRE -> dryFire(level, player, state, now);
@@ -123,6 +148,31 @@ public final class Rac1BlasterServer {
             }
         }
         saveState(player, state);
+    }
+
+    /**
+     * Whether the Blaster is in the main hand of a player.
+     *
+     * @param player the player
+     * @return {@code true} when the main hand of the player holds the Blaster
+     */
+    public static boolean blasterInMainHand(Player player) {
+        return player.getMainHandItem().is(RacMcItems.BLASTER.get());
+    }
+
+    /**
+     * Whether a player fires the Blaster with the main hand at the moment.
+     *
+     * <p>The player fires the weapon when the weapon is used with the main hand and when the main
+     * hand holds the Blaster. The state of the use is the state of the server, so the answer is
+     * the same on every client.
+     *
+     * @param player the player
+     * @return {@code true} when the player fires the Blaster with the main hand
+     */
+    public static boolean isFiring(Player player) {
+        return player.isUsingItem() && player.getUsedItemHand() == InteractionHand.MAIN_HAND
+                && blasterInMainHand(player);
     }
 
     /**
@@ -198,8 +248,7 @@ public final class Rac1BlasterServer {
             // weapon stops being used, so that the shot is not drawn either.
             player.stopUsingItem();
             return false;
-        }
-        if (withAmmo && !consumeArrow(player)) {
+        }        if (withAmmo && !consumeArrow(player)) {
             // The shot is only paid for when the ammunition is really there. The arrow is taken
             // out of the world again, so that no shot is given away.
             arrow.discard();
@@ -248,7 +297,13 @@ public final class Rac1BlasterServer {
      * @return the arrow, or {@code null} when the shot is blocked
      */
     private static Arrow spawnArrow(Level level, Player player) {
-        InteractionHand hand = handOf(player);
+        // The weapon the shot was fired from is the stack of the Blaster in the main hand. The
+        // arrow of the game of blocks refuses an empty weapon, so a shot is only made when the
+        // main hand really holds the Blaster: no weapon is ever made up.
+        ItemStack weapon = player.getMainHandItem();
+        if (weapon.isEmpty() || !weapon.is(RacMcItems.BLASTER.get())) {
+            return null;
+        }
         // The mouth of the weapon, in the world. The place is built out of the frame of the
         // weapon and out of the place of the player, and it is the same place the weapon is
         // drawn at in the third person.
@@ -264,8 +319,7 @@ public final class Rac1BlasterServer {
         Vec3 target = target(player, eyes);
         Rac1BlasterGrip.Direction direction = Rac1BlasterGrip.direction(spawn.x, spawn.y, spawn.z,
                 target.x, target.y, target.z);
-        Arrow arrow = new Arrow(level, player, new ItemStack(Items.ARROW),
-                player.getItemInHand(hand));
+        Arrow arrow = new Arrow(level, player, new ItemStack(Items.ARROW), weapon);
         arrow.pickup = AbstractArrow.Pickup.DISALLOWED;
         arrow.setPos(spawn.x, spawn.y, spawn.z);
         if (direction.x() != 0.0 || direction.y() != 0.0 || direction.z() != 0.0) {
@@ -429,18 +483,5 @@ public final class Rac1BlasterServer {
         CompoundTag data = player.getPersistentData();
         data.putLong(LAST_SHOT, state.lastShotTick());
         data.putLong(LAST_CLICK, state.lastDryClickTick());
-    }
-
-    /**
-     * The hand the weapon is held in.
-     *
-     * <p>The weapon is used in the hand the player holds it in, and the shot leaves the weapon of
-     * that hand.
-     *
-     * @param player the player that fires
-     * @return the hand of the weapon
-     */
-    private static InteractionHand handOf(Player player) {
-        return player.isUsingItem() ? player.getUsedItemHand() : InteractionHand.MAIN_HAND;
     }
 }

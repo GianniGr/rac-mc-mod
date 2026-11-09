@@ -21,19 +21,23 @@ import com.github.giannigr.racmc.iso.Rac1MediaConfig;
 import com.github.giannigr.racmc.iso.Rac1MediaGate;
 import com.github.giannigr.racmc.iso.Rac1MediaManager;
 import com.github.giannigr.racmc.iso.Rac1MediaState;
+import com.github.giannigr.racmc.item.Rac1BlasterMovement;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.player.Input;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Player;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.MovementInputUpdateEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RenderLivingEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
@@ -335,7 +339,6 @@ public final class RacMcClient {
     public static void onRenderLivingPre(RenderLivingEvent.Pre<?, ?> event) {
         Rac1BlasterClient.onRenderLivingPre(event);
     }
-
     /**
      * Forgets the player that was drawn.
      *
@@ -344,6 +347,33 @@ public final class RacMcClient {
     @SubscribeEvent
     public static void onRenderLivingPost(RenderLivingEvent.Post<?, ?> event) {
         Rac1BlasterClient.onRenderLivingPost(event);
+    }
+
+    /**
+     * Keeps the speed of a player that holds the trigger of the Blaster.
+     *
+     * <p>The game of blocks slows a player down that uses an item: it keeps a fifth of the input
+     * of the keyboard, the way it does for the bow. The Blaster is not a bow, so the share that
+     * the game of blocks takes away is put back here.
+     *
+     * <p>The event of the game of blocks is fired before the share is taken, so the share cannot
+     * be taken back afterwards: the input is put back before the game of blocks takes its share
+     * away. Only the Blaster is treated this way: every other item keeps the share of the game
+     * of blocks.
+     *
+     * @param event the event of the update of the input of the movement
+     */
+    @SubscribeEvent
+    public static void onMovementInputUpdate(MovementInputUpdateEvent event) {
+        Player player = event.getEntity();
+        if (!Rac1BlasterClient.isFiring(player) || player.isPassenger()) {
+            // The player does not fire the Blaster with the main hand, or the player rides: the
+            // game of blocks does not slow such a player down either.
+            return;
+        }
+        Input input = event.getInput();
+        input.leftImpulse = Rac1BlasterMovement.compensate(input.leftImpulse);
+        input.forwardImpulse = Rac1BlasterMovement.compensate(input.forwardImpulse);
     }
 
     /**

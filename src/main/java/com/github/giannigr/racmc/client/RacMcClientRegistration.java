@@ -54,6 +54,17 @@ public final class RacMcClientRegistration {
             @Override
             public HumanoidModel.ArmPose getArmPose(LivingEntity entity, InteractionHand hand,
                                                     ItemStack stack) {
+                if (hand != InteractionHand.MAIN_HAND) {
+                    // The other arm keeps the pose of the game of blocks.
+                    return null;
+                }
+                if (!Rac1BlasterClient.isFiring(entity)) {
+                    // The Blaster is only held and not fired: the arm of the game of blocks holds
+                    // the weapon the way it holds every other item.
+                    return null;
+                }
+                // The shot was accepted and the arm of the player points the bore of the weapon
+                // at the place the player looks at.
                 return Rac1BlasterArmPose.aim();
             }
         }, RacMcItems.BLASTER.get());

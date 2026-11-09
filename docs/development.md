@@ -433,6 +433,24 @@ The arrows of the Blaster fly for twelve ticks (about six tenths of a second, th
 bolt of the game) and are then removed. Only the arrows of the Blaster are shortened: the arrows
 of the game keep their own life, and the life of the arrows of the game is not touched.
 
+The weapon is fired with the main hand only. A pull of the trigger with the other hand is
+refused at the door, before anything happens: no shot is fired, no ammunition is used, the
+weapon is not used at all and no animation is played. The refusal is the same on the client and
+on the server, because both of them run the same method of the item. The rules of the weapon are
+held by the class `Rac1FirePolicy`, which holds the hands of the player as a hand of its own, so
+that the rule of the other hand can be checked on a plain virtual machine.
+
+A player that holds the trigger of the weapon walks at the speed of a player that walks with
+empty hands. The game of blocks slows a player down that uses an item - it keeps a fifth of the
+input of the keyboard, the way it does for the bow - and the Blaster is not a bow. The share that
+the game of blocks takes away is put back in the one place the game of blocks offers to change
+the input of a player, the event of the update of the input of the movement. The event is fired
+before the share is taken, so the share cannot be taken back afterwards: the input is put back
+before the game of blocks takes its share away. Only the Blaster is treated this way; every other
+item keeps the share of the game of blocks, and no other movement of the player is changed. The
+factor is held by the class `Rac1BlasterMovement`, which holds no Minecraft types, so that the
+rule can be checked on a plain virtual machine.
+
 ### Where the arrows leave the weapon
 
 The arrows leave the mouth of the weapon and not the head of the shooter. The place of the
@@ -482,6 +500,11 @@ the contract and the game cannot drift apart.
 The shot goes to the place the player looks at: the ray of his eyes is followed, and the shot
 goes from the mouth of the weapon to the place where the ray met something.
 
+The shot leaves the mouth of the weapon in the main hand, and the arrow of the game of blocks is
+made from that very stack of the Blaster. The arrows of the game of blocks refuse an empty
+weapon, so a shot is only made when the main hand really holds the Blaster; no weapon is ever
+made up and no exception is ever swallowed.
+
 When the mouth of the weapon stands inside a wall, which happens when the player stands close
 to it, or when the way from the eyes of the player to the mouth of the weapon is blocked, no
 shot is made at all: no arrow is created, no ammunition is used and the weapon stops being used,
@@ -502,6 +525,18 @@ server sends to every client by itself, so that the players around see the weapo
 The state of the use is forgotten by the game when the player changes the slot, when the player
 dies and when the player leaves and comes back, so the weapon stops firing in every one of these
 cases without anything else having to be done.
+
+The state of the use is the state of the server only. The client does not guess that the shot
+was made: it waits for the state of the server, which is the state that says that the shot was
+accepted. A shot that was refused - a dry fire, a weapon that is held against a wall, the
+spectator mode - therefore never shows the pose of the aim and never plays the animation of the
+shot.
+
+The pose of the arm that holds the weapon is the pose of the aim only while the weapon really
+fires: the weapon is used with the main hand and the main hand holds the Blaster. A player that
+only holds the weapon keeps the pose of the game of blocks for an item that is held, and the
+other arm of the player is never turned. The new value of the pose of the arm is not a pose of
+two hands, so the arm that holds the weapon is not dragged into the aim of the other arm.
 
 ### The size of the weapon and its transforms
 
@@ -555,6 +590,31 @@ The sizes of the first person and of the lists are a provisional reference and n
 one: they were looked at in the game and they are open to the review of the owner of the
 project. The size of the weapon in the world is the size of the game.
 
+The weapon is turned around its own side while it is only held, and only in the third person.
+The game of blocks holds an item in the hand with the arm of the player hanging at the side of
+his body, and the weapon of the game stands in that hand with its bore along the arm. The turn
+was measured out of the chain of the transforms of the game of blocks: with it the bore of the
+weapon points down along the arm of the player, and the weapon follows the arm of the player
+while he walks. The turn is bounded by a quarter of a turn, and it is held by the contract as
+`Rac1BlasterGrip.IDLE_ROTATION`. The pose of the aim is not touched by this turn: the turn is
+only made while the weapon is not fired, so the bore of the weapon still points at the place the
+player looks at and the weapon still stands upright while it fires.
+
+The picture of the weapon in the first person is moved a little, so that the mouth of the drawn
+weapon stands at the place the shot of the weapon really leaves from. The shot of the weapon
+leaves the mouth of the weapon in the third person, and the picture of the weapon in the first
+person is a picture of the same weapon; before the move, the shot was seen to leave the empty
+air beside the drawn weapon. The move is the place of the drawn mouth of the weapon in the
+space of the camera, less the place of the true mouth of the weapon in the space of the camera,
+and it is held by the contract as `Rac1BlasterGrip.FIRST_PERSON_MOVE`. The move is a move of the
+picture of the weapon only: the shot of the weapon still leaves the mouth of the weapon in the
+third person, and the shot still flies along the place the player looks at. The move is bounded:
+no axis of it is greater than `Rac1BlasterGrip.FIRST_PERSON_MOVE_LIMIT` blocks, and the drawn
+mouth of the weapon stays in front of the eye of the player and not further away than
+`Rac1BlasterGrip.FIRST_PERSON_MOUTH_RANGE` blocks. The tests replay the chain of the transforms
+of the game of blocks with the classes of the game itself and compare the drawn mouth with the
+true mouth, so that the alignment is measured and not claimed.
+
 ### Trying the weapon out
 
 The weapon is in the tab of the creative mode of the mod. In the creative mode it fires without
@@ -576,13 +636,19 @@ is held.
   middle of the weapon. The picture of the weapon in the lists of the game is therefore a long
   and flat shape, the shape of the weapon of the game.
 - The first person draws the weapon with the turns of the first person, and the mouth of the
-  weapon is drawn at the lower right of the screen there, while the arrows leave the weapon from
-  the place of the mouth of the third person, which is the place of the hand of the player in the
-  world. The two are not the same place on the screen, so a shot of the first person is seen to
-  leave the weapon near the body of the player. The turns of the first person are a turn of the
-  picture only: they do not touch the place of the mouth on the server, which is the place of the
-  third person. Bringing the two together is a change of the first person alone, and it is not
-  done yet. Nothing is measured about the place the arrow leaves from.
+  weapon is moved so that it stands at the place the shot of the weapon really leaves from. The
+  move is measured for the player that looks straight ahead: the mouth of the weapon follows the
+  head of the player in the third person, while the picture of the weapon in the first person
+  stands in the hand of the eye, so the two are the same place only while the player looks
+  straight ahead.
+- The sprint of the player cannot be started while the weapon is used. The game of blocks asks
+  `!isUsingItem()` before it lets a player start to sprint, and that question is private to the
+  game of blocks; the narrow event of the input of the movement cannot answer it. A player that
+  was already running keeps running at the full speed, because the share of the input that the
+  game of blocks takes away is put back for the Blaster.
+- The weapon is turned around its own side while it is only held, and the turn is not blended
+  into the shot: the turn ends and the pose of the aim begins at the same tick, the way the arm
+  of the player changes from the pose of the game of blocks to the pose of the aim.
 - Only the right hand is fitted. The left hand falls back to the transforms of the right hand,
   and the weapon of the left hand is drawn as well.
 - The sound of the weapon is the click of the lever of the game. No sound of the game of Ratchet &
@@ -968,6 +1034,10 @@ v1.00 release of the authorized directory, which was only read.
 | `gradlew.bat test --rerun -Dracmc.isoImage=<PAL v2.00> -Dracmc.isoExpectedRevision="PAL v2.00"` on the tree of issue #6 | `BUILD SUCCESSFUL`, 236 of 236 tests passed over 29 test classes with no skip, `RealDiscAssetTest` 18 of 18 included. The image was read in place under the authorized directory and was never copied. |
 | `gradlew.bat clean build --no-build-cache` on the tree of issue #6 | `BUILD SUCCESSFUL`, all 11 tasks executed (`compileJava`, `compileTestJava` and `test` ran rather than being restored from the build cache), the same 236 tests with 214 passed and 22 skipped, and `build/libs/racmc-0.1.0.jar` (173,514 bytes) was built. |
 | `gradlew.bat runClient` on the tree of issue #6 | The client window opened (`Minecraft NeoForge* 1.21.1`, 854x480 client area). The configured disc image was verified again (`The disc image was verified: NTSC-U v1.00.`), the cache of the assets was built for it (`The cache of the assets is started for the disc image.`) and the main menu opened with the *Blaster test* button on it. The screen of the demo of the Blaster was opened from the main menu and left open. The pictures the game saved under `run/screenshots` - `2026-11-04_16.04.25.png`, `2026-11-04_16.04.31.png`, `2026-11-04_16.04.34.png` and `2026-11-04_16.08.30.png` - show the hero with the Blaster in his hand in the left half of the area, the piece of the scenery standing on the lower edge of its own place in the right half, the thin line between the two places, and a different pose of the hero and a different side of the scenery in every picture, so the animation and the turn of the view run while the two places stay fixed. Neither model reaches the edge of its place, so neither is cut off, and the text and the button of the screen stay clear of the models. The setup screen was drawn as well (`2026-11-04_16.08.12.png`): it shows the same two models next to each other under the text of that screen. The log of the run holds no error and no warning of the mod, and the client was closed through its own window (`Stopping!`), which ended the Gradle task with `BUILD SUCCESSFUL` (13m 48s). |
+| `gradlew.bat test --tests "com.github.giannigr.racmc.item.Rac1BlasterHandGuardTest" --tests "com.github.giannigr.racmc.item.Rac1FirePolicyTest" --tests "com.github.giannigr.racmc.item.Rac1BlasterMovementTest" --tests "com.github.giannigr.racmc.client.Rac1BlasterArmPoseTest" --tests "com.github.giannigr.racmc.client.Rac1BlasterSpeedTest"` on this revision | `BUILD SUCCESSFUL`, 25 of 25 tests passed: the three checks of the guards of the hand, the ten checks of the rules of the weapon, the four checks of the share of the input of a player that uses an item, the six checks of the pose of the arm and the two checks of the speed of a player that holds the trigger. |
+| the same command on the tree without the guards of the hand | `BUILD FAILED`, 3 of 3 tests of the guards of the hand failed: the other hand was not refused before the weapon fires, the weapon of the shot came out of an arbitrary hand of the player and the rules of the weapon were not asked for the main hand. The other 22 tests passed on that tree as well, so the failure names the guards of the hand and nothing else. |
+| `gradlew.bat test --tests "com.github.giannigr.racmc.item.Rac1BlasterIdleTest" --tests "com.github.giannigr.racmc.item.Rac1BlasterFirstPersonTest"` on this revision | `BUILD SUCCESSFUL`, 9 of 9 tests passed: the four checks of the weapon that is only held and the five checks of the picture of the weapon in the first person, including the check that the drawn mouth of the weapon stands at the place the shot of the weapon really leaves from. |
+| `gradlew.bat test --rerun` on this revision | `BUILD SUCCESSFUL`, 370 tests in all over 48 test classes: 347 passed, 23 skipped, no failure and no error, counted from the XML reports of the test task. The twenty-three skipped tests are the twenty-two opt-in checks of a real disc image and the check of the link that needs a system that can build a symbolic link. |
 
 All of the measurements above were taken on Windows. The Linux and macOS build and test runs are
 covered by the CI matrix but have not been executed yet, and the client and dedicated server

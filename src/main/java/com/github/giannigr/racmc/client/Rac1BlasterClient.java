@@ -65,15 +65,21 @@ public final class Rac1BlasterClient {
     /**
      * Whether a player is firing the weapon at the moment.
      *
+     * <p>The weapon is fired with the main hand only. A player that fires the weapon uses it
+     * with the main hand and holds the Blaster in the main hand, so the answer is the same on
+     * every client and the pose of the arm and the animation of the shot agree with the shots
+     * that are really made.
+     *
      * @param entity the entity
      * @return {@code true} when the entity fires the weapon
      */
     public static boolean isFiring(LivingEntity entity) {
-        if (!(entity instanceof Player player) || !player.isUsingItem()) {
+        if (!(entity instanceof Player player)) {
             return false;
         }
-        InteractionHand hand = player.getUsedItemHand();
-        return player.getItemInHand(hand).is(RacMcItems.BLASTER.get());
+        return Rac1BlasterArmPose.aimsWithMainHand(player.isUsingItem(),
+                player.getUsedItemHand() == InteractionHand.MAIN_HAND,
+                player.getMainHandItem().is(RacMcItems.BLASTER.get()));
     }
 
     /**

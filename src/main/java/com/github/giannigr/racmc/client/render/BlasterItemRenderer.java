@@ -6,7 +6,9 @@ import com.github.giannigr.racmc.cache.Rac1CacheContent;
 import com.github.giannigr.racmc.client.Rac1BlasterClient;
 import com.github.giannigr.racmc.client.Rac1BlasterPose;
 import com.github.giannigr.racmc.client.RacMcClient;
+import com.github.giannigr.racmc.item.Rac1BlasterGrip;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.geom.EntityModelSet;
@@ -116,6 +118,14 @@ public final class BlasterItemRenderer extends BlockEntityWithoutLevelRenderer {
                 // weapon keeps the size it was imported with. The move of the game is therefore
                 // taken back, exactly, before anything else is done to the weapon.
                 poseStack.translate(0.5f, 0.5f, 0.5f);
+                if (idleTurn(entity, context)) {
+                    // The weapon is only held and not fired: the game of blocks holds it in the
+                    // hand with the arm of the player hanging at the side of his body, and the
+                    // weapon is turned around its own side so that the bore of the weapon points
+                    // down along the arm of the player.
+                    poseStack.mulPose(Axis.YP
+                            .rotationDegrees((float) Rac1BlasterGrip.IDLE_ROTATION));
+                }
                 Rac1MeshRenderer.render(poseStack, source, blaster.mesh(), positions,
                         this.pose.normals(), locations, usedLight);
             } finally {
@@ -126,6 +136,25 @@ public final class BlasterItemRenderer extends BlockEntityWithoutLevelRenderer {
             RacMcMod.LOGGER.error("The Blaster could not be drawn. The weapon is not drawn again.",
                     exception);
         }
+    }
+
+    /**
+     * Whether the weapon is drawn in the turn of the weapon that is only held.
+     *
+     * <p>The turn is only used in the third person and only while the weapon is not fired: the
+     * picture of the weapon in the first person and in the lists of the game is the picture of
+     * the game of blocks and is not touched.
+     *
+     * @param entity the entity the weapon is drawn for
+     * @param context the place the weapon is drawn at
+     * @return {@code true} when the weapon is turned around its own side
+     */
+    private static boolean idleTurn(LivingEntity entity, ItemDisplayContext context) {
+        if (context != ItemDisplayContext.THIRD_PERSON_RIGHT_HAND
+                && context != ItemDisplayContext.THIRD_PERSON_LEFT_HAND) {
+            return false;
+        }
+        return !Rac1BlasterClient.isFiring(entity);
     }
 
     /**

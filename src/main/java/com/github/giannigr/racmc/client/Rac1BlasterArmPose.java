@@ -35,4 +35,22 @@ public final class Rac1BlasterArmPose {
             return null;
         }
     }
+
+    /**
+     * Whether the arm of the player points the bore of the weapon at the place the player looks
+     * at.
+     *
+     * <p>The pose of the aim is only the pose of the arm while the weapon really fires: the
+     * weapon is used with the main hand and the main hand holds the Blaster. A player that only
+     * holds the weapon keeps the pose of the game of blocks for an item that is held.
+     *
+     * @param usingItem whether the player uses an item at the moment
+     * @param usedHandIsMain whether the item is used with the main hand
+     * @param blasterInMainHand whether the main hand of the player holds the Blaster
+     * @return {@code true} when the arm of the player points at the place the player looks at
+     */
+    public static boolean aimsWithMainHand(boolean usingItem, boolean usedHandIsMain,
+            boolean blasterInMainHand) {
+        return usingItem && usedHandIsMain && blasterInMainHand;
+    }
 }

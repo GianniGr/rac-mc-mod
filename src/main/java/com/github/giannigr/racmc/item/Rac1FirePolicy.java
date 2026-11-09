@@ -11,6 +11,8 @@ package com.github.giannigr.racmc.item;
  *       second of the game;</li>
  *   <li>the click of an empty weapon may only be played again after
  *       {@link #DRY_FIRE_COOLDOWN_TICKS} ticks, so a held trigger cannot spam the click;</li>
+ *   <li>the weapon is fired with the main hand only: a pull of the trigger with the other hand
+ *       is refused and nothing happens at all;</li>
  *   <li>an arrow of the Blaster flies for {@link Rac1ArrowLifetime#LIFETIME_TICKS} ticks.</li>
  * </ul>
  */
@@ -21,6 +23,21 @@ public final class Rac1FirePolicy {
 
     /** The number of ticks that have to pass before the click of an empty weapon may play again. */
     public static final int DRY_FIRE_COOLDOWN_TICKS = 10;
+
+    /**
+     * The hand the trigger was pulled with.
+     *
+     * <p>The names are the names of the hands of the game of blocks, without the types of the
+     * game, so that the rules can be checked on a plain virtual machine.
+     */
+    public enum Hand {
+
+        /** The main hand of the player. */
+        MAIN,
+
+        /** The off hand of the player. */
+        OFF
+    }
 
     /** What the Blaster does with one pull of the trigger. */
     public enum Outcome {
@@ -53,6 +70,25 @@ public final class Rac1FirePolicy {
      * @return the outcome of the pull
      */
     public static Outcome evaluate(Rac1GameMode mode, int ordinaryArrows) {
+        return evaluate(mode, ordinaryArrows, Hand.MAIN);
+    }
+
+    /**
+     * Decides what one pull of the trigger does.
+     *
+     * <p>The Blaster of the game is fired with the main hand only. A pull of the trigger with the
+     * other hand is refused before anything else happens: no shot is fired, no click is played,
+     * no ammunition is used and the weapon is not used at all.
+     *
+     * @param mode the way of play of the player
+     * @param ordinaryArrows the number of ordinary arrows the player carries
+     * @param hand the hand the trigger was pulled with
+     * @return the outcome of the pull
+     */
+    public static Outcome evaluate(Rac1GameMode mode, int ordinaryArrows, Hand hand) {
+        if (hand == Hand.OFF) {
+            return Outcome.BLOCKED;
+        }
         return switch (mode) {
             case CREATIVE -> Outcome.FIRE_WITHOUT_AMMO;
             case SURVIVAL, ADVENTURE -> ordinaryArrows > 0
@@ -60,6 +96,16 @@ public final class Rac1FirePolicy {
                     : Outcome.DRY_FIRE;
             case SPECTATOR -> Outcome.BLOCKED;
         };
+    }
+
+    /**
+     * Whether the outcome refuses the shot altogether.
+     *
+     * @param outcome the outcome of a pull of the trigger
+     * @return {@code true} when nothing happens at all
+     */
+    public static boolean isBlocked(Outcome outcome) {
+        return outcome == Outcome.BLOCKED;
     }
 
     /**

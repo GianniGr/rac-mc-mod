@@ -86,4 +86,39 @@ class Rac1FirePolicyTest {
         assertEquals(10, Rac1FirePolicy.DRY_FIRE_COOLDOWN_TICKS);
         assertEquals(20 / Rac1FirePolicy.DRY_FIRE_COOLDOWN_TICKS, 2);
     }
+
+    @Test
+    @DisplayName("The other hand never fires, never clicks and never uses ammunition")
+    void theOtherHandIsBlocked() {
+        for (Rac1GameMode mode : Rac1GameMode.values()) {
+            for (int arrows : new int[] { 0, 1, 64 }) {
+                Rac1FirePolicy.Outcome outcome =
+                        Rac1FirePolicy.evaluate(mode, arrows, Rac1FirePolicy.Hand.OFF);
+                assertEquals(Rac1FirePolicy.Outcome.BLOCKED, outcome);
+                assertTrue(Rac1FirePolicy.isBlocked(outcome));
+                assertFalse(Rac1FirePolicy.firesShot(outcome));
+                assertFalse(Rac1FirePolicy.consumesArrow(outcome));
+                assertFalse(Rac1FirePolicy.playsDryFireClick(outcome));
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("The main hand fires as the way of play and the ammunition ask")
+    void theMainHandIsNotBlocked() {
+        for (Rac1GameMode mode : Rac1GameMode.values()) {
+            Rac1FirePolicy.Outcome outcome =
+                    Rac1FirePolicy.evaluate(mode, 64, Rac1FirePolicy.Hand.MAIN);
+            assertEquals(Rac1FirePolicy.evaluate(mode, 64), outcome);
+        }
+        // Only the spectator mode is blocked with the main hand.
+        assertTrue(Rac1FirePolicy.isBlocked(
+                Rac1FirePolicy.evaluate(Rac1GameMode.SPECTATOR, 64, Rac1FirePolicy.Hand.MAIN)));
+        assertFalse(Rac1FirePolicy.isBlocked(
+                Rac1FirePolicy.evaluate(Rac1GameMode.CREATIVE, 64, Rac1FirePolicy.Hand.MAIN)));
+        assertFalse(Rac1FirePolicy.isBlocked(
+                Rac1FirePolicy.evaluate(Rac1GameMode.SURVIVAL, 64, Rac1FirePolicy.Hand.MAIN)));
+        assertFalse(Rac1FirePolicy.isBlocked(
+                Rac1FirePolicy.evaluate(Rac1GameMode.ADVENTURE, 64, Rac1FirePolicy.Hand.MAIN)));
+    }
 }
