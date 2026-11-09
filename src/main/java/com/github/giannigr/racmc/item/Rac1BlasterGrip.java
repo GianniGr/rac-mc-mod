@@ -9,7 +9,7 @@ package com.github.giannigr.racmc.item;
  * <h2>The frame of the weapon</h2>
  *
  * <p>The frame of the weapon is the frame of the mesh of the Blaster of the game, as it was
- * imported: the first axis is the side of the weapon, the second axis is up and the third axis
+ * imported: the first axis runs up, the second axis is the side of the weapon and the third axis
  * runs along the bore. The numbers were measured out of the class of the weapon of the disc:
  *
  * <ul>
@@ -38,9 +38,17 @@ package com.github.giannigr.racmc.item;
  *       of the player, turns it by a quarter around the first axis, turns it by half a turn
  *       around the second axis and moves the item by a sixteenth of a block to the side, by an
  *       eighth of a block up and by five eighths of a block back;</li>
- *   <li>the model of the item turns the mesh of the weapon, and the game of blocks moves the cube
- *       of the item by half a block in every direction before it hands the item to the renderer;
- *       the renderer of the Blaster takes that move back, exactly;</li>
+ *   <li>the joint of the arm of the player is turned around the first axis of the model of the
+ *       player and then around the second axis, the way the game of blocks turns it, so the turn
+ *       of the arm around the first axis is the turn of the head around the side axis and the
+ *       turn of the arm around the second axis is the turn of the head around the vertical
+ *       axis;</li>
+ *   <li>the model of the item turns the mesh of the weapon around the first axis, then around the
+ *       second axis and then around the third axis, the way the game of blocks turns the model of
+ *       an item, so the third axis of the turn is turned first;</li>
+ *   <li>the game of blocks moves the cube of the item by half a block in every direction before
+ *       it hands the item to the renderer; the renderer of the Blaster takes that move back,
+ *       exactly;</li>
  *   <li>the renderer of the living entities turns the model of the player around the vertical
  *       axis by the turn of the body of the player, turns it around the vertical axis by a half
  *       turn and turns it upside down, and moves it down by 1.501 blocks.</li>
@@ -62,6 +70,24 @@ public final class Rac1BlasterGrip {
 
     /** The place of the mouth of the barrel, along the third axis of the mesh. */
     public static final double MUZZLE_Z = 0.6335;
+
+    /** The smallest place of the mesh of the weapon along the first axis, which runs up. */
+    public static final double MESH_MIN_X = -0.1830;
+
+    /** The greatest place of the mesh of the weapon along the first axis. */
+    public static final double MESH_MAX_X = 0.5272;
+
+    /** The smallest place of the mesh of the weapon along the second axis, the side. */
+    public static final double MESH_MIN_Y = -0.1661;
+
+    /** The greatest place of the mesh of the weapon along the second axis. */
+    public static final double MESH_MAX_Y = 0.1438;
+
+    /** The smallest place of the mesh of the weapon along the third axis, the bore. */
+    public static final double MESH_MIN_Z = -0.1031;
+
+    /** The greatest place of the mesh of the weapon along the third axis. */
+    public static final double MESH_MAX_Z = 0.6335;
 
     /** The place of the joint of the arm of the player, along the first axis of the model. */
     public static final double ARM_JOINT_X = -5.0 / 16.0;
@@ -89,15 +115,31 @@ public final class Rac1BlasterGrip {
      *
      * <p>The turn is around the first axis, then around the second axis and then around the third
      * axis, the way the game of blocks turns the model of an item. With this turn the bore of the
-     * weapon points into the direction the player looks at.
+     * weapon points into the direction the player looks at and the weapon stands upright: the up
+     * axis of the weapon points into the direction of the sky while the player looks ahead.
      */
-    public static final double[] THIRD_PERSON_ROTATION = { -90.0, 0.0, 0.0 };
+    public static final double[] THIRD_PERSON_ROTATION = { -90.0, 0.0, -90.0 };
 
-    /** The turn of the model of the item in the first person, in degrees. */
-    public static final double[] FIRST_PERSON_ROTATION = { 0.0, 180.0, 0.0 };
+    /**
+     * The turn of the model of the item in the first person, in degrees.
+     *
+     * <p>The turn is around the first axis, then around the second axis and then around the third
+     * axis, the way the game of blocks turns the model of an item. With this turn the bore of the
+     * weapon points away from the eye of the player, into the screen, and the up axis of the
+     * weapon points up, into the screen.
+     */
+    public static final double[] FIRST_PERSON_ROTATION = { 0.0, 180.0, 90.0 };
 
-    /** The turn of the model of the item in the lists of the game, in degrees. */
-    public static final double[] GUI_ROTATION = { 0.0, 90.0, 0.0 };
+    /**
+     * The turn of the model of the item in the lists of the game, in degrees.
+     *
+     * <p>The turn is around the first axis, then around the second axis and then around the third
+     * axis, the way the game of blocks turns the model of an item. With this turn the up axis of
+     * the weapon runs up in the list and the bore of the weapon runs to the right and a little
+     * towards the player, so the picture of the weapon in the lists is the weapon seen from the
+     * side and not the weapon seen from above.
+     */
+    public static final double[] GUI_ROTATION = { 0.0, 60.0, 90.0 };
 
     private Rac1BlasterGrip() {
         throw new UnsupportedOperationException("Utility class");
@@ -167,27 +209,17 @@ public final class Rac1BlasterGrip {
      * The turns of the arm of the player that point the bore of the weapon at the place the
      * player looks at.
      *
-     * <p>The arm of the player hangs at the side of his body and the bore of the weapon stands
-     * across the arm, so the turn of the arm around the first axis of the model is the turn of
-     * the bore up and down and the turn of the arm around the second axis is the turn of the bore
-     * from one side to the other. The head of the player may be turned away from the body, so the
-     * two turns are needed to point the weapon at the place the player looks at.
+     * <p>The game of blocks turns the joint of the arm of the player around the first axis of the
+     * model of the player and then around the second axis, so the turn of the arm around the first
+     * axis is the turn of the head around the side axis and the turn of the arm around the second
+     * axis is the turn of the head around the vertical axis. The turn of the head around the body
+     * of the player is enough, because the head of the player may be turned away from the body.
      *
      * @param look the look of the player
      * @return the turns of the arm of the player
      */
     public static ArmTurn aim(Look look) {
-        double turn = Math.toRadians(look.headYaw());
-        double pitch = Math.toRadians(look.headPitch());
-        // The place the player looks at, in the frame of the model of the player. The second axis
-        // of the model points down, so the turn of the head around the side axis is positive when
-        // the player looks down.
-        double x = -Math.cos(pitch) * Math.sin(turn);
-        double y = Math.sin(pitch);
-        double z = -Math.cos(pitch) * Math.cos(turn);
-        double armY = -Math.toDegrees(Math.asin(Math.max(-1.0, Math.min(1.0, x))));
-        double armX = Math.toDegrees(Math.atan2(y, -z));
-        return new ArmTurn(armX, armY);
+        return new ArmTurn(look.headPitch(), look.headYaw());
     }
 
     /**
@@ -249,10 +281,12 @@ public final class Rac1BlasterGrip {
      */
     public static double[] inModel(double[] mesh, ArmTurn arm) {
         double[] place = { mesh[0], mesh[1], mesh[2] };
-        // The turn of the model of the item.
-        rotateX(place, THIRD_PERSON_ROTATION[0]);
-        rotateY(place, THIRD_PERSON_ROTATION[1]);
+        // The turn of the model of the item: the game of blocks turns the model around the first
+        // axis, then around the second axis and then around the third axis, so the third axis of
+        // the turn is turned first.
         rotateZ(place, THIRD_PERSON_ROTATION[2]);
+        rotateY(place, THIRD_PERSON_ROTATION[1]);
+        rotateX(place, THIRD_PERSON_ROTATION[0]);
         // The place of the item in the joint of the arm.
         place[0] += ITEM_IN_JOINT_X;
         place[1] += ITEM_IN_JOINT_Y;
@@ -261,10 +295,10 @@ public final class Rac1BlasterGrip {
         // the second axis.
         rotateY(place, 180.0);
         rotateX(place, -90.0);
-        // The turn of the arm of the player.
-        rotateZ(place, 0.0);
-        rotateY(place, arm.y());
+        // The turn of the arm of the player: the game of blocks turns the joint of the arm around
+        // the first axis of the model and then around the second axis.
         rotateX(place, arm.x());
+        rotateY(place, arm.y());
         // The place of the joint of the arm.
         place[0] += ARM_JOINT_X;
         place[1] += ARM_JOINT_Y;
@@ -281,14 +315,20 @@ public final class Rac1BlasterGrip {
      */
     public static double[] inModelDirection(double[] mesh, ArmTurn arm) {
         double[] place = { mesh[0], mesh[1], mesh[2] };
-        rotateX(place, THIRD_PERSON_ROTATION[0]);
-        rotateY(place, THIRD_PERSON_ROTATION[1]);
+        // The turn of the model of the item: the game of blocks turns the model around the first
+        // axis, then around the second axis and then around the third axis, so the third axis of
+        // the turn is turned first.
         rotateZ(place, THIRD_PERSON_ROTATION[2]);
+        rotateY(place, THIRD_PERSON_ROTATION[1]);
+        rotateX(place, THIRD_PERSON_ROTATION[0]);
+        // The turn of the joint of the arm: a quarter around the first axis and half a turn around
+        // the second axis.
         rotateY(place, 180.0);
         rotateX(place, -90.0);
-        rotateZ(place, 0.0);
-        rotateY(place, arm.y());
+        // The turn of the arm of the player: the game of blocks turns the joint of the arm around
+        // the first axis of the model and then around the second axis.
         rotateX(place, arm.x());
+        rotateY(place, arm.y());
         return place;
     }
 

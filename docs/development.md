@@ -464,7 +464,13 @@ of the source of the version 1.21.1 with NeoForge 21.1.265:
    quarter around the first axis and by half a turn around the second axis, and moves the item by
    a sixteenth of a block to the side, by an eighth of a block up and by five eighths of a block
    back.
-3. The model of the item turns the mesh of the weapon.
+3. The joint of the arm of the player is turned around the first axis of the model of the player
+   and then around the second axis, the way the game of blocks turns it, so the turn of the arm
+   around the first axis is the turn of the head around the side axis and the turn of the arm
+   around the second axis is the turn of the head around the vertical axis.
+4. The model of the item turns the mesh of the weapon around the first axis, then around the
+   second axis and then around the third axis, the way the game of blocks turns the model of an
+   item, so the third axis of the turn is turned first.
 
 The class `Rac1BlasterGrip` holds the numbers and the arithmetic of that chain, and it holds no
 Minecraft types, so the place of the mouth can be checked on a plain virtual machine. The tests
@@ -521,13 +527,15 @@ the game back, exactly, before it draws anything: the two moves cancel each othe
 places of the mesh of the weapon are the places of the game. There is no size in the moves, so
 nothing of the size of the weapon is changed by them.
 
-Out of that chain the frame of the item follows: in the third person the item is held by the
-joint of the arm of the player, the game turns that joint by a quarter around the first axis and
-by half a turn around the second axis, and the first axis of the item is the side of the
-player, the second axis is the direction he looks at and the third axis points down. The turn of
-the model of the item turns the mouth of the weapon into the second axis of the item, so that the
-weapon points into the direction the player looks at, and the point of the game that holds the
-weapon stays in the hand of the player.
+Out of that chain the frame of the item follows. The frame of the mesh of the weapon is the frame
+it was imported with: the first axis runs up, the second axis is the side of the weapon and the
+third axis runs along the bore. In the third person the item is held by the joint of the arm of
+the player, the game turns that joint by a quarter around the first axis and by half a turn
+around the second axis, and the model of the item is then turned by a quarter around the first
+axis and by a quarter around the third axis. With that turn the bore of the weapon runs into the
+direction the player looks at and the up axis of the weapon runs up, so the weapon stands upright
+in the hand of the player, and the point of the game that holds the weapon stays in the hand of
+the player.
 
 The first person and the third person have their own turns, because the item space of the
 first person is the space of the camera of the player and the item space of the third person is
@@ -537,9 +545,11 @@ weapon in the hand and the place of the mouth of the weapon stay the same on the
 the game.
 
 The picture in the lists of the game is fitted on its own: the item space of the lists of the
-game is the space of the camera of the first person, so the picture of the weapon is turned
-there and is scaled up, and it is put in the middle of the place of the picture, so that the
-whole weapon is seen in the place of the list.
+game is the space of the camera of the first person, so the picture of the weapon is turned there
+so that its up axis runs up and its bore runs to the right and a little towards the player - the
+weapon seen from the side and not the weapon seen from above. The picture is scaled on every axis
+by the same number, so that the weapon keeps its shape, and it is put in the middle of the place
+of the picture, so that the whole weapon is seen in the place of the list.
 
 The sizes of the first person and of the lists are a provisional reference and not a canonical
 one: they were looked at in the game and they are open to the review of the owner of the
@@ -565,6 +575,14 @@ is held.
 - The weapon is drawn with the imported geometry, which includes a wide and flat part around the
   middle of the weapon. The picture of the weapon in the lists of the game is therefore a long
   and flat shape, the shape of the weapon of the game.
+- The first person draws the weapon with the turns of the first person, and the mouth of the
+  weapon is drawn at the lower right of the screen there, while the arrows leave the weapon from
+  the place of the mouth of the third person, which is the place of the hand of the player in the
+  world. The two are not the same place on the screen, so a shot of the first person is seen to
+  leave the weapon near the body of the player. The turns of the first person are a turn of the
+  picture only: they do not touch the place of the mouth on the server, which is the place of the
+  third person. Bringing the two together is a change of the first person alone, and it is not
+  done yet. Nothing is measured about the place the arrow leaves from.
 - Only the right hand is fitted. The left hand falls back to the transforms of the right hand,
   and the weapon of the left hand is drawn as well.
 - The sound of the weapon is the click of the lever of the game. No sound of the game of Ratchet &
@@ -619,7 +637,7 @@ ModDevGradle's NeoForge aware unit test support is enabled (`neoForge { unitTest
 so the test source set has the mod and the Minecraft classes on its classpath and tests can use
 Minecraft types directly.
 
-Forty-one focused test classes exist today:
+Forty-two focused test classes exist today:
 
 - `ModBootstrapMetadataTest` verifies that the mod id, mod name and mod version are identical in
   `gradle.properties`, in the generated `META-INF/neoforge.mods.toml` and in `RacMcConstants`, and
@@ -678,11 +696,18 @@ Forty-one focused test classes exist today:
   leaving of the player.
 - `Rac1ArrowLifetimeTest` verifies the life of the arrows of the Blaster: the arrows fly for
   twelve ticks, they live while they fly and they are removed when their flight is over.
-- `Rac1BlasterGripTest` verifies the place the weapon of the game is held at: the place of the
-  item in the joint of the arm of the player is the place of the chain of the game of blocks, the
-  axes of the item follow the arm of the player, the mouth of the weapon is in front of the hand
-  of the player, and the weapon points into the direction the player looks at and tilts with the
-  arm of the player.
+- `Rac1BlasterGripTest` verifies the place the weapon of the game is held at and the way it
+  stands in the hand: the checks replay the chain of the transforms of the game of blocks with
+  the classes of the game itself - the joint of the arm of the model of the player and the turn
+  of the model of an item - and compare the mouth of the weapon and the bore of the weapon with
+  the contract, and they check that the weapon stands upright in the third person and in the
+  first person, with a turn of the head and a turn of the head around the side axis that are both
+  away from the zero.
+- `Rac1BlasterGuiTest` verifies the picture of the weapon in the lists of the game: it reads the
+  transform of the model of the item out of the file of the mod and applies it with the class of
+  the game, and it checks that the up axis of the weapon runs up in the lists, that the bore of
+  the weapon runs to the right and towards the player, that the picture keeps the shape of the
+  weapon, that it fits into its place and that it stands in the middle of its place.
 - `Rac1BlasterAnimationTest` verifies the animation of the weapon: the blend takes two to three
   ticks, the cycle of the shot is half a second long and holds five shots, the weapon is blended
   into the shot once for a burst, a burst of many shots does not stutter it, and it is blended
