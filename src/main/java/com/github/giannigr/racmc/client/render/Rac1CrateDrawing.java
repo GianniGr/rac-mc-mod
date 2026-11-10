@@ -91,6 +91,32 @@ public final class Rac1CrateDrawing {
     }
 
     /**
+     * Draws a crate of the game at the place of the entity that carries it.
+     *
+     * <p>The origin of the entity that falls is the middle of the ground of the place the crate
+     * was at, and the origin of the crate of the game is the middle of its own width and at its
+     * feet as well, so the crate is drawn where it was without being moved.
+     *
+     * @param pose the place of the crate
+     * @param buffers the buffers the triangles are written into
+     * @param crate the crate of the game
+     * @param textures the place of the texture of every material
+     * @param light the light the crate is drawn with
+     */
+    public static void drawAtOrigin(PoseStack pose, MultiBufferSource buffers,
+                                     Rac1CrateAsset crate, ResourceLocation[] textures, int light) {
+        Rac1CrateFit.Place place = Rac1CrateFit.place(crate.mesh());
+        pose.pushPose();
+        try {
+            pose.scale(place.scale(), place.scale(), place.scale());
+            pose.translate(place.offsetX(), place.offsetY(), place.offsetZ());
+            Rac1MeshRenderer.render(pose, buffers, crate.mesh(), textures, light, closes(buffers));
+        } finally {
+            pose.popPose();
+        }
+    }
+
+    /**
      * Whether the runs of the triangles can be closed in the given buffers.
      *
      * @param buffers the buffers the triangles are written into

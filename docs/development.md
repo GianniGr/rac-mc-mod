@@ -822,10 +822,33 @@ a block is made smaller.
 - A crate is broken with a bare hand in as long as a plank of the game of blocks: the hardness of
   the block is two and its sound is the sound of the wood, and the block does not ask for the right
   tool.
+- A crate falls like the sand of the game of blocks. The block of a crate is a falling block of
+  the game of blocks, so it falls when the block under it is gone, it comes to rest on the first
+  block under it, and a stack of crates falls one after the other, because every crate that comes
+  to rest schedules the fall of the crate above it. The fall is the fall of the game of blocks, so
+  the crate is carried by the falling block of the game of blocks and it keeps the physics of the
+  game of blocks.
+- The falling block of the game of blocks drops an item when it cannot come to rest. The crates
+  drop nothing, so that drop is switched off; the crate itself still comes to rest.
+- The crate comes to rest as a block with its block entity again, because the block of a crate
+  makes its block entity when it is placed.
 - The crates are in the tab of the creative mode of the mod, next to the Blaster.
 - The blocks and their block entities hold no types of the client, so a dedicated server starts
   with them. The renderer of the crates draws nothing when the assets of the game are not in the
   cache, so a client without the cache of the assets still plays and only sees no crate.
+
+### The drawing of a falling crate
+
+The falling block of the game of blocks is drawn by the renderer of the game of blocks, which
+draws the model of the block that falls. The crate of the game has no model: it is drawn by the
+renderer of its block entity. The renderer of the falling block is therefore replaced by one that
+draws the crate of the game with the mesh and the textures of the crate and hands every other
+falling block to the renderer of the game of blocks, so that the sand and the gravel of the game
+of blocks are still drawn by the game of blocks.
+
+The origin of the entity that falls is the middle of the ground of the place the crate was at, and
+the origin of the crate of the game is the middle of its own width and at its feet, so the crate is
+drawn where it was, without being moved.
 
 ### The drawing of a crate
 
@@ -904,7 +927,7 @@ ModDevGradle's NeoForge aware unit test support is enabled (`neoForge { unitTest
 so the test source set has the mod and the Minecraft classes on its classpath and tests can use
 Minecraft types directly.
 
-Fifty-six focused test classes exist today:
+Fifty-seven focused test classes exist today:
 
 - `ModBootstrapMetadataTest` verifies that the mod id, mod name and mod version are identical in
   `gradle.properties`, in the generated `META-INF/neoforge.mods.toml` and in `RacMcConstants`, and
@@ -1155,6 +1178,12 @@ Fifty-six focused test classes exist today:
   blocks, the cube of the item is moved by half a block in every direction the way the game of
   blocks moves it, and the crate has to end up in the same place as a block of the game of blocks
   in every place the item is drawn at and in both hands.
+- `Rac1CrateFallTest` verifies the fall of the crates: the block of a crate is a falling block of
+  the game of blocks and it is a fallable block, it has a block entity so that it is made again
+  when it comes to rest, it writes no fall of its own, the rule of the block under it is the rule
+  of the game of blocks, a falling crate drops nothing but still comes to rest, the renderer of
+  the falling block draws the crate of the game and hands every other block to the game of blocks,
+  and the crate is drawn where it stands while it falls.
 - `Rac1CrateAssetsTest` verifies the files of the crates in the resources of the mod: every crate
   has the file of the states of its block, the model of its block and the model of its item, the
   model of the item is the model of an item with a renderer of its own, it names a turn, a place
@@ -1165,7 +1194,7 @@ Fifty-six focused test classes exist today:
   the files of the crates are written without a byte order mark, or the game of blocks cannot read
   them.
 
-The suite currently contains 424 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
+The suite currently contains 432 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in
 `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in
 `Rac1MediaManagerTest`, 8 in `Rac1MediaGateTest`, 8 in `WadDecoderTest`, 5 in `TieClassReaderTest`,
@@ -1177,7 +1206,8 @@ The suite currently contains 424 tests: 7 in `ModBootstrapMetadataTest`, 2 in `M
 `Rac1AssetCacheManagerTest`, 10 in `Rac1ScreenLayoutTest`, 18 in
 `RealDiscAssetTest`, 3 in `DiscFactsDiagnosticTest`, 2 in `RealDiscCrateTest`, 5 in
 `Rac1CratesTest`, 6 in `Rac1CrateFitTest`, 8 in `Rac1CrateAssetsTest`, 3 in
-`Rac1CrateItemTransformTest` and 1 in `RealDiscImageTest`. 399 of them pass,
+`Rac1CrateItemTransformTest`, 8 in `Rac1CrateFallTest` and 1 in `RealDiscImageTest`.
+407 of them pass,
 and twenty-five of them are skipped unless they are asked for: the twenty-four opt-in checks of a
 real disc image and the check of the cleanup of the staging files, which needs a system that can
 build a symbolic link.

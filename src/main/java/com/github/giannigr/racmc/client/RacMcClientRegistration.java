@@ -6,6 +6,7 @@ import com.github.giannigr.racmc.client.render.BlasterItemRenderer;
 import com.github.giannigr.racmc.client.render.Rac1BlasterArrowRenderer;
 import com.github.giannigr.racmc.client.render.Rac1CrateItemRenderer;
 import com.github.giannigr.racmc.client.render.Rac1CrateRenderer;
+import com.github.giannigr.racmc.client.render.Rac1FallingBlockRenderer;
 import com.github.giannigr.racmc.item.RacMcEntities;
 import com.github.giannigr.racmc.item.RacMcItems;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -17,7 +18,9 @@ import net.minecraft.client.model.geom.EntityModelSet;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.BlockItem;
@@ -71,6 +74,12 @@ public final class RacMcClientRegistration {
         event.registerEntityRenderer(RacMcEntities.BLASTER_ARROW.get(),
                 Rac1BlasterArrowRenderer::new);
         event.registerBlockEntityRenderer(RacMcBlockEntities.CRATE.get(), Rac1CrateRenderer::new);
+        // The crates of the game fall like the sand of the game of blocks, so they are carried
+        // by the falling block of the game of blocks. Its renderer draws the model of the block
+        // that falls, and the crate of the game has no model, so the renderer is replaced by one
+        // that draws the crate of the game and hands every other block to the game of blocks.
+        event.registerEntityRenderer(EntityType.FALLING_BLOCK,
+                Rac1FallingBlockRenderer::new);
     }
 
     /**

@@ -153,8 +153,8 @@ class Rac1CrateAssetsTest {
     @DisplayName("The crate is broken in as long as a plank of the game of blocks")
     void theCrateIsBrokenLikeAPlank() {
         String body = ModSource.methodOf(
-                ModSource.of("com/github/giannigr/racmc/block/RacMcBlocks.java"),
-                "private static BlockBehaviour.Properties properties(");
+                ModSource.of("com/github/giannigr/racmc/block/Rac1CrateBlock.java"),
+                "public static Properties properties(");
 
         // The hardness of the planks of the game of blocks is two, and the sound of the planks
         // is the sound of the wood. The block of a crate uses the same values, so that a crate

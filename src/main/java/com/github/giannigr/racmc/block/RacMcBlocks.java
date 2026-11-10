@@ -7,9 +7,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.SoundType;
-import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.minecraft.world.level.material.MapColor;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -40,7 +37,7 @@ public final class RacMcBlocks {
         for (Rac1CrateDefinition definition : Rac1Crates.definitions()) {
             CRATES.put(definition.key(), BLOCKS.registerBlock(definition.key(),
                     properties -> new Rac1CrateBlock(definition, properties),
-                    properties(definition)));
+                    Rac1CrateBlock.properties(definition)));
         }
     }
 
@@ -84,44 +81,6 @@ public final class RacMcBlocks {
             blocks[index++] = holder.get();
         }
         return blocks;
-    }
-
-    /**
-     * The properties of the block of a crate.
-     *
-     * <p>The crate of the game fills its block, so the block of the crate is a solid block. The
-     * block does not hide the faces of the blocks around it, because it draws nothing itself:
-     * the crate of the game is drawn by the renderer of the block entity.
-     *
-     * <p>The hardness and the sound of the block are the ones of the planks of the game of
-     * blocks: a crate is broken with a bare hand in as long as a plank is, and it sounds like
-     * wood. The block does not ask for the right tool, so a bare hand breaks it in the time of
-     * a plank of the game of blocks.
-     *
-     * @param definition the description of the crate
-     * @return the properties of the block
-     */
-    private static BlockBehaviour.Properties properties(Rac1CrateDefinition definition) {
-        return BlockBehaviour.Properties.of()
-                .mapColor(color(definition))
-                .noOcclusion()
-                .strength(2.0F, 3.0F)
-                .sound(SoundType.WOOD);
-    }
-
-    /**
-     * The colour of a crate on the map of the game of blocks.
-     *
-     * @param definition the description of the crate
-     * @return the colour
-     */
-    private static MapColor color(Rac1CrateDefinition definition) {
-        return switch (definition.key()) {
-            case "health_crate" -> MapColor.COLOR_BLUE;
-            case "ammo_crate" -> MapColor.COLOR_GRAY;
-            case "explosive_crate" -> MapColor.COLOR_RED;
-            default -> MapColor.COLOR_BROWN;
-        };
     }
 
     /**
