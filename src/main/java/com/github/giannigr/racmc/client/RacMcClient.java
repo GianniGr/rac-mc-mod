@@ -29,6 +29,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.player.Input;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.neoforged.api.distmarker.Dist;
@@ -39,6 +40,7 @@ import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.MovementInputUpdateEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.RenderLivingEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 
@@ -350,7 +352,21 @@ public final class RacMcClient {
     }
 
     /**
-     * Keeps the speed of a player that holds the trigger of the Blaster.
+     * Remembers the matrices of the frame of the world that is drawn.
+     *
+     * <p>The event is fired after the world is drawn and right before the hand of the player is
+     * drawn, so that the matrices are the matrices of the frame that is drawn.
+     *
+     * @param event the event that is fired after the world is drawn
+     */
+    @SubscribeEvent
+    public static void onRenderLevelStage(RenderLevelStageEvent event) {
+        Rac1BlasterFrame.capture(event);
+    }
+
+    /**
+     * Keeps the speed of a player that holds the trigger of the Blaster and lets the player
+     * sprint while the weapon is fired.
      *
      * <p>The game of blocks slows a player down that uses an item: it keeps a fifth of the input
      * of the keyboard, the way it does for the bow. The Blaster is not a bow, so the share that
@@ -361,17 +377,28 @@ public final class RacMcClient {
      * away. Only the Blaster is treated this way: every other item keeps the share of the game
      * of blocks.
      *
+     * <p>The game of blocks refuses every player that uses an item the right to start to sprint,
+     * and the Blaster is held with the trigger. The sprint of the player is therefore started
+     * here, with the rules of the game of blocks and with the use of the item as the only rule
+     * that is put aside.
+     *
      * @param event the event of the update of the input of the movement
      */
     @SubscribeEvent
     public static void onMovementInputUpdate(MovementInputUpdateEvent event) {
         Player player = event.getEntity();
-        if (!Rac1BlasterClient.isFiring(player) || player.isPassenger()) {
+        if (!(player instanceof LocalPlayer local)) {
+            return;
+        }
+        Input input = event.getInput();
+        // The sprint is looked at before the share of the game of blocks is put back, so that the
+        // share of the keyboard is the share of the game of blocks.
+        Rac1BlasterClient.sprint(local, input);
+        if (!Rac1BlasterClient.isFiring(local) || local.isPassenger()) {
             // The player does not fire the Blaster with the main hand, or the player rides: the
             // game of blocks does not slow such a player down either.
             return;
         }
-        Input input = event.getInput();
         input.leftImpulse = Rac1BlasterMovement.compensate(input.leftImpulse);
         input.forwardImpulse = Rac1BlasterMovement.compensate(input.forwardImpulse);
     }

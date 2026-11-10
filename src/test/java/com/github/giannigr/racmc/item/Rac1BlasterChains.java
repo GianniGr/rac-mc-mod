@@ -1,11 +1,13 @@
 package com.github.giannigr.racmc.item;
 
+import com.github.giannigr.racmc.client.Rac1BlasterHand;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.renderer.block.model.ItemTransform;
+import net.minecraft.world.entity.HumanoidArm;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
@@ -26,9 +28,6 @@ final class Rac1BlasterChains {
 
     /** The up axis of the mesh of the weapon. */
     static final Vector3f UP = new Vector3f(1.0f, 0.0f, 0.0f);
-
-    /** The place of the hand of the player in the first person. */
-    private static final float[] FIRST_HAND = { 0.56f, -0.52f, -0.72f };
 
     private Rac1BlasterChains() {
         throw new UnsupportedOperationException("Utility class");
@@ -88,20 +87,30 @@ final class Rac1BlasterChains {
     /**
      * The chain of the transforms of the game of blocks in the first person.
      *
+     * <p>The chain is the chain of the game of blocks: the hand of the player is moved to the
+     * place of the hand of the player, the turn of the model of the item is applied and the cube
+     * of the item of the game of blocks is moved and moved back.
+     *
+     * <p>The place of the hand of the player is the place the renderer of the Blaster gives to the
+     * weapon, so that the weapon does not move while it is fired.
+     *
      * @param rotation the turn of the model of the item, in degrees
      * @param translation the move of the model of the item, in blocks
      * @param scale the size of the model of the item
+     * @param using whether the weapon is used with the main hand
      * @return the stack of the poses of the game
      */
-    static PoseStack firstPerson(double[] rotation, double[] translation, double[] scale) {
+    static PoseStack firstPerson(double[] rotation, double[] translation, double[] scale,
+            boolean using) {
         PoseStack chain = new PoseStack();
         chain.setIdentity();
-        chain.translate(FIRST_HAND[0], FIRST_HAND[1], FIRST_HAND[2]);
+        Rac1BlasterHand.apply(chain, HumanoidArm.RIGHT, using, 0.0f);
         ItemTransform transform = new ItemTransform(
                 new Vector3f((float) rotation[0], (float) rotation[1], (float) rotation[2]),
                 new Vector3f((float) translation[0], (float) translation[1], (float) translation[2]),
                 new Vector3f((float) scale[0], (float) scale[1], (float) scale[2]));
         transform.apply(false, chain);
+        // The cube of the item of the game of blocks, and the move back of the renderer.
         chain.translate(-0.5f, -0.5f, -0.5f);
         chain.translate(0.5f, 0.5f, 0.5f);
         return chain;
@@ -142,27 +151,44 @@ final class Rac1BlasterChains {
      *
      * @param world the place in the world
      * @param eyeHeight the height of the eyes of the player above the place of his feet
+     * @param yaw the turn of the head of the player around the vertical axis, in degrees
+     * @param pitch the turn of the head of the player around the side axis, in degrees
      * @return the place in the space of the camera
      */
-    static double[] toCamera(Vector3f world, double eyeHeight) {
-        double[] look = { 0.0, 0.0, 1.0 };
+    static double[] toCamera(Vector3f world, double eyeHeight, double yaw, double pitch) {
+        double turn = Math.toRadians(yaw);
+        double tilt = Math.toRadians(pitch);
+        double[] forward = { -Math.sin(turn) * Math.cos(tilt), -Math.sin(tilt),
+                Math.cos(turn) * Math.cos(tilt) };
+        double[] right = { -Math.cos(turn), 0.0, -Math.sin(turn) };
+        double[] up = { -Math.sin(turn) * Math.sin(tilt), Math.cos(tilt),
+                Math.cos(turn) * Math.sin(tilt) };
         double[] relative = { world.x, world.y - eyeHeight, world.z };
-        double[] right = normalize(cross(look, new double[] { 0.0, 1.0, 0.0 }));
-        double[] up = cross(right, look);
-        return new double[] { dot(relative, right), dot(relative, up), -dot(relative, look) };
+        return new double[] { dot(relative, right), dot(relative, up), -dot(relative, forward) };
     }
 
-    private static double[] cross(double[] a, double[] b) {
-        return new double[] { a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2],
-                a[0] * b[1] - a[1] * b[0] };
+    /**
+     * The place of a point of the screen, out of the place of the camera.
+     *
+     * <p>The place is the place of the point of the screen, with the middle of the screen at the
+     * place zero and the edges of the screen at the places one and minus one.
+     *
+     * @param camera the place in the space of the camera
+     * @param fov the angle of the sight of the camera, in degrees
+     * @param aspect the width of the screen over its height
+     * @return the place on the screen
+     */
+    static double[] toScreen(double[] camera, double fov, double aspect) {
+        double height = Math.tan(Math.toRadians(fov / 2.0));
+        double width = height * aspect;
+        double depth = -camera[2];
+        if (depth <= 0.0) {
+            return null;
+        }
+        return new double[] { camera[0] / depth / width, camera[1] / depth / height };
     }
 
     private static double dot(double[] a, double[] b) {
         return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-    }
-
-    private static double[] normalize(double[] a) {
-        double length = Math.sqrt(dot(a, a));
-        return new double[] { a[0] / length, a[1] / length, a[2] / length };
     }
 }

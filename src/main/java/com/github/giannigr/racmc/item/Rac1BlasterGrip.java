@@ -117,8 +117,15 @@ public final class Rac1BlasterGrip {
      * axis, the way the game of blocks turns the model of an item. With this turn the bore of the
      * weapon points into the direction the player looks at and the weapon stands upright: the up
      * axis of the weapon points into the direction of the sky while the player looks ahead.
+     *
+     * <p>The turn is the turn of the weapon in the hand of a player whose arm is raised to aim.
+     * The arm of the player is raised by the pose of the aim, and the turn of the model of the
+     * item keeps the weapon pointing into the direction the player looks at while the arm is
+     * raised. The turn of the model of the item is the same for the player that only holds the
+     * weapon: with the arm of the player hanging at the side of his body, the weapon points down
+     * along the arm.
      */
-    public static final double[] THIRD_PERSON_ROTATION = { -90.0, 0.0, -90.0 };
+    public static final double[] THIRD_PERSON_ROTATION = { 180.0, 0.0, -90.0 };
 
     /**
      * The turn of the model of the item in the first person, in degrees.
@@ -129,6 +136,25 @@ public final class Rac1BlasterGrip {
      * weapon points up, into the screen.
      */
     public static final double[] FIRST_PERSON_ROTATION = { 0.0, 180.0, 90.0 };
+
+    /**
+     * The size of the weapon in the first person, as a share of its size in the game.
+     *
+     * <p>The size is a provisional reference and not a canonical one: it was looked at in the game
+     * and it is open to the review of the owner of the project. The size of the weapon in the
+     * world is the size of the game.
+     */
+    public static final double FIRST_PERSON_SCALE = 0.55;
+
+    /**
+     * The place of the hand of the player in the first person, in blocks.
+     *
+     * <p>The place is the place the game of blocks puts the hand of the player in: five hundred
+     * and sixty thousandths of a block to the side, five hundred and twenty thousandths of a
+     * block down and seven hundred and twenty thousandths of a block in front of the eye of the
+     * player.
+     */
+    public static final double[] FIRST_PERSON_HAND = { 0.56, -0.52, -0.72 };
 
     /**
      * The turn of the model of the item in the lists of the game, in degrees.
@@ -142,46 +168,6 @@ public final class Rac1BlasterGrip {
     public static final double[] GUI_ROTATION = { 0.0, 60.0, 90.0 };
 
     /**
-     * The turn of the weapon in the third person while the weapon is only held, in degrees.
-     *
-     * <p>The turn is around the side of the weapon, in the frame of the model of the item. The
-     * game of blocks holds an item in the hand with the arm of the player hanging at the side of
-     * his body, and the weapon of the game stands in that hand with its bore along the arm. The
-     * turn was measured out of the chain of the transforms of the game of blocks: with it the bore
-     * of the weapon points down along the arm of the player, and the weapon follows the arm of
-     * the player while he walks.
-     *
-     * <p>The turn is only used while the weapon is not fired. The pose of the aim is the pose of
-     * the arm of the game of blocks and is not touched by this turn.
-     */
-    public static final double IDLE_ROTATION = -90.0;
-
-    /**
-     * The move of the drawn weapon in the first person, in blocks.
-     *
-     * <p>The move is the place of the drawn mouth of the weapon in the space of the camera, less
-     * the place of the true mouth of the weapon in the space of the camera. The true mouth is the
-     * place the shot of the weapon really leaves from, and it is the place the mouth of the
-     * weapon is drawn at in the third person. With this move the drawn mouth of the weapon stands
-     * at the place the shot of the weapon really leaves from, so that a shot of the weapon leaves
-     * the drawn weapon and not the empty air beside it.
-     *
-     * <p>The move is a move of the picture of the weapon only: the shot of the weapon still
-     * leaves the mouth of the weapon in the third person, and the shot still flies along the place
-     * the player looks at.
-     */
-    public static final double[] FIRST_PERSON_MOVE = { -0.198500, -0.245275, 0.309925 };
-
-    /**
-     * The greatest move of the drawn weapon in the first person, in blocks.
-     *
-     * <p>The move of the picture of the weapon is small: the picture of the weapon in the first
-     * person is a picture, and it may not be moved far away from the place the mouth of the
-     * weapon really is.
-     */
-    public static final double FIRST_PERSON_MOVE_LIMIT = 0.35;
-
-    /**
      * The greatest place of the mouth of the weapon from the eye of the player, in blocks.
      *
      * <p>The mouth of the weapon may not be drawn behind the eye of the player and not far away
@@ -189,6 +175,16 @@ public final class Rac1BlasterGrip {
      * of the player.
      */
     public static final double FIRST_PERSON_MOUTH_RANGE = 2.0;
+
+    /**
+     * The place of the mouth of the drawn weapon in the space of the camera, in blocks.
+     *
+     * <p>The mouth of the drawn weapon is drawn at the place of the screen where the mouth of the
+     * weapon in the world is drawn, and the depth of the mouth of the drawn weapon is the depth
+     * the game of blocks gives it, so that the size of the weapon on the screen and the
+     * perspective of the weapon do not change.
+     */
+    public static final double FIRST_PERSON_MOUTH_DEPTH = 1.068;
 
     private Rac1BlasterGrip() {
         throw new UnsupportedOperationException("Utility class");
@@ -264,11 +260,16 @@ public final class Rac1BlasterGrip {
      * axis is the turn of the head around the vertical axis. The turn of the head around the body
      * of the player is enough, because the head of the player may be turned away from the body.
      *
+     * <p>The arm of the player is raised to aim: the turn of the arm around the first axis is a
+     * quarter of a turn less than the turn of the head around the side axis, so that the arm of
+     * the player points forward while the player looks ahead and follows the head of the player
+     * when the head is tilted.
+     *
      * @param look the look of the player
      * @return the turns of the arm of the player
      */
     public static ArmTurn aim(Look look) {
-        return new ArmTurn(look.headPitch(), look.headYaw());
+        return new ArmTurn(look.headPitch() - 90.0, look.headYaw());
     }
 
     /**

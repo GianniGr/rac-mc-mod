@@ -153,10 +153,10 @@ class Rac1BlasterGripTest {
                 "The mouth of the weapon has to stand at the right hand of the player");
         // The mouth of the weapon stands in front of the player.
         assertTrue(mouth.z() > 0.0, "The mouth of the weapon has to stand in front of the player");
-        // The mouth of the weapon stands at the height of the hand of the player, which is a little
-        // below the hips of the player and not at the height of his eyes.
-        assertTrue(mouth.y() > 0.5 && mouth.y() < 1.0,
-                "The mouth of the weapon has to stand at the height of the hand of the player");
+        // The mouth of the weapon stands at the height of the eyes of the player, because the arm
+        // of the player is raised to aim while the weapon is fired.
+        assertTrue(mouth.y() > 1.4 && mouth.y() < 1.9,
+                "The mouth of the weapon has to stand at the height of the eyes of the player");
     }
 
     @Test
@@ -201,12 +201,12 @@ class Rac1BlasterGripTest {
     @Test
     @DisplayName("The socket of the weapon is at the hand of the player")
     void socketIsAtTheHandOfThePlayer() {
-        // The arm of the player hangs at the side of his body and the item of the game of blocks
-        // is held in the hand at the end of the arm.
+        // The arm of the player is raised to aim while the weapon is fired, and the item of the
+        // game of blocks is held in the hand at the end of the arm.
         Rac1BlasterGrip.Look look = new Rac1BlasterGrip.Look(0.0, 0.0, 0.0);
         Rac1BlasterGrip.Point socket = Rac1BlasterGrip.grip(0.0, 0.0, 0.0, look);
-        assertTrue(socket.y() > 0.5 && socket.y() < 1.0,
-                "The socket of the weapon has to stand at the height of the hand of the player");
+        assertTrue(socket.y() > 1.4 && socket.y() < 1.9,
+                "The socket of the weapon has to stand at the height of the eyes of the player");
         assertTrue(socket.z() > 0.0, "The socket of the weapon has to stand in front of the player");
         assertTrue(socket.x() < 0.0, "The socket of the weapon has to stand at the right hand");
     }

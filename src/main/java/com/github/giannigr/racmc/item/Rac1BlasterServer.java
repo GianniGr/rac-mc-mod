@@ -10,7 +10,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
-import net.minecraft.world.entity.projectile.Arrow;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
@@ -37,6 +36,10 @@ import net.minecraft.world.phys.Vec3;
  * <p>The arrows of the Blaster are the arrows of the game. They are marked in the data of the
  * entity, so that only they are removed after {@link Rac1ArrowLifetime#LIFETIME_TICKS} ticks. The
  * arrows of the game keep their own life, and the life of the arrows of the game is not touched.
+ *
+ * <p>The arrow of the Blaster is a kind of arrow of its own: it flies straight, without the fall
+ * of the arrows of the game, and every client knows which arrows the Blaster fired. The arrows of
+ * the bow, of the crossbow and of the other mods keep their own kind and their own fall.
  */
 public final class Rac1BlasterServer {
 
@@ -242,7 +245,7 @@ public final class Rac1BlasterServer {
      */
     private static boolean fire(Level level, Player player, Rac1BurstState state, long now,
                                 boolean withAmmo) {
-        Arrow arrow = spawnArrow(level, player);
+        Rac1BlasterArrow arrow = spawnArrow(level, player);
         if (arrow == null) {
             // The mouth of the weapon is blocked: no shot is made, no ammunition is used and the
             // weapon stops being used, so that the shot is not drawn either.
@@ -282,8 +285,10 @@ public final class Rac1BlasterServer {
     /**
      * Spawns the arrow of a shot of the Blaster.
      *
-     * <p>The arrow is an arrow of the game: it flies with the gravity and the drag of the game,
-     * it hits with the damage of the game, and it is never picked up.
+     * <p>The arrow is an arrow of the game: it flies with the drag of the game, it hits with the
+     * damage of the game, and it is never picked up. It does not fall: the arrow of the Blaster
+     * flies straight, in the direction it was shot at. The drag of the game of blocks is a
+     * measure of the speed alone, so the direction of the flight does not change.
      *
      * <p>The arrow leaves the mouth of the weapon and not the head of the shooter: the place of
      * the mouth is built out of the frame of the weapon and out of the place of the player, and it
@@ -296,7 +301,7 @@ public final class Rac1BlasterServer {
      * @param player the player that fires
      * @return the arrow, or {@code null} when the shot is blocked
      */
-    private static Arrow spawnArrow(Level level, Player player) {
+    private static Rac1BlasterArrow spawnArrow(Level level, Player player) {
         // The weapon the shot was fired from is the stack of the Blaster in the main hand. The
         // arrow of the game of blocks refuses an empty weapon, so a shot is only made when the
         // main hand really holds the Blaster: no weapon is ever made up.
@@ -319,7 +324,8 @@ public final class Rac1BlasterServer {
         Vec3 target = target(player, eyes);
         Rac1BlasterGrip.Direction direction = Rac1BlasterGrip.direction(spawn.x, spawn.y, spawn.z,
                 target.x, target.y, target.z);
-        Arrow arrow = new Arrow(level, player, new ItemStack(Items.ARROW), weapon);
+        Rac1BlasterArrow arrow = new Rac1BlasterArrow(RacMcEntities.BLASTER_ARROW.get(), level,
+                player);
         arrow.pickup = AbstractArrow.Pickup.DISALLOWED;
         arrow.setPos(spawn.x, spawn.y, spawn.z);
         if (direction.x() != 0.0 || direction.y() != 0.0 || direction.z() != 0.0) {

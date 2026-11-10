@@ -1,13 +1,20 @@
 package com.github.giannigr.racmc.client;
 
 import com.github.giannigr.racmc.item.Rac1BlasterAnimation;
+import com.github.giannigr.racmc.item.Rac1BlasterGrip;
+import com.github.giannigr.racmc.item.Rac1BlasterSprint;
 import com.github.giannigr.racmc.item.RacMcItems;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.player.Input;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.neoforged.neoforge.client.event.RenderLivingEvent;
@@ -30,6 +37,9 @@ public final class Rac1BlasterClient {
 
     /** The player that is drawn at the moment, or {@code null} when none is drawn. */
     private static LivingEntity current;
+
+    /** The trigger of the sprint of the player of the client. */
+    private static final Rac1BlasterSprint.Trigger SPRINT = new Rac1BlasterSprint.Trigger();
 
     private Rac1BlasterClient() {
         throw new UnsupportedOperationException("Utility class");
@@ -83,6 +93,74 @@ public final class Rac1BlasterClient {
     }
 
     /**
+     * Lets the player of the client start to sprint while the weapon is fired.
+     *
+     * <p>The game of blocks refuses every player that uses an item the right to start to sprint,
+     * and the Blaster is held with the trigger. The rules of the game of blocks are kept as they
+     * are here, and only the use of the item is put aside: the food of the player, the water,
+     * the collision, the crouch, the blindness, the passenger, the fall of the player and every
+     * other item keep the rules of the game of blocks.
+     *
+     * <p>The sprint is started the same way the game of blocks starts it: with the key of the
+     * sprint, or with the trigger of the sprint, which is armed while the player lets go of the
+     * key of the forward.
+     *
+     * @param player the player of the client
+     * @param input the input of the player
+     */
+    public static void sprint(LocalPlayer player, Input input) {
+        SPRINT.tick();
+        if (!isFiring(player)) {
+            // The weapon is not fired: the game of blocks holds the trigger of the sprint itself.
+            SPRINT.clear();
+            return;
+        }
+        Rac1BlasterSprint.Conditions conditions = conditions(player, input);
+        if (!Rac1BlasterSprint.mayStart(conditions)) {
+            SPRINT.clear();
+            return;
+        }
+        boolean start = false;
+        if (Rac1BlasterSprint.enoughImpulse(conditions)) {
+            start = conditions.sprintKey() || SPRINT.armed();
+            SPRINT.clear();
+        } else if (Rac1BlasterSprint.mayArm(conditions)) {
+            SPRINT.arm();
+        } else {
+            // The game of blocks forgets the trigger of the sprint while the player holds the
+            // key of the crouch.
+            SPRINT.clear();
+        }
+        if (start) {
+            player.setSprinting(true);
+        }
+    }
+
+    /**
+     * The conditions of the sprint of the player of the client.
+     *
+     * @param player the player of the client
+     * @param input the input of the player
+     * @return the conditions of the sprint of the player
+     */
+    private static Rac1BlasterSprint.Conditions conditions(LocalPlayer player, Input input) {
+        boolean passenger = player.isPassenger();
+        boolean underWater = player.isUnderWater();
+        float impulse = underWater
+                ? (input.hasForwardImpulse() ? 1.0f : 0.0f)
+                : input.forwardImpulse;
+        return new Rac1BlasterSprint.Conditions(
+                passenger ? player.getVehicle().onGround() : player.onGround(),
+                player.isInWater(), underWater || player.canStartSwimming(),
+                input.shiftKeyDown, player.hasEffect(MobEffects.BLINDNESS), passenger,
+                !passenger || player.getVehicle().canSprint()
+                        && player.getVehicle().isControlledByLocalInstance(),
+                player.isFallFlying(), player.isSpectator(),
+                player.getFoodData().getFoodLevel(), player.mayFly(), impulse,
+                Minecraft.getInstance().options.keySprint.isDown());
+    }
+
+    /**
      * Brings the state of the weapons of the players of the world up to date.
      *
      * <p>The state is looked at once a tick, so that the moment of the change is known and the
@@ -118,6 +196,23 @@ public final class Rac1BlasterClient {
      */
     public static Rac1BlasterAnimation animationOf(LivingEntity entity) {
         return entity == null ? null : ANIMATIONS.get(entity.getId());
+    }
+
+    /**
+     * The place of the mouth of the weapon in the world, for a player.
+     *
+     * <p>The place is built out of the place of the player and out of the turn of the body of the
+     * player, in the same way the server builds it when it fires a shot, so that the mouth of the
+     * drawn weapon and the mouth of the weapon in the world are the same place of the world.
+     *
+     * @param player the player
+     * @return the place of the mouth of the weapon in the world
+     */
+    public static Rac1BlasterGrip.Point muzzleOf(Player player) {
+        Rac1BlasterGrip.Look look = new Rac1BlasterGrip.Look(
+                Mth.wrapDegrees(player.getYRot() - player.yBodyRot), player.getXRot(),
+                player.yBodyRot);
+        return Rac1BlasterGrip.muzzle(player.getX(), player.getY(), player.getZ(), look);
     }
 
     /**

@@ -3,15 +3,19 @@ package com.github.giannigr.racmc.client.render;
 import com.github.giannigr.racmc.RacMcMod;
 import com.github.giannigr.racmc.asset.Rac1AnimatedAsset;
 import com.github.giannigr.racmc.cache.Rac1CacheContent;
+import com.github.giannigr.racmc.client.Rac1BlasterAim;
 import com.github.giannigr.racmc.client.Rac1BlasterClient;
+import com.github.giannigr.racmc.client.Rac1BlasterFrame;
 import com.github.giannigr.racmc.client.Rac1BlasterPose;
 import com.github.giannigr.racmc.client.RacMcClient;
 import com.github.giannigr.racmc.item.Rac1BlasterGrip;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.client.model.geom.EntityModelSet;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
@@ -19,6 +23,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
 
 /**
  * The drawing of the Blaster as an item of the game.
@@ -118,13 +125,16 @@ public final class BlasterItemRenderer extends BlockEntityWithoutLevelRenderer {
                 // weapon keeps the size it was imported with. The move of the game is therefore
                 // taken back, exactly, before anything else is done to the weapon.
                 poseStack.translate(0.5f, 0.5f, 0.5f);
-                if (idleTurn(entity, context)) {
-                    // The weapon is only held and not fired: the game of blocks holds it in the
-                    // hand with the arm of the player hanging at the side of his body, and the
-                    // weapon is turned around its own side so that the bore of the weapon points
-                    // down along the arm of the player.
-                    poseStack.mulPose(Axis.YP
-                            .rotationDegrees((float) Rac1BlasterGrip.IDLE_ROTATION));
+                if (context.firstPerson()) {
+                    // The game of blocks draws the weapon in the hand of the player with its own
+                    // projection, and the shot of the weapon leaves the mouth of the weapon in
+                    // the world, which is drawn with the projection of the world. The mouth of
+                    // the drawn weapon is therefore moved to the place of the screen where the
+                    // mouth of the weapon in the world is drawn, so that the shot stands over the
+                    // mouth of the drawn weapon. The move is limited in the height, so that the
+                    // crosshair of the screen stays clear and the weapon of the game stays in
+                    // the lower right of the screen.
+                    alignWithWorldMuzzle(poseStack, context);
                 }
                 Rac1MeshRenderer.render(poseStack, source, blaster.mesh(), positions,
                         this.pose.normals(), locations, usedLight);
@@ -139,22 +149,46 @@ public final class BlasterItemRenderer extends BlockEntityWithoutLevelRenderer {
     }
 
     /**
-     * Whether the weapon is drawn in the turn of the weapon that is only held.
+     * Moves the mouth of the drawn weapon to the place of the screen where the mouth of the
+     * weapon in the world is drawn.
      *
-     * <p>The turn is only used in the third person and only while the weapon is not fired: the
-     * picture of the weapon in the first person and in the lists of the game is the picture of
-     * the game of blocks and is not touched.
+     * <p>The mouth of the weapon in the world is the place the shot of the weapon leaves from,
+     * and the shot is drawn with the projection of the world. The mouth of the drawn weapon is
+     * drawn with the projection of the hand of the player, which is another projection. The move
+     * is made with the matrices of the game of blocks of the frame that is drawn, so that the
+     * mouth of the drawn weapon stands in the column of the mouth of the weapon in the world for
+     * every field of view of the game. The move in the height is limited, so that the crosshair
+     * of the screen stays clear and the weapon of the game stays in the lower right of the
+     * screen.
      *
-     * @param entity the entity the weapon is drawn for
+     * @param poseStack the stack of the poses of the game
      * @param context the place the weapon is drawn at
-     * @return {@code true} when the weapon is turned around its own side
      */
-    private static boolean idleTurn(LivingEntity entity, ItemDisplayContext context) {
-        if (context != ItemDisplayContext.THIRD_PERSON_RIGHT_HAND
-                && context != ItemDisplayContext.THIRD_PERSON_LEFT_HAND) {
-            return false;
+    private static void alignWithWorldMuzzle(PoseStack poseStack, ItemDisplayContext context) {
+        Minecraft minecraft = Minecraft.getInstance();
+        LocalPlayer player = minecraft.player;
+        if (player == null || !Rac1BlasterFrame.ready()) {
+            // The world was not drawn: there is nothing to aim at.
+            return;
         }
-        return !Rac1BlasterClient.isFiring(entity);
+        ItemDisplayContext mainHand = player.getMainArm() == HumanoidArm.RIGHT
+                ? ItemDisplayContext.FIRST_PERSON_RIGHT_HAND
+                : ItemDisplayContext.FIRST_PERSON_LEFT_HAND;
+        if (context != mainHand) {
+            // The other hand keeps the place the game of blocks gives it.
+            return;
+        }
+        Matrix4f modelView = Rac1BlasterFrame.modelView();
+        Vector3f camera = Rac1BlasterFrame.camera();
+        Rac1BlasterGrip.Point muzzle = Rac1BlasterClient.muzzleOf(player);
+        // The place of the mouth of the weapon in the world, in the space of the camera.
+        Vector4f world = new Vector4f((float) (muzzle.x() - camera.x),
+                (float) (muzzle.y() - camera.y), (float) (muzzle.z() - camera.z), 1.0f)
+                .mul(modelView);
+        Vector3f move = Rac1BlasterAim.align(poseStack.last().pose(), modelView,
+                Rac1BlasterFrame.projection(), RenderSystem.getProjectionMatrix(),
+                new Vector3f(world.x, world.y, world.z));
+        poseStack.translate(move.x, move.y, move.z);
     }
 
     /**
