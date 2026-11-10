@@ -31,7 +31,7 @@ import java.util.stream.Stream;
 public final class Rac1CacheStore {
 
     /** The version of the schema of the assets. */
-    public static final int SCHEMA_VERSION = 3;
+    public static final int SCHEMA_VERSION = 4;
 
     /** The name of the file of a cache that is being written. */
     private static final String STAGING_SUFFIX = ".staging";

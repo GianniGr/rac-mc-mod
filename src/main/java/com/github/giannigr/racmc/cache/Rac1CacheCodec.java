@@ -2,6 +2,7 @@ package com.github.giannigr.racmc.cache;
 
 import com.github.giannigr.racmc.asset.Rac1AnimatedAsset;
 import com.github.giannigr.racmc.asset.Rac1Animation;
+import com.github.giannigr.racmc.asset.Rac1CrateAsset;
 import com.github.giannigr.racmc.asset.Rac1Mesh;
 import com.github.giannigr.racmc.asset.Rac1SkinnedMesh;
 import com.github.giannigr.racmc.asset.Rac1Skeleton;
@@ -9,6 +10,8 @@ import com.github.giannigr.racmc.asset.Rac1StaticAsset;
 import com.github.giannigr.racmc.asset.Rac1Texture;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.zip.CRC32;
 
 /**
@@ -79,7 +82,7 @@ public final class Rac1CacheCodec {
     public static final int FORMAT_VERSION = 2;
 
     /** The version of the converter that writes cache files. */
-    public static final int CONVERTER_VERSION = 1;
+    public static final int CONVERTER_VERSION = 3;
 
     /** The offset of the version of the converter in the header. */
     private static final int CONVERTER_OFFSET = 12;
@@ -98,6 +101,9 @@ public final class Rac1CacheCodec {
 
     /** The kind of the section that holds the weapon. */
     public static final int SECTION_BLASTER = 3;
+
+    /** The kind of the section that holds the crates. */
+    public static final int SECTION_CRATES = 4;
 
     private Rac1CacheCodec() {
         throw new UnsupportedOperationException("Utility class");
@@ -143,17 +149,19 @@ public final class Rac1CacheCodec {
         byte[] staticSection = writeStatic(content);
         byte[] animatedSection = writeAnimated(content);
         byte[] blasterSection = writeBlaster(content);
+        byte[] cratesSection = writeCrates(content);
 
-        int sectionCount = 3;
+        int sectionCount = 4;
         int tableLength = sectionCount * SECTION_ENTRY_SIZE;
         int tableOffset = HEADER_SIZE;
         int keyOffset = tableOffset + tableLength;
         int staticOffset = keyOffset + discKey.length;
         int animatedOffset = staticOffset + staticSection.length;
         int blasterOffset = animatedOffset + animatedSection.length;
+        int cratesOffset = blasterOffset + blasterSection.length;
         int payloadOffset = keyOffset;
         int payloadLength = discKey.length + staticSection.length + animatedSection.length
-                + blasterSection.length;
+                + blasterSection.length + cratesSection.length;
 
         byte[] file = new byte[payloadOffset + payloadLength];
         System.arraycopy(MAGIC, 0, file, 0, 4);
@@ -170,6 +178,7 @@ public final class Rac1CacheCodec {
         System.arraycopy(staticSection, 0, file, staticOffset, staticSection.length);
         System.arraycopy(animatedSection, 0, file, animatedOffset, animatedSection.length);
         System.arraycopy(blasterSection, 0, file, blasterOffset, blasterSection.length);
+        System.arraycopy(cratesSection, 0, file, cratesOffset, cratesSection.length);
         writeInt(file, 40, checksum(file, payloadOffset, payloadLength));
         writeInt(file, 44, checksum(file, 0, 44));
 
@@ -178,6 +187,8 @@ public final class Rac1CacheCodec {
                 animatedSection);
         writeSection(file, tableOffset + 2 * SECTION_ENTRY_SIZE, SECTION_BLASTER, blasterOffset,
                 blasterSection);
+        writeSection(file, tableOffset + 3 * SECTION_ENTRY_SIZE, SECTION_CRATES, cratesOffset,
+                cratesSection);
         return file;
     }
 
@@ -252,6 +263,7 @@ public final class Rac1CacheCodec {
         byte[] staticSection = null;
         byte[] animatedSection = null;
         byte[] blasterSection = null;
+        byte[] cratesSection = null;
         for (int index = 0; index < sectionCount; index++) {
             int entry = tableOffset + index * SECTION_ENTRY_SIZE;
             int kind = readInt(file, entry);
@@ -272,14 +284,18 @@ public final class Rac1CacheCodec {
                 animatedSection = section;
             } else if (kind == SECTION_BLASTER) {
                 blasterSection = section;
+            } else if (kind == SECTION_CRATES) {
+                cratesSection = section;
             }
         }
-        if (staticSection == null || animatedSection == null || blasterSection == null) {
+        if (staticSection == null || animatedSection == null || blasterSection == null
+                || cratesSection == null) {
             throw new IOException("The cache file does not hold all of the assets.");
         }
         int handJoint = readInt(blasterSection, 0);
         Rac1CacheContent content = new Rac1CacheContent(discKey, readStatic(staticSection),
-                readAnimated(animatedSection), readBlaster(blasterSection), handJoint);
+                readAnimated(animatedSection), readBlaster(blasterSection), handJoint,
+                readCrates(cratesSection));
         return content;
     }
 
@@ -341,6 +357,79 @@ public final class Rac1CacheCodec {
 
     private static byte[] writeAnimated(Rac1CacheContent content) throws IOException {
         return writeAnimatedAsset(content.animatedAsset());
+    }
+
+    /**
+     * Writes the crates of the cache into a section of their own.
+     *
+     * <p>The crates are written in the order they were converted, and every crate is written
+     * with its key, so that the reader can find a crate by its key again.
+     *
+     * @param content the content of the cache
+     * @return the bytes of the section
+     */
+    private static byte[] writeCrates(Rac1CacheContent content) {
+        Rac1Bytes.Writer out = new Rac1Bytes.Writer();
+        out.putInt(content.crates().size());
+        for (Rac1CrateAsset crate : content.crates().values()) {
+            byte[] key = crate.key().getBytes(StandardCharsets.UTF_8);
+            Rac1Mesh mesh = crate.mesh();
+            out.putInt(key.length);
+            out.putBytes(key);
+            out.putInt(crate.classNumber());
+            out.putInt(mesh.vertexCount());
+            out.putInt(mesh.triangleCount());
+            out.putInt(crate.textures().length);
+            putFloats(out, mesh.positions());
+            putFloats(out, mesh.normals());
+            putFloats(out, mesh.uvs());
+            putInts(out, mesh.indices());
+            putInts(out, mesh.materials());
+            putTextures(out, crate.textures());
+        }
+        return out.toByteArray();
+    }
+
+    /**
+     * Reads the crates of the cache out of the section that holds them.
+     *
+     * @param section the bytes of the section
+     * @return the crates, by the key they are known by
+     * @throws IOException when the section is damaged
+     */
+    private static Map<String, Rac1CrateAsset> readCrates(byte[] section) throws IOException {
+        Rac1Bytes.Reader in = new Rac1Bytes.Reader(section);
+        int count = in.getInt();
+        if (count < 0 || count > 64) {
+            throw new IOException("The cache file holds an implausible number of crates.");
+        }
+        Map<String, Rac1CrateAsset> crates = new LinkedHashMap<>();
+        for (int index = 0; index < count; index++) {
+            int keyLength = in.getInt();
+            if (keyLength < 0 || keyLength > 1024) {
+                throw new IOException("The key of a crate of the cache file is implausible.");
+            }
+            byte[] key = new byte[keyLength];
+            in.getBytes(key);
+            int classNumber = in.getInt();
+            int vertexCount = in.getInt();
+            int triangleCount = in.getInt();
+            int textureCount = in.getInt();
+            if (vertexCount < 0 || triangleCount < 0 || textureCount < 0
+                    || vertexCount > 1 << 20 || triangleCount > 1 << 20 || textureCount > 64) {
+                throw new IOException("A crate of the cache file has implausible sizes.");
+            }
+            float[] positions = getFloats(in, vertexCount * 3);
+            float[] normals = getFloats(in, vertexCount * 3);
+            float[] uvs = getFloats(in, vertexCount * 2);
+            int[] indices = getInts(in, triangleCount * 3);
+            int[] materials = getInts(in, triangleCount);
+            Rac1Texture[] textures = getTextures(in, textureCount);
+            Rac1Mesh mesh = new Rac1Mesh(positions, normals, uvs, indices, materials);
+            String name = new String(key, StandardCharsets.UTF_8);
+            crates.put(name, new Rac1CrateAsset(name, classNumber, mesh, textures));
+        }
+        return crates;
     }
 
     private static byte[] writeBlaster(Rac1CacheContent content) throws IOException {

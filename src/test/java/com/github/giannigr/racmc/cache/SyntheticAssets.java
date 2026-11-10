@@ -2,11 +2,13 @@ package com.github.giannigr.racmc.cache;
 
 import com.github.giannigr.racmc.asset.Rac1AnimatedAsset;
 import com.github.giannigr.racmc.asset.Rac1Animation;
+import com.github.giannigr.racmc.asset.Rac1CrateAsset;
 import com.github.giannigr.racmc.asset.Rac1Mesh;
 import com.github.giannigr.racmc.asset.Rac1SkinnedMesh;
 import com.github.giannigr.racmc.asset.Rac1Skeleton;
 import com.github.giannigr.racmc.asset.Rac1StaticAsset;
 import com.github.giannigr.racmc.asset.Rac1Texture;
+import java.util.Map;
 
 /**
  * The assets that the checks of the cache use.
@@ -103,12 +105,29 @@ final class SyntheticAssets {
     }
 
     /**
+     * A crate of the game of the checks.
+     *
+     * @return the crate
+     */
+    static Rac1CrateAsset crate() {
+        float[] positions = { 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+                1.0f };
+        float[] normals = { 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f };
+        float[] uvs = { 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f };
+        int[] indices = { 0, 1, 2, 1, 3, 2 };
+        int[] materials = { 0, 0 };
+        Rac1Mesh mesh = new Rac1Mesh(positions, normals, uvs, indices, materials);
+        return new Rac1CrateAsset("bolt_crate", 500, mesh, new Rac1Texture[] { texture(2, 2) });
+    }
+
+    /**
      * The content of a cache of the checks.
      *
      * @param discKey the identity of the disc
      * @return the content
      */
     static Rac1CacheContent content(String discKey) {
-        return new Rac1CacheContent(discKey, staticAsset(), animatedAsset(), animatedAsset(), 56);
+        return new Rac1CacheContent(discKey, staticAsset(), animatedAsset(), animatedAsset(), 56,
+                Map.of("bolt_crate", crate()));
     }
 }

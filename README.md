@@ -19,6 +19,12 @@ animations of the weapon, and it fires the arrows of the game while the trigger 
 details, the rules of the weapon and the way the weapon is measured are described in
 [`docs/development.md`](docs/development.md).
 
+The crates of the game are blocks of the game as well: the wooden bolt crate, the crate of the
+nanotech, the crate of the ammunition of Gadgetron and the red explosive crate can be placed in
+the world and are in the tab of the creative mode of the mod. They keep the size and the
+proportions they have in the game and fit into one block. They are a picture of the game for now:
+they drop nothing, they do not explode and they do not give bolts, health or ammunition.
+
 ## Vision
 
 Build a Minecraft experience featuring Ratchet & Clank-inspired gameplay, with a focus on importing

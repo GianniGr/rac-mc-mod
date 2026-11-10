@@ -1,6 +1,9 @@
 package com.github.giannigr.racmc.item;
 
 import com.github.giannigr.racmc.RacMcConstants;
+import com.github.giannigr.racmc.asset.Rac1CrateDefinition;
+import com.github.giannigr.racmc.asset.Rac1Crates;
+import com.github.giannigr.racmc.block.RacMcBlocks;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
@@ -39,12 +42,21 @@ public final class RacMcCreativeTabs {
      *
      * <p>The sign of the tab is the picture of the mod. The picture is drawn as an item, because
      * the game draws the sign of a tab as an item; the item is a sign and nothing else.
+     *
+     * <p>The tab holds the items of the mod: the Blaster and the crates of the game.
      */
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> RACMC =
             TABS.register(TAB_NAME, () -> CreativeModeTab.builder()
                     .title(Component.translatable(TITLE_KEY))
                     .icon(() -> new ItemStack(RacMcItems.TAB_ICON.get()))
-                    .displayItems((parameters, output) -> output.accept(RacMcItems.BLASTER.get()))
+                    .displayItems((parameters, output) -> {
+                        output.accept(RacMcItems.BLASTER.get());
+                        // Every crate of the game is in the tab, in the order of the table of
+                        // the crates.
+                        for (Rac1CrateDefinition definition : Rac1Crates.definitions()) {
+                            output.accept(RacMcBlocks.crate(definition).get().asItem());
+                        }
+                    })
                     .build());
 
     private RacMcCreativeTabs() {

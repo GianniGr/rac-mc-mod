@@ -6,7 +6,7 @@ closed until that cache holds the assets.
 
 ## What is converted
 
-The mod converts three assets of the first level of the game (the level of Novalis, the level number
+The mod converts the assets of the first level of the game (the level of Novalis, the level number
 1 of the table of contents of the disc):
 
 | Asset | Class | What it is |
@@ -14,15 +14,48 @@ The mod converts three assets of the first level of the game (the level of Noval
 | `tie_452` | 452 | A piece of the scenery of the level. The class holds three levels of detail; the converter takes the one with the highest detail. |
 | `moby_0` | 0 | The hero of the game. The class holds the mesh, the skeleton and the animation sequences of the hero. |
 | `gadget_168` | 168 | The Blaster, the weapon of the hero. It is a gadget, so its class is a compressed stream of its own. |
+| `bolt_crate` | 500 | The wooden crate of the game that holds bolts. |
+| `health_crate` | 501 | The crate of the nanotech of the game. The nanotech is the health of the game, so this is the health crate. |
+| `ammo_crate` | 511 | The light grey crate of Gadgetron that holds the ammunition of the weapons. |
+| `explosive_crate` | 505 | The red crate of the game that explodes when it is touched. The mod shows the crate and nothing else. |
 
-All three classes carry their textures. The scenery uses one texture, the hero uses four and the
-Blaster uses one.
+All the classes carry their textures. The scenery uses one texture, the hero uses four and the
+Blaster uses one. The bolt crate uses two, the health crate uses two, the ammo crate uses three
+and the explosive crate uses three.
 
 The class numbers were found by reading the disc image of the player; they are not guesses. The
 class 452 of Novalis is placed 146 times in the level, and the hero class 0 carries 111 joints and
 88 animation sequences. The Blaster is the item 15 of the hand slot of the hero and it has the
 class 168; the ReRAC project measured the list of the gadgets and the names of the items in the
 code of the game, see `docs/plan/gadgets.md` of that project.
+
+## The crates of the game
+
+The game has several kinds of crates. The names of the classes of the game are the ones the
+editor of the game shows; the list was taken from the class catalogue of the OpenRAC project
+(MIT), see `tools/extract/moby_classes.tsv` of `OpenRAC/rac1-decomp`:
+
+| Class | Name in the game | What it is |
+| --- | --- | --- |
+| 500 | `bolt_crate` | The wooden crate with the frame of yellow metal. It holds bolts. |
+| 501 | `nanotech_crate` | The blue and grey crate. It holds nanotech, which is the health of the game. |
+| 502 | `metal_crate` | The dark grey crate with an X on every side. It holds bolts and cannot be opened by hand. |
+| 505 | `oom_oom_box` | The red crate with the burst on it. It explodes when it is touched. |
+| 511 | `ammo_crate` | The light grey crate with the red sign of Gadgetron on it. It holds ammunition. |
+
+The mod imports the four crates that are a part of the slice of the issue: the bolt crate (500),
+the health crate (501), the ammo crate (511) and the explosive crate (505). The metal crate of the
+game is not part of the mod yet; it can be added to the table of the crates without touching
+anything else.
+
+Every crate of the game is one unit high and one unit wide and deep, and it stands on the ground
+of its own origin. The converter does not change that: the crates keep the size and the
+proportions they have in the game, so they fit into one block of the game of blocks without being
+scaled. The same numbers were measured on the NTSC-U v1.00 disc and on the PAL v2.00 disc, and
+the same classes hold the same geometry in every level that was read.
+
+A crate of the game is a class of the game without a skeleton and without an animation, so it is
+converted like a piece of scenery: the geometry and the textures are read and nothing else.
 
 ## How the data is found
 
@@ -133,8 +166,9 @@ moves or deletes a cache that was written before. The README describes the setti
 The file starts with the magic `RACM`, holds a header of 64 bytes, a table that names the sections
 and the sections themselves. Every integer is stored in the little endian order.
 
-The file holds three sections: the scenery, the hero and the Blaster. Every section holds the
-number of the class and the name of the asset, so that the cache says which asset it holds.
+The file holds four sections: the scenery, the hero, the Blaster and the crates. Every section
+holds the number of the class and the name of the asset, so that the cache says which asset it
+holds.
 
 | Offset | Size | Field |
 | --- | --- | --- |
@@ -173,8 +207,8 @@ checked on its own:
 | Version | Where | What it means | When it is bumped |
 | --- | --- | --- | --- |
 | Format version (`Rac1CacheCodec.FORMAT_VERSION`, currently 2) | 0x04 | The layout of the container: the header, the table of the sections and the meaning of the words of the header | When a file of the old layout cannot be read any more. It is `2` because the word at 0x0C used to be the flags of the file and now holds the version of the converter |
-| Schema version (`Rac1CacheStore.SCHEMA_VERSION`, currently 3) | 0x08 | The layout of the bytes inside the sections - what the converter writes for the scenery, the hero and the Blaster | When the encoding of the assets changes, for example when a field is added to an asset |
-| Converter version (`Rac1CacheCodec.CONVERTER_VERSION`, currently 1) | 0x0C | The identity of the converter that wrote the file | When the conversion itself changes in a way that makes an older result unacceptable although the format and the schema are unchanged - a different level of detail, a different change of the axes or a different choice of the classes to convert |
+| Schema version (`Rac1CacheStore.SCHEMA_VERSION`, currently 4) | 0x08 | The layout of the bytes inside the sections - what the converter writes for the scenery, the hero, the Blaster and the crates | When the encoding of the assets changes, for example when a field is added to an asset |
+| Converter version (`Rac1CacheCodec.CONVERTER_VERSION`, currently 3) | 0x0C | The identity of the converter that wrote the file | When the conversion itself changes in a way that makes an older result unacceptable although the format and the schema are unchanged - a different level of detail, a different change of the axes or a different choice of the classes to convert |
 
 The converter version is not a copy of the schema version: a file can hold the current schema and
 still have been written by an older converter, and a file can hold the current converter version
