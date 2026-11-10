@@ -82,7 +82,7 @@ public final class Rac1CacheCodec {
     public static final int FORMAT_VERSION = 2;
 
     /** The version of the converter that writes cache files. */
-    public static final int CONVERTER_VERSION = 2;
+    public static final int CONVERTER_VERSION = 3;
 
     /** The offset of the version of the converter in the header. */
     private static final int CONVERTER_OFFSET = 12;

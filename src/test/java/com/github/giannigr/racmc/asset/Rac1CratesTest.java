@@ -22,12 +22,13 @@ import org.junit.jupiter.api.Test;
 class Rac1CratesTest {
 
     @Test
-    @DisplayName("The mod has the three crates of the game")
+    @DisplayName("The mod has the crates of the game")
     void theModHasThreeCrates() {
         List<Rac1CrateDefinition> definitions = Rac1Crates.definitions();
 
-        assertEquals(3, definitions.size(),
-                "The mod has the bolt crate, the health crate and the ammo crate");
+        assertEquals(4, definitions.size(),
+                "The mod has the bolt crate, the health crate, the ammo crate and the explosive "
+                        + "crate");
     }
 
     @Test
@@ -39,6 +40,8 @@ class Rac1CratesTest {
                 "The health crate is the class 501 of the game");
         assertEquals(511, Rac1Crates.AMMO.classNumber(),
                 "The ammo crate is the class 511 of the game");
+        assertEquals(505, Rac1Crates.EXPLOSIVE.classNumber(),
+                "The explosive crate is the class 505 of the game");
     }
 
     @Test

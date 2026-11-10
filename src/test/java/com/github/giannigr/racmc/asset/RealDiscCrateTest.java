@@ -56,6 +56,7 @@ class RealDiscCrateTest {
         Rac1CrateAsset bolt = Rac1AssetExtractor.readCrateAsset(assets, Rac1Crates.BOLT);
         Rac1CrateAsset health = Rac1AssetExtractor.readCrateAsset(assets, Rac1Crates.HEALTH);
         Rac1CrateAsset ammo = Rac1AssetExtractor.readCrateAsset(assets, Rac1Crates.AMMO);
+        Rac1CrateAsset explosive = Rac1AssetExtractor.readCrateAsset(assets, Rac1Crates.EXPLOSIVE);
 
         assertEquals("bolt_crate", bolt.key());
         assertEquals(500, bolt.classNumber());
@@ -74,6 +75,13 @@ class RealDiscCrateTest {
         assertEquals(168, ammo.mesh().vertexCount(), "The ammo crate holds 168 vertices");
         assertEquals(108, ammo.mesh().triangleCount(), "The ammo crate holds 108 triangles");
         assertEquals(3, ammo.textures().length, "The ammo crate holds three textures");
+
+        assertEquals("explosive_crate", explosive.key());
+        assertEquals(505, explosive.classNumber());
+        assertEquals(540, explosive.mesh().vertexCount(), "The explosive crate holds 540 vertices");
+        assertEquals(356, explosive.mesh().triangleCount(),
+                "The explosive crate holds 356 triangles");
+        assertEquals(3, explosive.textures().length, "The explosive crate holds three textures");
     }
 
     @Test

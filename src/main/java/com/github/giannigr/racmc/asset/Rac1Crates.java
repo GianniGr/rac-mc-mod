@@ -19,7 +19,9 @@ import java.util.Optional;
  *   <li>501 is the {@code nanotech_crate} - the crate of the nanotech, which is the health of
  *       the game;</li>
  *   <li>511 is the {@code ammo_crate} - the light grey crate of Gadgetron that holds the
- *       ammunition of the weapons.</li>
+ *       ammunition of the weapons;</li>
+ *   <li>505 is the {@code oom_oom_box} - the red crate that explodes when it is touched. The mod
+ *       shows the crate and nothing else.</li>
  * </ul>
  *
  * <p>The classes are read out of the first level of the game, the level of Novalis. Every crate
@@ -51,8 +53,19 @@ public final class Rac1Crates {
      */
     public static final Rac1CrateDefinition AMMO = new Rac1CrateDefinition("ammo_crate", 511);
 
+    /**
+     * The explosive crate of the game.
+     *
+     * <p>The class of the game is the {@code oom_oom_box}: the red crate with the burst on it
+     * that explodes when it is touched. The mod shows the crate and nothing else: it does not
+     * explode, it does not drop anything and it does not hurt anybody.
+     */
+    public static final Rac1CrateDefinition EXPLOSIVE =
+            new Rac1CrateDefinition("explosive_crate", 505);
+
     /** The crates of the game, in the order they are converted and shown. */
-    private static final List<Rac1CrateDefinition> DEFINITIONS = List.of(BOLT, HEALTH, AMMO);
+    private static final List<Rac1CrateDefinition> DEFINITIONS =
+            List.of(BOLT, HEALTH, AMMO, EXPLOSIVE);
 
     private Rac1Crates() {
         throw new UnsupportedOperationException("Utility class");

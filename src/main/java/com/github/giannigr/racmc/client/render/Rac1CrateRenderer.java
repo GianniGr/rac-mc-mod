@@ -63,13 +63,13 @@ public final class Rac1CrateRenderer implements BlockEntityRenderer<Rac1CrateBlo
             if (crate == null || crate.mesh().triangleCount() == 0) {
                 return;
             }
-            if (!(buffers instanceof MultiBufferSource.BufferSource source)) {
-                // The buffers of the game are needed to close the run of the triangles of a
-                // material. Without them the crate cannot be drawn.
-                return;
-            }
+            // The buffers of the game are not always a buffer that can be closed: while the
+            // block is being destroyed, the game of blocks hands the renderer a buffer that
+            // draws the crack of the block in front of the buffer of the block. The crate is
+            // drawn into that buffer as well, so that the crate stays visible while it is
+            // broken and the crack of the game of blocks is drawn over it.
             ResourceLocation[] locations = texturesOf(content.get(), crate);
-            Rac1CrateDrawing.drawInBlock(poseStack, source, crate, locations, packedLight);
+            Rac1CrateDrawing.drawInBlock(poseStack, buffers, crate, locations, packedLight);
         } catch (RuntimeException | LinkageError exception) {
             this.failure = exception.toString();
             RacMcMod.LOGGER.error("A crate of the game could not be drawn. The crate is not drawn "

@@ -20,10 +20,10 @@ details, the rules of the weapon and the way the weapon is measured are describe
 [`docs/development.md`](docs/development.md).
 
 The crates of the game are blocks of the game as well: the wooden bolt crate, the crate of the
-nanotech and the crate of the ammunition of Gadgetron can be placed in the world and are in the
-tab of the creative mode of the mod. They keep the size and the proportions they have in the game
-and fit into one block. They are a picture of the game for now: they drop nothing, and they do not
-give bolts, health or ammunition.
+nanotech, the crate of the ammunition of Gadgetron and the red explosive crate can be placed in
+the world and are in the tab of the creative mode of the mod. They keep the size and the
+proportions they have in the game and fit into one block. They are a picture of the game for now:
+they drop nothing, they do not explode and they do not give bolts, health or ammunition.
 
 ## Vision
 

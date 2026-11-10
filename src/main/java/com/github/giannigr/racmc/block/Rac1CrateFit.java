@@ -28,6 +28,18 @@ public final class Rac1CrateFit {
      */
     public record Place(float scale, float offsetX, float offsetY, float offsetZ, float width,
                          float height, float depth) {
+
+        /**
+         * The move of the crate along the second axis in the cube of an item.
+         *
+         * <p>The cube of an item of the game of blocks stands in the middle of the place of the
+         * item, so the crate is centred in the cube along the second axis as well.
+         *
+         * @return the move of the crate
+         */
+        public float itemOffsetY() {
+            return offsetY - height * scale / 2.0f;
+        }
     }
 
     private Rac1CrateFit() {

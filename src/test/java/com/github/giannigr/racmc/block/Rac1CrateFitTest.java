@@ -75,6 +75,25 @@ class Rac1CrateFitTest {
         assertTrue(depth <= 1.0f + 1.0e-6f, "The crate is too deep: " + depth);
     }
 
+    @Test
+    @DisplayName("A crate is centred in the cube of an item")
+    void aCrateIsCentredInTheCubeOfAnItem() {
+        Rac1CrateFit.Place place = Rac1CrateFit.place(cube(-0.5f, 0.5f, 0.0f, 1.0f, -0.5f, 0.5f));
+
+        // The cube of an item of the game of blocks stands in the middle of the place of the
+        // item, so the crate has to stand in the middle of that cube along every axis.
+        assertEquals(0.0f, place.offsetX(), 1.0e-6f);
+        assertEquals(0.0f, place.offsetZ(), 1.0e-6f);
+        assertEquals(-0.5f, place.itemOffsetY(), 1.0e-6f,
+                "The crate has to stand in the middle of the cube of the item");
+        float lowest = place.itemOffsetY();
+        float highest = place.itemOffsetY() + place.height() * place.scale();
+        assertEquals(0.5f, highest, 1.0e-6f,
+                "The crate has to stand in the middle of the cube of the item");
+        assertEquals(-0.5f, lowest, 1.0e-6f,
+                "The crate has to stand in the middle of the cube of the item");
+    }
+
     /**
      * A mesh of a box that stands on the ground.
      *

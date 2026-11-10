@@ -60,16 +60,11 @@ public final class Rac1CrateItemRenderer extends BlockEntityWithoutLevelRenderer
             if (crate == null || crate.mesh().triangleCount() == 0) {
                 return;
             }
-            if (!(buffers instanceof MultiBufferSource.BufferSource source)) {
-                // The buffers of the game are needed to close the run of the triangles of a
-                // material. Without them the crate cannot be drawn.
-                return;
-            }
             ResourceLocation[] locations = texturesOf(content.get(), crate);
             // The picture of the item in the lists of the game is always drawn with the full
             // light, so that the crate can be seen in the lists.
             int usedLight = context == ItemDisplayContext.GUI ? Rac1MeshRenderer.FULL_LIGHT : light;
-            Rac1CrateDrawing.drawAsItem(poseStack, source, crate, locations, usedLight);
+            Rac1CrateDrawing.drawAsItem(poseStack, buffers, crate, locations, usedLight);
         } catch (RuntimeException | LinkageError exception) {
             this.failure = exception.toString();
             RacMcMod.LOGGER.error("A crate of the game could not be drawn as an item. The crate is "

@@ -16,6 +16,12 @@ import net.minecraft.resources.ResourceLocation;
  *
  * <p>The crate keeps the size and the proportions it has in the game. It is scaled by one factor
  * for all three axes, so that it fits into one block of the game of blocks.
+ *
+ * <p>The buffers of the game are not always a buffer that can be closed: while a block is being
+ * destroyed, the game of blocks hands the renderer of the block entity a buffer that draws the
+ * crack of the block in front of the buffer of the block. The crate is drawn into that buffer as
+ * well, so that the crate stays visible while it is broken and the crack of the game of blocks is
+ * drawn over it.
  */
 public final class Rac1CrateDrawing {
 
@@ -36,15 +42,15 @@ public final class Rac1CrateDrawing {
      * @param textures the place of the texture of every material
      * @param light the light the crate is drawn with
      */
-    public static void drawInBlock(PoseStack pose, MultiBufferSource.BufferSource buffers,
-                                    Rac1CrateAsset crate, ResourceLocation[] textures, int light) {
+    public static void drawInBlock(PoseStack pose, MultiBufferSource buffers, Rac1CrateAsset crate,
+                                    ResourceLocation[] textures, int light) {
         Rac1CrateFit.Place place = Rac1CrateFit.place(crate.mesh());
         pose.pushPose();
         try {
             pose.translate(0.5f, 0.0f, 0.5f);
             pose.scale(place.scale(), place.scale(), place.scale());
             pose.translate(place.offsetX(), place.offsetY(), place.offsetZ());
-            Rac1MeshRenderer.render(pose, buffers, crate.mesh(), textures, light);
+            Rac1MeshRenderer.render(pose, buffers, crate.mesh(), textures, light, closes(buffers));
         } finally {
             pose.popPose();
         }
@@ -54,7 +60,9 @@ public final class Rac1CrateDrawing {
      * Draws a crate of the game as an item of the game of blocks.
      *
      * <p>The cube of an item of the game of blocks stands in the middle of the place of the
-     * item, so the crate is centred in that cube and keeps its own proportions.
+     * item, so the crate is centred in that cube and keeps its own proportions. The turn of the
+     * cube and its size are the turns of the model of the item, so that the crate is drawn like
+     * every other block of the game of blocks.
      *
      * @param pose the place of the crate
      * @param buffers the buffers the triangles are written into
@@ -62,17 +70,26 @@ public final class Rac1CrateDrawing {
      * @param textures the place of the texture of every material
      * @param light the light the crate is drawn with
      */
-    public static void drawAsItem(PoseStack pose, MultiBufferSource.BufferSource buffers,
-                                  Rac1CrateAsset crate, ResourceLocation[] textures, int light) {
+    public static void drawAsItem(PoseStack pose, MultiBufferSource buffers, Rac1CrateAsset crate,
+                                   ResourceLocation[] textures, int light) {
         Rac1CrateFit.Place place = Rac1CrateFit.place(crate.mesh());
         pose.pushPose();
         try {
             pose.scale(place.scale(), place.scale(), place.scale());
-            pose.translate(place.offsetX(), place.offsetY() - place.height() * place.scale() / 2.0f,
-                    place.offsetZ());
-            Rac1MeshRenderer.render(pose, buffers, crate.mesh(), textures, light);
+            pose.translate(place.offsetX(), place.itemOffsetY(), place.offsetZ());
+            Rac1MeshRenderer.render(pose, buffers, crate.mesh(), textures, light, closes(buffers));
         } finally {
             pose.popPose();
         }
+    }
+
+    /**
+     * Whether the runs of the triangles can be closed in the given buffers.
+     *
+     * @param buffers the buffers the triangles are written into
+     * @return {@code true} when the buffers can be closed
+     */
+    private static boolean closes(MultiBufferSource buffers) {
+        return buffers instanceof MultiBufferSource.BufferSource;
     }
 }

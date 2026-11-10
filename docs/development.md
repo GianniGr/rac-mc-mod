@@ -765,19 +765,23 @@ is held.
 
 ## The crates of the game as blocks
 
-The three crates of the game that the mod imports are placeable blocks of the game of blocks:
+The four crates of the game that the mod imports are placeable blocks of the game of blocks:
 
 | Block | Class of the game | What it is |
 | --- | --- | --- |
 | `racmc:bolt_crate` | 500 | The wooden crate of the game that holds bolts. |
 | `racmc:health_crate` | 501 | The crate of the nanotech of the game. The nanotech is the health of the game. |
 | `racmc:ammo_crate` | 511 | The light grey crate of Gadgetron that holds the ammunition of the weapons. |
+| `racmc:explosive_crate` | 505 | The red crate of the game that explodes when it is touched. The mod shows the crate and nothing else. |
 
 The classes and the names of the game are the ones the editor of the game shows; the list was
 taken from the class catalogue of the OpenRAC project (MIT), see `tools/extract/moby_classes.tsv`
 of `OpenRAC/rac1-decomp`. The same classes hold the same geometry in the NTSC-U v1.00 disc and in
 the PAL v2.00 disc, and in every level that was read. `docs/assets.md` describes the conversion of
 the crates in detail.
+
+The purple crate of the nanotech of *Going Commando* is not a crate of this game and is not in the
+mod.
 
 ### The pipeline of the crates
 
@@ -814,11 +818,35 @@ a block is made smaller.
   space, they can be built on and they can be broken.
 - A crate drops nothing. The crates are a picture of the game and not a part of the game of blocks
   yet: the bolts, the health and the ammunition of the game are not a part of this slice, and the
-  crate of the game is not broken for a reward.
+  crate of the game is not broken for a reward. The explosive crate does not explode either.
+- A crate is broken with a bare hand in as long as a plank of the game of blocks: the hardness of
+  the block is two and its sound is the sound of the wood, and the block does not ask for the right
+  tool.
 - The crates are in the tab of the creative mode of the mod, next to the Blaster.
 - The blocks and their block entities hold no types of the client, so a dedicated server starts
   with them. The renderer of the crates draws nothing when the assets of the game are not in the
   cache, so a client without the cache of the assets still plays and only sees no crate.
+
+### The drawing of a crate
+
+The crate of the game is drawn in two places, and both places use the same geometry and the same
+textures:
+
+- In the world the crate is drawn by the renderer of the block entity. The renderer of the block
+  entities of the game of blocks stands at the corner of the block, so the crate is moved to the
+  middle of the block and stands on the ground of it.
+- As an item the crate is drawn by the renderer of the item, so that the tab of the creative mode
+  shows the crate of the game and not a picture of it. The model of the item names the turn and
+  the size of the crate for every place the item is drawn at, and they are the turns and the sizes
+  of a block of the game of blocks: the crate is drawn as a small block in the lists of the game,
+  as a block in the hand of the player and as a block on the ground.
+
+While a crate is broken, the game of blocks hands the renderer of the block entity a buffer that
+draws the crack of the block in front of the buffer of the block. The renderer of the crate draws
+the crate into that buffer as well, so that the crate stays visible while it is broken and the
+progressive crack of the game of blocks is drawn over it. The runs of the triangles of the crate
+are not closed in that buffer, because such a buffer cannot be closed; every run of the triangles
+is written into a buffer of its own, because every material of a mesh has a texture of its own.
 
 ## Gradle tasks
 
@@ -868,7 +896,7 @@ ModDevGradle's NeoForge aware unit test support is enabled (`neoForge { unitTest
 so the test source set has the mod and the Minecraft classes on its classpath and tests can use
 Minecraft types directly.
 
-Fifty-four focused test classes exist today:
+Fifty-five focused test classes exist today:
 
 - `ModBootstrapMetadataTest` verifies that the mod id, mod name and mod version are identical in
   `gradle.properties`, in the generated `META-INF/neoforge.mods.toml` and in `RacMcConstants`, and
@@ -1106,15 +1134,25 @@ Fifty-four focused test classes exist today:
   triangles and of the textures that were measured on the disc, and every crate of the game is one
   block big and stands on the ground of its own origin.
 - `Rac1CratesTest` verifies the table of the crates of the game: the mod has the bolt crate, the
-  health crate and the ammo crate, they are the classes 500, 501 and 511 of the game, every crate
-  has a key of its own, a crate is found by its key, and a description of a crate needs a key and a
-  class.
+  health crate, the ammo crate and the explosive crate, they are the classes 500, 501, 511 and 505
+  of the game, every crate has a key of its own, a crate is found by its key, and a description of
+  a crate needs a key and a class.
 - `Rac1CrateFitTest` verifies the place of a crate inside one block: a crate that is one block big
   is not scaled, a crate that is too big is scaled down and keeps its proportions, a crate that is
   smaller than a block keeps its size, a crate stands on the ground of the block and is centred
-  above it, and a crate fits into one block after it was placed.
+  above it, a crate fits into one block after it was placed, and a crate is centred in the cube of
+  an item.
+- `Rac1CrateAssetsTest` verifies the files of the crates in the resources of the mod: every crate
+  has the file of the states of its block, the model of its block and the model of its item, the
+  model of the item is the model of an item with a renderer of its own, it names a turn, a place
+  and a size for every place the item is drawn at, the turns and the sizes are the ones of a
+  block of the game of blocks, every crate has a name of its own, the block of a crate is as hard
+  as a plank of the game of blocks and sounds like wood, the renderer of the crate does not
+  refuse a buffer that cannot be closed, so that the crate stays visible while it is broken, and
+  the files of the crates are written without a byte order mark, or the game of blocks cannot read
+  them.
 
-The suite currently contains 412 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
+The suite currently contains 421 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in
 `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in
 `Rac1MediaManagerTest`, 8 in `Rac1MediaGateTest`, 8 in `WadDecoderTest`, 5 in `TieClassReaderTest`,
@@ -1125,7 +1163,8 @@ The suite currently contains 412 tests: 7 in `ModBootstrapMetadataTest`, 2 in `M
 `Rac1CacheStoreTest`, 18 in `Rac1CacheLocationTest`, 7 in `Rac1CacheInterruptionTest`, 8 in
 `Rac1AssetCacheManagerTest`, 10 in `Rac1ScreenLayoutTest`, 18 in
 `RealDiscAssetTest`, 3 in `DiscFactsDiagnosticTest`, 2 in `RealDiscCrateTest`, 5 in
-`Rac1CratesTest`, 5 in `Rac1CrateFitTest` and 1 in `RealDiscImageTest`. 387 of them pass,
+`Rac1CratesTest`, 6 in `Rac1CrateFitTest`, 8 in `Rac1CrateAssetsTest` and 1 in
+`RealDiscImageTest`. 396 of them pass,
 and twenty-five of them are skipped unless they are asked for: the twenty-four opt-in checks of a
 real disc image and the check of the cleanup of the staging files, which needs a system that can
 build a symbolic link.

@@ -17,10 +17,11 @@ The mod converts the assets of the first level of the game (the level of Novalis
 | `bolt_crate` | 500 | The wooden crate of the game that holds bolts. |
 | `health_crate` | 501 | The crate of the nanotech of the game. The nanotech is the health of the game, so this is the health crate. |
 | `ammo_crate` | 511 | The light grey crate of Gadgetron that holds the ammunition of the weapons. |
+| `explosive_crate` | 505 | The red crate of the game that explodes when it is touched. The mod shows the crate and nothing else. |
 
 All the classes carry their textures. The scenery uses one texture, the hero uses four and the
-Blaster uses one. The bolt crate uses two, the health crate uses two and the ammo crate uses
-three.
+Blaster uses one. The bolt crate uses two, the health crate uses two, the ammo crate uses three
+and the explosive crate uses three.
 
 The class numbers were found by reading the disc image of the player; they are not guesses. The
 class 452 of Novalis is placed 146 times in the level, and the hero class 0 carries 111 joints and
@@ -42,9 +43,10 @@ editor of the game shows; the list was taken from the class catalogue of the Ope
 | 505 | `oom_oom_box` | The red crate with the burst on it. It explodes when it is touched. |
 | 511 | `ammo_crate` | The light grey crate with the red sign of Gadgetron on it. It holds ammunition. |
 
-The mod imports the three crates that are a part of the slice of the issue: the bolt crate
-(500), the health crate (501) and the ammo crate (511). The other two crates of the game are not
-part of the mod yet; they can be added to the table of the crates without touching anything else.
+The mod imports the four crates that are a part of the slice of the issue: the bolt crate (500),
+the health crate (501), the ammo crate (511) and the explosive crate (505). The metal crate of the
+game is not part of the mod yet; it can be added to the table of the crates without touching
+anything else.
 
 Every crate of the game is one unit high and one unit wide and deep, and it stands on the ground
 of its own origin. The converter does not change that: the crates keep the size and the
@@ -206,7 +208,7 @@ checked on its own:
 | --- | --- | --- | --- |
 | Format version (`Rac1CacheCodec.FORMAT_VERSION`, currently 2) | 0x04 | The layout of the container: the header, the table of the sections and the meaning of the words of the header | When a file of the old layout cannot be read any more. It is `2` because the word at 0x0C used to be the flags of the file and now holds the version of the converter |
 | Schema version (`Rac1CacheStore.SCHEMA_VERSION`, currently 4) | 0x08 | The layout of the bytes inside the sections - what the converter writes for the scenery, the hero, the Blaster and the crates | When the encoding of the assets changes, for example when a field is added to an asset |
-| Converter version (`Rac1CacheCodec.CONVERTER_VERSION`, currently 2) | 0x0C | The identity of the converter that wrote the file | When the conversion itself changes in a way that makes an older result unacceptable although the format and the schema are unchanged - a different level of detail, a different change of the axes or a different choice of the classes to convert |
+| Converter version (`Rac1CacheCodec.CONVERTER_VERSION`, currently 3) | 0x0C | The identity of the converter that wrote the file | When the conversion itself changes in a way that makes an older result unacceptable although the format and the schema are unchanged - a different level of detail, a different change of the axes or a different choice of the classes to convert |
 
 The converter version is not a copy of the schema version: a file can hold the current schema and
 still have been written by an older converter, and a file can hold the current converter version
