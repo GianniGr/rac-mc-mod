@@ -339,6 +339,42 @@ they were measured on, on Windows only. The game has never been started on Linux
 nothing is claimed for another Minecraft or NeoForge version. The measured commands and their
 results are held in `docs/development.md`.
 
+## The picture of the tab of the creative mode
+
+The sign of the tab of the creative mode of the mod is a picture that the owner of the project
+gave for the tab: `Pixel Ratchet Aviator Icon.png`. The picture is not an asset of the disc of
+the game and it is not converted out of a disc image: it is a picture of the mod.
+
+The file of the owner is kept unchanged in the resources of the mod, so that the master of the
+picture is part of the repository:
+
+| File | Size | Digest (SHA-256) |
+| --- | --- | --- |
+| `assets/racmc/textures/gui/tab_icon_original.png` | 989715 bytes | `54c4cd17af4dd9320f50313a63dd0a563c8e6e6b81f187dcf8eb917544beb59c` |
+
+The digest of the file of the owner is the same: `54c4cd17af4dd9320f50313a63dd0a563c8e6e6b81f187dcf8eb917544beb59c`.
+
+The game draws the sign of a tab as an item, so the picture is used through the model of an item:
+`assets/racmc/models/item/tab_icon.json` is a plain item model with the picture as its
+texture, and the item `racmc:tab_icon` is the sign. The item is in no list of the creative
+mode and it has no use in a world.
+
+The picture of the game has to fit into the atlas of the game, which only takes the pictures of
+the textures of the items, and the atlas wants the pictures in a size that is a power of two. A
+picture for the game is therefore made out of the picture of the owner: it is scaled down by the
+factor three with the nearest neighbour, so that no picture is drawn anew, and it is put into a
+square of 512 pixels, with the picture of the owner in the middle of it and the rest left
+transparent. The proportion of the picture is kept: the picture of the owner measures 1536 x 1024
+pixels and the picture for the game measures 512 x 341 pixels of it.
+
+| File | Size | Digest (SHA-256) |
+| --- | --- | --- |
+| `assets/racmc/textures/item/tab_icon.png` | 207735 bytes | `a42335e5c48832eb29a9052566ee0ad0c434bb0399a0030be6aab58574e3311c` |
+
+The picture of the owner is a picture of the project and not an asset of the game of Ratchet &
+Clank. The licence of the sources of this repository covers the source code only, and it says
+nothing about the picture.
+
 ## Known limits
 
 * Only the assets of the first level are converted: one piece of scenery, the hero and his

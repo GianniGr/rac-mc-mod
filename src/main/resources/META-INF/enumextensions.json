@@ -1,0 +1,13 @@
+{
+  "entries": [
+    {
+      "enum": "net/minecraft/client/model/HumanoidModel$ArmPose",
+      "name": "RACMC_AIM",
+      "constructor": "(ZLnet/neoforged/neoforge/client/IArmPoseTransformer;)V",
+      "parameters": {
+        "class": "com/github/giannigr/racmc/client/Rac1BlasterArmParams",
+        "method": "getArmPoseTransformer"
+      }
+    }
+  ]
+}

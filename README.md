@@ -4,14 +4,20 @@ A community-made Minecraft Java Edition mod project inspired by **Ratchet & Clan
 
 ## Project status
 
-**Foundation, disc importer and graphical user interface rendering started.** The Minecraft mod
-project is set up and buildable, and the first milestone (M1) covers the asset import pipeline and
-the first rendering of original assets. The local disc importer reads and verifies a validated disc
-image, and the game keeps the disc image mandatory and asks for it in the main menu. The assets of
-the first level are converted out of the image and kept in a local cache, and the graphical user
-interface draws them with the renderer of the game: the static piece of the scenery next to the
-animated hero holding his Blaster, with the original textures and the original animation. Rendering
-inside a world and the weapon gameplay are not implemented yet.
+**Foundation, disc importer, graphical user interface rendering and the first weapon.** The
+Minecraft mod project is set up and buildable, and the first milestone (M1) covers the asset
+import pipeline and the first rendering of original assets. The local disc importer reads and
+verifies a validated disc image, and the game keeps the disc image mandatory and asks for it in
+the main menu. The assets of the first level are converted out of the image and kept in a local
+cache, and the graphical user interface draws them with the renderer of the game: the static piece
+of the scenery next to the animated hero holding his Blaster, with the original textures and the
+original animation.
+
+The Blaster of the game is now an item of the game as well: it has a tab of the creative mode of
+its own, it is drawn with the imported geometry, the imported textures and the imported
+animations of the weapon, and it fires the arrows of the game while the trigger is held. The
+details, the rules of the weapon and the way the weapon is measured are described in
+[`docs/development.md`](docs/development.md).
 
 ## Vision
 

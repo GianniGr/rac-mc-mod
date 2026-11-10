@@ -1,4 +1,7 @@
 {
+  "itemGroup.racmc": "Ratchet & Clank: Getting Wood",
+  "item.racmc.blaster": "Blaster",
+  "item.racmc.tab_icon": "Tab icon",
   "screen.racmc.iso_selection.title": "Select a Ratchet & Clank disc image",
   "screen.racmc.iso_selection.open": "Disc image",
   "screen.racmc.iso_selection.pick": "Pick disc image",

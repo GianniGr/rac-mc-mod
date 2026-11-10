@@ -21,20 +21,27 @@ import com.github.giannigr.racmc.iso.Rac1MediaConfig;
 import com.github.giannigr.racmc.iso.Rac1MediaGate;
 import com.github.giannigr.racmc.iso.Rac1MediaManager;
 import com.github.giannigr.racmc.iso.Rac1MediaState;
+import com.github.giannigr.racmc.item.Rac1BlasterMovement;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.player.Input;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Player;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.MovementInputUpdateEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.RenderLivingEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 
 /**
@@ -301,13 +308,99 @@ public final class RacMcClient {
         startAssetsWhenReady();
         openDemoWhenAsked();
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || allowsWorldEntry()) {
+        if (minecraft.level == null) {
+            return;
+        }
+        updateBlasters();
+        if (allowsWorldEntry()) {
             return;
         }
         RacMcMod.LOGGER.info("The disc image gate leaves the world that was entered without a "
                 + "verified disc image or without the assets of the game.");
         minecraft.disconnect(new TitleScreen());
         minecraft.setScreen(new IsoSelectionScreen(true));
+    }
+
+    /**
+     * Brings the state of the Blasters of the players up to date.
+     */
+    private static void updateBlasters() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level != null) {
+            Rac1BlasterClient.update(minecraft.level);
+        }
+    }
+
+    /**
+     * Remembers the player that is drawn, so that the weapon of a player can be drawn with the
+     * animation of the shot.
+     *
+     * @param event the event that is fired before a living entity is drawn
+     */
+    @SubscribeEvent
+    public static void onRenderLivingPre(RenderLivingEvent.Pre<?, ?> event) {
+        Rac1BlasterClient.onRenderLivingPre(event);
+    }
+    /**
+     * Forgets the player that was drawn.
+     *
+     * @param event the event that is fired after a living entity was drawn
+     */
+    @SubscribeEvent
+    public static void onRenderLivingPost(RenderLivingEvent.Post<?, ?> event) {
+        Rac1BlasterClient.onRenderLivingPost(event);
+    }
+
+    /**
+     * Remembers the matrices of the frame of the world that is drawn.
+     *
+     * <p>The event is fired after the world is drawn and right before the hand of the player is
+     * drawn, so that the matrices are the matrices of the frame that is drawn.
+     *
+     * @param event the event that is fired after the world is drawn
+     */
+    @SubscribeEvent
+    public static void onRenderLevelStage(RenderLevelStageEvent event) {
+        Rac1BlasterFrame.capture(event);
+    }
+
+    /**
+     * Keeps the speed of a player that holds the trigger of the Blaster and lets the player
+     * sprint while the weapon is fired.
+     *
+     * <p>The game of blocks slows a player down that uses an item: it keeps a fifth of the input
+     * of the keyboard, the way it does for the bow. The Blaster is not a bow, so the share that
+     * the game of blocks takes away is put back here.
+     *
+     * <p>The event of the game of blocks is fired before the share is taken, so the share cannot
+     * be taken back afterwards: the input is put back before the game of blocks takes its share
+     * away. Only the Blaster is treated this way: every other item keeps the share of the game
+     * of blocks.
+     *
+     * <p>The game of blocks refuses every player that uses an item the right to start to sprint,
+     * and the Blaster is held with the trigger. The sprint of the player is therefore started
+     * here, with the rules of the game of blocks and with the use of the item as the only rule
+     * that is put aside.
+     *
+     * @param event the event of the update of the input of the movement
+     */
+    @SubscribeEvent
+    public static void onMovementInputUpdate(MovementInputUpdateEvent event) {
+        Player player = event.getEntity();
+        if (!(player instanceof LocalPlayer local)) {
+            return;
+        }
+        Input input = event.getInput();
+        // The sprint is looked at before the share of the game of blocks is put back, so that the
+        // share of the keyboard is the share of the game of blocks.
+        Rac1BlasterClient.sprint(local, input);
+        if (!Rac1BlasterClient.isFiring(local) || local.isPassenger()) {
+            // The player does not fire the Blaster with the main hand, or the player rides: the
+            // game of blocks does not slow such a player down either.
+            return;
+        }
+        input.leftImpulse = Rac1BlasterMovement.compensate(input.leftImpulse);
+        input.forwardImpulse = Rac1BlasterMovement.compensate(input.forwardImpulse);
     }
 
     /**
