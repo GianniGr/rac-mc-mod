@@ -76,22 +76,24 @@ class Rac1CrateFitTest {
     }
 
     @Test
-    @DisplayName("A crate is centred in the cube of an item")
-    void aCrateIsCentredInTheCubeOfAnItem() {
+    @DisplayName("A crate is placed in the cube of an item like a block of the game of blocks")
+    void aCrateIsPlacedInTheCubeOfAnItem() {
         Rac1CrateFit.Place place = Rac1CrateFit.place(cube(-0.5f, 0.5f, 0.0f, 1.0f, -0.5f, 0.5f));
 
-        // The cube of an item of the game of blocks stands in the middle of the place of the
-        // item, so the crate has to stand in the middle of that cube along every axis.
-        assertEquals(0.0f, place.offsetX(), 1.0e-6f);
-        assertEquals(0.0f, place.offsetZ(), 1.0e-6f);
-        assertEquals(-0.5f, place.itemOffsetY(), 1.0e-6f,
-                "The crate has to stand in the middle of the cube of the item");
-        float lowest = place.itemOffsetY();
-        float highest = place.itemOffsetY() + place.height() * place.scale();
-        assertEquals(0.5f, highest, 1.0e-6f,
-                "The crate has to stand in the middle of the cube of the item");
-        assertEquals(-0.5f, lowest, 1.0e-6f,
-                "The crate has to stand in the middle of the cube of the item");
+        // The cube of an item of the game of blocks holds the block that is drawn in it, and the
+        // block of the game of blocks has its origin in the corner of the cube. The crate of the
+        // game has its origin in the middle of its own width and at its feet, so it is moved by
+        // half a block along the first and the third axis and by nothing along the second axis.
+        assertEquals(0.5f, place.itemOffsetX(), 1.0e-6f);
+        assertEquals(0.0f, place.itemOffsetY(), 1.0e-6f);
+        assertEquals(0.5f, place.itemOffsetZ(), 1.0e-6f);
+
+        // The crate fills the cube of the item, from its ground to its top and from one side of
+        // it to the other.
+        assertEquals(0.0f, place.itemOffsetY(), 1.0e-6f);
+        assertEquals(1.0f, place.itemOffsetY() + place.height() * place.scale(), 1.0e-6f);
+        assertEquals(0.0f, place.itemOffsetX() - place.width() * place.scale() / 2.0f, 1.0e-6f);
+        assertEquals(1.0f, place.itemOffsetX() + place.width() * place.scale() / 2.0f, 1.0e-6f);
     }
 
     /**

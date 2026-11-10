@@ -841,6 +841,14 @@ textures:
   of a block of the game of blocks: the crate is drawn as a small block in the lists of the game,
   as a block in the hand of the player and as a block on the ground.
 
+The place of the crate in the cube of the item follows the contract of the game of blocks: the
+cube of an item holds the block that is drawn in it, the model of a block of the game of blocks has
+its origin in the corner of that cube, and the game of blocks moves the cube by half a block in
+every direction before it hands it to the renderer of the item. The crate of the game has its
+origin in the middle of its own width and at its feet, so it is moved into the cube by half a block
+along the first and the third axis and by nothing along the second axis. The crate is then drawn
+exactly where a block of the game of blocks would be drawn.
+
 While a crate is broken, the game of blocks hands the renderer of the block entity a buffer that
 draws the crack of the block in front of the buffer of the block. The renderer of the crate draws
 the crate into that buffer as well, so that the crate stays visible while it is broken and the
@@ -896,7 +904,7 @@ ModDevGradle's NeoForge aware unit test support is enabled (`neoForge { unitTest
 so the test source set has the mod and the Minecraft classes on its classpath and tests can use
 Minecraft types directly.
 
-Fifty-five focused test classes exist today:
+Fifty-six focused test classes exist today:
 
 - `ModBootstrapMetadataTest` verifies that the mod id, mod name and mod version are identical in
   `gradle.properties`, in the generated `META-INF/neoforge.mods.toml` and in `RacMcConstants`, and
@@ -1140,8 +1148,13 @@ Fifty-five focused test classes exist today:
 - `Rac1CrateFitTest` verifies the place of a crate inside one block: a crate that is one block big
   is not scaled, a crate that is too big is scaled down and keeps its proportions, a crate that is
   smaller than a block keeps its size, a crate stands on the ground of the block and is centred
-  above it, a crate fits into one block after it was placed, and a crate is centred in the cube of
-  an item.
+  above it, a crate fits into one block after it was placed, and a crate is placed in the cube of
+  an item the way a block of the game of blocks is placed in it.
+- `Rac1CrateItemTransformTest` verifies the place of a crate as an item with the chain of the game
+  of blocks itself: the turn of the model of the item is read with the reader of the game of
+  blocks, the cube of the item is moved by half a block in every direction the way the game of
+  blocks moves it, and the crate has to end up in the same place as a block of the game of blocks
+  in every place the item is drawn at and in both hands.
 - `Rac1CrateAssetsTest` verifies the files of the crates in the resources of the mod: every crate
   has the file of the states of its block, the model of its block and the model of its item, the
   model of the item is the model of an item with a renderer of its own, it names a turn, a place
@@ -1152,7 +1165,7 @@ Fifty-five focused test classes exist today:
   the files of the crates are written without a byte order mark, or the game of blocks cannot read
   them.
 
-The suite currently contains 421 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
+The suite currently contains 424 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in
 `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in
 `Rac1MediaManagerTest`, 8 in `Rac1MediaGateTest`, 8 in `WadDecoderTest`, 5 in `TieClassReaderTest`,
@@ -1163,8 +1176,8 @@ The suite currently contains 421 tests: 7 in `ModBootstrapMetadataTest`, 2 in `M
 `Rac1CacheStoreTest`, 18 in `Rac1CacheLocationTest`, 7 in `Rac1CacheInterruptionTest`, 8 in
 `Rac1AssetCacheManagerTest`, 10 in `Rac1ScreenLayoutTest`, 18 in
 `RealDiscAssetTest`, 3 in `DiscFactsDiagnosticTest`, 2 in `RealDiscCrateTest`, 5 in
-`Rac1CratesTest`, 6 in `Rac1CrateFitTest`, 8 in `Rac1CrateAssetsTest` and 1 in
-`RealDiscImageTest`. 396 of them pass,
+`Rac1CratesTest`, 6 in `Rac1CrateFitTest`, 8 in `Rac1CrateAssetsTest`, 3 in
+`Rac1CrateItemTransformTest` and 1 in `RealDiscImageTest`. 399 of them pass,
 and twenty-five of them are skipped unless they are asked for: the twenty-four opt-in checks of a
 real disc image and the check of the cleanup of the staging files, which needs a system that can
 build a symbolic link.

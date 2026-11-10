@@ -30,15 +30,39 @@ public final class Rac1CrateFit {
                          float height, float depth) {
 
         /**
+         * The move of the crate along the first axis in the cube of an item.
+         *
+         * <p>The cube of an item of the game of blocks holds the block that is drawn in it, and
+         * the block of the game of blocks has its origin in the corner of the cube. The crate of
+         * the game has its origin in the middle of its own width and at its feet, so it is
+         * moved into the cube the way a block of the game of blocks is placed in it.
+         *
+         * @return the move of the crate
+         */
+        public float itemOffsetX() {
+            return 0.5f + offsetX;
+        }
+
+        /**
          * The move of the crate along the second axis in the cube of an item.
          *
-         * <p>The cube of an item of the game of blocks stands in the middle of the place of the
-         * item, so the crate is centred in the cube along the second axis as well.
+         * <p>The crate of the game stands on the ground of its own origin, and the block of the
+         * game of blocks stands on the ground of its origin as well, so the crate is not moved
+         * along the second axis.
          *
          * @return the move of the crate
          */
         public float itemOffsetY() {
-            return offsetY - height * scale / 2.0f;
+            return offsetY;
+        }
+
+        /**
+         * The move of the crate along the third axis in the cube of an item.
+         *
+         * @return the move of the crate
+         */
+        public float itemOffsetZ() {
+            return 0.5f + offsetZ;
         }
     }
 

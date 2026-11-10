@@ -59,10 +59,17 @@ public final class Rac1CrateDrawing {
     /**
      * Draws a crate of the game as an item of the game of blocks.
      *
-     * <p>The cube of an item of the game of blocks stands in the middle of the place of the
-     * item, so the crate is centred in that cube and keeps its own proportions. The turn of the
-     * cube and its size are the turns of the model of the item, so that the crate is drawn like
-     * every other block of the game of blocks.
+     * <p>The cube of an item of the game of blocks holds the block that is drawn in it: the
+     * model of a block of the game of blocks has its origin in the corner of that cube, and the
+     * game of blocks moves the cube by half a block in every direction before it hands it to
+     * the renderer of the item. The crate of the game has its origin in the middle of its own
+     * width and at its feet, so it is moved into the cube the way a block of the game of blocks
+     * is placed in it. The crate is then drawn exactly where a block of the game of blocks would
+     * be drawn, so it is held in the hand of the player and shown in the lists of the game the
+     * way every other block is.
+     *
+     * <p>The turn of the cube and its size are the turns of the model of the item, so that the
+     * crate is drawn like every other block of the game of blocks.
      *
      * @param pose the place of the crate
      * @param buffers the buffers the triangles are written into
@@ -76,7 +83,7 @@ public final class Rac1CrateDrawing {
         pose.pushPose();
         try {
             pose.scale(place.scale(), place.scale(), place.scale());
-            pose.translate(place.offsetX(), place.itemOffsetY(), place.offsetZ());
+            pose.translate(place.itemOffsetX(), place.itemOffsetY(), place.itemOffsetZ());
             Rac1MeshRenderer.render(pose, buffers, crate.mesh(), textures, light, closes(buffers));
         } finally {
             pose.popPose();
