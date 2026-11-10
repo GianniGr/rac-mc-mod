@@ -3,6 +3,9 @@ package com.github.giannigr.racmc.cache;
 import com.github.giannigr.racmc.asset.AssetFormatException;
 import com.github.giannigr.racmc.asset.Rac1AnimatedAsset;
 import com.github.giannigr.racmc.asset.Rac1AssetExtractor;
+import com.github.giannigr.racmc.asset.Rac1CrateAsset;
+import com.github.giannigr.racmc.asset.Rac1CrateDefinition;
+import com.github.giannigr.racmc.asset.Rac1Crates;
 import com.github.giannigr.racmc.asset.Rac1StaticAsset;
 import com.github.giannigr.racmc.disc.DiscFormatException;
 import com.github.giannigr.racmc.disc.Rac1LevelAssets;
@@ -12,6 +15,8 @@ import com.github.giannigr.racmc.wad.WadFormatException;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -243,11 +248,18 @@ public final class Rac1AssetCacheManager implements Closeable {
             progress = 80;
             Rac1AnimatedAsset blaster = Rac1AssetExtractor.readGadgetAsset(assets,
                     Rac1AssetExtractor.BLASTER_CLASS);
+            step = "The crates are converted.";
+            progress = 90;
+            Map<String, Rac1CrateAsset> crates = new LinkedHashMap<>();
+            for (Rac1CrateDefinition definition : Rac1Crates.definitions()) {
+                crates.put(definition.key(), Rac1AssetExtractor.readCrateAsset(assets, definition));
+            }
             int[] handChain = Rac1AssetExtractor.readHandChain(assets);
             int handJoint = handChain.length == 0 ? 0 : handChain[handChain.length - 1];
             step = "The cache is written.";
-            progress = 90;
-            return new Rac1CacheContent(key, staticAsset, animatedAsset, blaster, handJoint);
+            progress = 95;
+            return new Rac1CacheContent(key, staticAsset, animatedAsset, blaster, handJoint,
+                    crates);
         }
     }
 

@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.github.giannigr.racmc.asset.Rac1CrateDefinition;
+import com.github.giannigr.racmc.asset.Rac1Crates;
+import com.github.giannigr.racmc.block.Rac1CrateBlock;
+import com.github.giannigr.racmc.block.RacMcBlocks;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -19,6 +23,7 @@ import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -117,5 +122,30 @@ class RacMcCreativeTabTest {
         assertTrue(combat.getDisplayItems().stream()
                 .noneMatch(stack -> stack.is(RacMcItems.BLASTER.get())),
                 "The Blaster must not be in the tab of the combat of the game");
+    }
+
+    @Test
+    @DisplayName("The tab of the mod holds the crates of the game")
+    void tabHoldsTheCrates() {
+        assertNotNull(tab);
+        Collection<ItemStack> items = tab.getDisplayItems();
+        assertNotNull(items);
+        for (Rac1CrateDefinition definition : Rac1Crates.definitions()) {
+            Block block = RacMcBlocks.crate(definition).get();
+            assertTrue(items.stream().anyMatch(stack -> stack.is(block.asItem())),
+                    "The tab of the mod must hold the crate " + definition.key());
+        }
+    }
+
+    @Test
+    @DisplayName("Every crate of the game is a block of the mod with an item of its own")
+    void everyCrateIsABlockWithAnItem() {
+        for (Rac1CrateDefinition definition : Rac1Crates.definitions()) {
+            Block block = RacMcBlocks.crate(definition).get();
+            assertEquals(definition, ((Rac1CrateBlock) block).definition(),
+                    "The block has to know the crate it shows");
+            assertFalse(block.asItem() == net.minecraft.world.item.Items.AIR,
+                    "The crate " + definition.key() + " needs an item to be placed with");
+        }
     }
 }

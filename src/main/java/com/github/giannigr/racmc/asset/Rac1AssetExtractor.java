@@ -222,6 +222,57 @@ public final class Rac1AssetExtractor {
     }
 
     /**
+     * Reads a crate of the game out of the data of a level.
+     *
+     * <p>The crates of the game are classes of the game like every other object of the game, so
+     * they are read out of the table of the classes of the level. A crate is a static object: it
+     * has no skeleton and no animation of its own, so only its geometry and its textures are
+     * read.
+     *
+     * <p>The geometry of a crate of the game is one unit high and one unit wide and deep, so it
+     * fits into one block of the game of blocks without being scaled. The converter does not
+     * change that: the crate keeps the size and the place it has in the game.
+     *
+     * @param assets the data of the level
+     * @param definition the description of the crate
+     * @return the asset of the crate
+     * @throws AssetFormatException when the crate cannot be read
+     */
+    public static Rac1CrateAsset readCrateAsset(Rac1LevelAssets assets,
+                                                 Rac1CrateDefinition definition)
+            throws AssetFormatException {
+        Rac1CoreIndex index = assets.coreIndex();
+        Rac1ClassEntry entry = index.mobyClass(definition.classNumber());
+        if (entry == null || entry.offset() <= 0) {
+            throw new AssetFormatException("The level has no crate of the class "
+                    + definition.classNumber() + ".");
+        }
+        MobyClassReader reader = MobyClassReader.of(classBlob(assets, entry));
+        MobyClassReader.Mesh mesh = reader.readMesh();
+        Rac1CoordinateTransform transform = new Rac1CoordinateTransform(UNIT_SCALE);
+        int vertexCount = mesh.vertexCount();
+        float[] positions = new float[vertexCount * 3];
+        float[] normals = new float[vertexCount * 3];
+        for (int vertex = 0; vertex < vertexCount; vertex++) {
+            float[] point = transform.convert(mesh.positions()[vertex * 3],
+                    mesh.positions()[vertex * 3 + 1], mesh.positions()[vertex * 3 + 2]);
+            positions[vertex * 3] = point[0];
+            positions[vertex * 3 + 1] = point[1];
+            positions[vertex * 3 + 2] = point[2];
+            float[] normal = transform.convertDirection(mesh.normals()[vertex * 3],
+                    mesh.normals()[vertex * 3 + 1], mesh.normals()[vertex * 3 + 2]);
+            normals[vertex * 3] = normal[0];
+            normals[vertex * 3 + 1] = normal[1];
+            normals[vertex * 3 + 2] = normal[2];
+        }
+        Rac1Texture[] textures = textures(assets, entry, index.mobyTextures(),
+                entry.textureCount());
+        Rac1Mesh converted = new Rac1Mesh(positions, normals, mesh.uvs(), mesh.indices(),
+                mesh.materials());
+        return new Rac1CrateAsset(definition.key(), definition.classNumber(), converted, textures);
+    }
+
+    /**
      * Reads the chain of joints the hero holds his items on.
      *
      * <p>The first list of the joint lists of the hero is the chain of the hand. The game places
