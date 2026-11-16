@@ -11,7 +11,7 @@ public final class Rac1HudTextures {
             new Rac1HudTextureRegistry<>(Rac1ClientTextures::release);
     private Rac1HudTextures() {}
     public static ResourceLocation get(Rac1CacheContent content, String key, Rac1Texture texture) {
-        return TEXTURES.get(content, key, () -> Rac1ClientTextures.register("hud_" + key, texture));
+        return TEXTURES.get(content, key, () -> Rac1ClientTextures.registerClamped("hud_" + key, texture));
     }
     public static void release() {
         TEXTURES.clear();

@@ -18,6 +18,12 @@ revision/notification protocol and four-second timeout are unchanged.
 - Shared client drawing/texture lifecycle supports cache replacement, resource
   reload and logout; textures are not allocated per frame.
 
+HUD pages use linear filtering with `CLAMP_TO_EDGE` on both texture axes. They are
+standalone images, not repeating tiles. The original cap's transparent outer
+columns must not borrow alpha from its opposite opaque edge. No pixels, full-page
+UV extents, cap rotation, font metrics or layout are cropped/changed by this policy;
+the existing 3D texture registration keeps its previous wrapping behavior.
+
 Nothing is added to native texture/font resources, and no external dependency or
 upstream source code is copied. Upstream GPL-marked decompilation was consulted
 only for format/behavior facts, then checked against the authorized retail bytes.
@@ -97,3 +103,16 @@ Actual Minecraft overlay placement, blending, readability at GUI scales, resourc
 reload under the graphics driver and pickup-driven presentation remain **runtime
 unverified**. Separate T13 and owner playtesting are required before integration.
 This work adds no sounds or original bolt launch motion and combines no branches.
+
+The owner subsequently previewed the HUD and reported thin lines outside both cap
+quads. A bounded isolated GPU regression reproduced 52 visible pixels per outside
+column with the original cap and default `REPEAT`; production clamp sampling
+reduced both to zero, retaining all non-boundary pixels. This uses a never-shown,
+unfocused test context and Minecraft's GUI shader, not a game-client playtest.
+Run it with `RACMC_TEST_SHADER_GPU=1` and
+`test --rerun --tests '*Rac1HudEdgeSamplingGpuTest'` (force execution when changing
+the opt-in environment/fixture rather than reusing a Gradle test result).
+Its default input is synthetic; a private read-only 32×32 RGBA cap can be supplied
+with `RACMC_TEST_HUD_PANEL_RGBA`. No original art fixture belongs in Git.
+The corrected candidate still needs T13/owner verification after a coordinated
+client restart; no live owner process is reloaded or modified by these tests.
