@@ -52,16 +52,20 @@ class Rac1CrateBlastPolicyTest {
     }
 
     @Test
-    void knockbackNormalizesToTheSamePerTargetBoundary() {
-        assertEquals(1, Rac1CrateBlastPolicy.knockback(0, true, 1));
-        assertEquals(0.5, Rac1CrateBlastPolicy.knockback(1, true, 1));
-        assertEquals(0.25, Rac1CrateBlastPolicy.knockback(1, true, 0.5));
-        assertEquals(0, Rac1CrateBlastPolicy.knockback(2, true, 1));
-        assertEquals(0, Rac1CrateBlastPolicy.knockback(2.000001, true, 1));
-        assertEquals(0.5, Rac1CrateBlastPolicy.knockback(1.5, false, 1));
-        assertEquals(0, Rac1CrateBlastPolicy.knockback(3, false, 1));
-        assertEquals(0, Rac1CrateBlastPolicy.knockback(3.000001, false, 1));
-        assertEquals(0, Rac1CrateBlastPolicy.knockback(0, false, 0));
+    void knockbackUsesVanillaTntEightBlockOriginEnvelopeIndependentOfDamage() {
+        assertEquals(4, Rac1CrateBlastPolicy.TNT_KNOCKBACK_POWER);
+        assertEquals(8, Rac1CrateBlastPolicy.KNOCKBACK_RADIUS);
+        assertEquals(1, Rac1CrateBlastPolicy.knockback(0, 1));
+        assertEquals(0.875, Rac1CrateBlastPolicy.knockback(1, 1));
+        assertEquals(0.75, Rac1CrateBlastPolicy.knockback(2, 1));
+        assertEquals(0.625, Rac1CrateBlastPolicy.knockback(3, 1));
+        assertEquals(0.5, Rac1CrateBlastPolicy.knockback(4, 1));
+        assertEquals(0.25, Rac1CrateBlastPolicy.knockback(4, 0.5));
+        assertEquals(0, Rac1CrateBlastPolicy.knockback(8, 1));
+        assertEquals(0, Rac1CrateBlastPolicy.knockback(8.000001, 1));
+        assertEquals(0, Rac1CrateBlastPolicy.knockback(0, 0));
+        assertFalse(Rac1CrateBlastPolicy.inRange(Vec3.ZERO, box(4), false));
+        assertTrue(Rac1CrateBlastPolicy.knockback(4, 1) > 0);
     }
 
     @Test
@@ -70,8 +74,8 @@ class Rac1CrateBlastPolicyTest {
         assertEquals(0, Rac1CrateBlastPolicy.damage(-1));
         assertEquals(0, Rac1CrateBlastPolicy.damage(Double.NaN));
         assertEquals(0, Rac1CrateBlastPolicy.damage(Double.POSITIVE_INFINITY));
-        assertEquals(0, Rac1CrateBlastPolicy.knockback(Double.NaN, false, 1));
-        assertEquals(0, Rac1CrateBlastPolicy.knockback(-1, false, 1));
+        assertEquals(0, Rac1CrateBlastPolicy.knockback(Double.NaN, 1));
+        assertEquals(0, Rac1CrateBlastPolicy.knockback(-1, 1));
     }
 
     @Test
@@ -88,5 +92,8 @@ class Rac1CrateBlastPolicyTest {
         assertFalse(source.contains("setHealth("));
         assertFalse(source.contains("DAMAGE_RADIUS"));
         assertFalse(source.contains("halfTntDamage"));
+        assertTrue(source.contains("Set<LivingEntity> hurtTargets"));
+        assertTrue(source.contains("Map<ServerPlayer, Vec3> playerPushes"));
+        assertTrue(source.indexOf("&& damage(level") < source.indexOf("knockback(level"));
     }
 }

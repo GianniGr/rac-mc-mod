@@ -63,12 +63,23 @@ and no point-blank amplification: a fully exposed unarmored player receives
 the raw hit; a fully blocking wall gives zero hurt, push and entity-hit callbacks.
 No manual health subtraction bypasses normal protection.
 
-Knockback stops at the **same 2/3-block boundary**. Inside it the magnitude is
-`(1-distanceToAABB/targetRadius) * exposure`, then the normal explosion-knockback
-resistance attribute and NeoForge knockback hook apply. Direction remains away
-from the blast toward the entity's eye position; authoritative velocity sync is
-retained. At the exact boundary the damage hit is eligible but the base impulse
-is zero. There is no surviving 8-block damage or push envelope.
+**Latest owner override: knockback alone is normal vanilla TNT strength 4.**
+It has a separate **8-block entity-origin envelope**, magnitude
+`(1-distanceFromEntityOrigin/8) * exposure`, then normal
+`EXPLOSION_KNOCKBACK_RESISTANCE` (including blast-protection equipment effects)
+and the NeoForge explosion-knockback hook. Direction uses entity X/Z and eye Y
+away from the blast, exactly as vanilla does for living targets. Damage remains
+the independent flat 5 HP × exposure within player 2 / mob 3 AABB boundaries;
+entities outside harm range can be pushed but receive **no added TNT damage**.
+The previous 2/3-limited impulse contract is superseded, not an active option.
+
+Player transport preserves vanilla's additive float3 impulse and its exclusion
+of spectator/creative-flying recipients. A fixed 12-byte clientbound payload
+applies the impulse to existing velocity on the client main thread. It does not
+replace absolute velocity or replay vanilla explosion terrain/audio/particles.
+Ordinary hurt/player movement synchronization stays managed by the engine;
+nonplayer mob velocity synchronization is explicit. Matching mod builds are
+required on server and client for the registered payload.
 
 Entity wall shielding is an explicit MC protection adaptation. Crates still use
 the independent 3-block, wall-ignoring query above, so a wall may protect a mob
@@ -76,15 +87,15 @@ while a crate behind that wall is destroyed/chain-armed. **ItemEntity is exclude
 both before and after events**, not assumed invulnerable.
 ## Events, protection, terrain and integration
 
-One Explosion context (radius metadata 3, fire=false) posts NeoForge Start before effects
+One Explosion context (strength metadata 4, fire=false) posts NeoForge Start before effects
 and Detonate before mutation. Event removals are honored; immutable original
 candidate identity/set intersection rejects additions and stale/replaced BEs.
 Denied self-removal suppresses the entire emission. The service never calls
 vanilla explode/finalizeExplosion, sends no vanilla terrain-destruction packet,
 and never removes a non-RaC block or places fire.
-The radius is event context for the maximum crate/query sphere, not a vanilla TNT
-damage strength. The Detonate hook receives geometric diameter 6; this version
-of NeoForge posts the event without using that argument for damage calculations.
+The context and Detonate radius argument 8 match TNT knockback compatibility,
+not a TNT damage calculation. Damage and knockback have separate eligibility
+loops, and neither invokes vanilla `explode()` or terrain finalization.
 
 This honors NeoForge explosion hooks and ordinary damage hooks, **not a guarantee
 for every third-party claim mod**. Mods protecting only player BreakEvent need a

@@ -8,6 +8,8 @@ public final class Rac1CrateBlastPolicy {
     public static final float BASE_DAMAGE = 5.0F;
     public static final double PLAYER_RADIUS = 2.0;
     public static final double MOB_RADIUS = 3.0;
+    public static final float TNT_KNOCKBACK_POWER = 4.0F;
+    public static final double KNOCKBACK_RADIUS = 8.0;
 
     private Rac1CrateBlastPolicy() {
     }
@@ -31,11 +33,12 @@ public final class Rac1CrateBlastPolicy {
         return (float) (BASE_DAMAGE * exposure(exposure));
     }
 
-    public static double knockback(double distance, boolean player, double exposure) {
-        if (!Double.isFinite(distance) || distance < 0 || distance > radius(player)) {
+    /** Vanilla TNT uses entity-origin distance, not the damage query's closest AABB point. */
+    public static double knockback(double distance, double exposure) {
+        if (!Double.isFinite(distance) || distance < 0 || distance > KNOCKBACK_RADIUS) {
             return 0;
         }
-        return (1.0 - distance / radius(player)) * exposure(exposure);
+        return (1.0 - distance / KNOCKBACK_RADIUS) * exposure(exposure);
     }
 
     private static double exposure(double value) {
