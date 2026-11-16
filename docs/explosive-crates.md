@@ -47,27 +47,44 @@ This approximates original collision primitives, not exact expanding PS2 queries
 It ignores intervening walls per adopted original rule. Loaded chunks only;
 no terrain raymarch or chunk acquisition.
 
-Living entities use **vanilla TNT strength 4 baseline**, damage envelope radius
-**8 blocks**, vanilla entity-position distance and vanilla sampled exposure.
-Raw damage is exactly `0.5 * floor(((impact² + impact)/2)*7*8 + 1)`,
-`impact=(1-distance/8)*exposure`, then normal explosion damage/armor/events apply.
-Point-blank unarmored damage can be **28.5 HP**, potentially lethal. This is NOT
-strength 2, radius 4, fixed damage, or original Ratchet HP behavior. Walls do not
-shield the crate chain query, but DO affect living damage/knockback exposure.
-Knockback retains vanilla TNT magnitude, exposure falloff, explosion resistance
-attribute and NeoForge knockback hook, independent of damage scaling.
-Only LivingEntity targets receive damage/knockback/callbacks; **ItemEntity is
-excluded both before and after events**, not assumed invulnerable. Other
-nonliving entities are not TNT-equivalent targets on this branch.
+**Current owner-approved balance supersedes the earlier half-TNT policy.**
+Players are eligible within **2 blocks**, other living mobs (`Mob`) within
+**3 blocks**, measured from blast center to the closest point on their entity
+AABB, inclusive at the boundary. Broadphase numerical padding does not extend
+this exact boundary. Items, armor stands and unrelated nonliving entities are
+not living damage targets. The final range/category checks run again after events.
 
+Every eligible exposed target receives **5 HP (2.5 Minecraft hearts) × vanilla
+sampled exposure**, before ordinary armor, enchantments, invulnerability and
+damage/protection events through `entity.hurt(explosionDamageSource, amount)`.
+There is **no distance falloff inside the boundary**, no TNT damage coefficient
+and no point-blank amplification: a fully exposed unarmored player receives
+5 HP near the crate or at the 2-block boundary. Partial exposure scales only
+the raw hit; a fully blocking wall gives zero hurt, push and entity-hit callbacks.
+No manual health subtraction bypasses normal protection.
+
+Knockback stops at the **same 2/3-block boundary**. Inside it the magnitude is
+`(1-distanceToAABB/targetRadius) * exposure`, then the normal explosion-knockback
+resistance attribute and NeoForge knockback hook apply. Direction remains away
+from the blast toward the entity's eye position; authoritative velocity sync is
+retained. At the exact boundary the damage hit is eligible but the base impulse
+is zero. There is no surviving 8-block damage or push envelope.
+
+Entity wall shielding is an explicit MC protection adaptation. Crates still use
+the independent 3-block, wall-ignoring query above, so a wall may protect a mob
+while a crate behind that wall is destroyed/chain-armed. **ItemEntity is excluded
+both before and after events**, not assumed invulnerable.
 ## Events, protection, terrain and integration
 
-One Explosion context (strength 4, fire=false) posts NeoForge Start before effects
+One Explosion context (radius metadata 3, fire=false) posts NeoForge Start before effects
 and Detonate before mutation. Event removals are honored; immutable original
 candidate identity/set intersection rejects additions and stale/replaced BEs.
 Denied self-removal suppresses the entire emission. The service never calls
 vanilla explode/finalizeExplosion, sends no vanilla terrain-destruction packet,
 and never removes a non-RaC block or places fire.
+The radius is event context for the maximum crate/query sphere, not a vanilla TNT
+damage strength. The Detonate hook receives geometric diameter 6; this version
+of NeoForge posts the event without using that argument for damage calculations.
 
 This honors NeoForge explosion hooks and ordinary damage hooks, **not a guarantee
 for every third-party claim mod**. Mods protecting only player BreakEvent need a

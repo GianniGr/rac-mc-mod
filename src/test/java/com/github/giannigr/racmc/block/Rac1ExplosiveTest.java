@@ -88,12 +88,12 @@ class Rac1ExplosiveTest {
     }
 
     @Test
-    void halfTntMeansHalfDamageNotHalfStrength() {
-        assertEquals(28.5F, Rac1ExplosiveFuse.halfTntDamage(0, 1));
-        assertEquals(11F, Rac1ExplosiveFuse.halfTntDamage(0.5, 1));
-        assertEquals(0.5F, Rac1ExplosiveFuse.halfTntDamage(1, 1));
-        assertEquals(0.5F, Rac1ExplosiveFuse.halfTntDamage(0, 0));
-        assertEquals(8, Rac1CrateBlast.DAMAGE_RADIUS);
+    void approvedFlatDamageSupersedesTntEnvelope() {
+        assertEquals(5.0F, Rac1CrateBlastPolicy.damage(1));
+        assertEquals(2.5F, Rac1CrateBlastPolicy.damage(0.5));
+        assertEquals(0, Rac1CrateBlastPolicy.damage(0));
+        assertEquals(2, Rac1CrateBlastPolicy.PLAYER_RADIUS);
+        assertEquals(3, Rac1CrateBlastPolicy.MOB_RADIUS);
         assertEquals(3, Rac1CrateBlast.CRATE_RADIUS);
     }
 

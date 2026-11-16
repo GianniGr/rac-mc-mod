@@ -79,9 +79,4 @@ public final class Rac1ExplosiveFuse {
                 179 - (int) Math.floor(3.0 * (FULL_TICKS - remaining + partial)));
         return originalCounter % 60 > 40 || originalCounter < 15;
     }
-
-    public static float halfTntDamage(double normalizedDistance, double exposure) {
-        double impact = (1.0 - normalizedDistance) * exposure;
-        return 0.5F * (int) ((impact * impact + impact) / 2.0 * 7.0 * 8.0 + 1.0);
-    }
 }

@@ -26,7 +26,6 @@ import net.neoforged.neoforge.event.EventHooks;
 /** One event-aware, final-allowlisted blast. Never invokes vanilla terrain finalization. */
 public final class Rac1CrateBlast {
     public static final double CRATE_RADIUS = 3.0;
-    public static final double DAMAGE_RADIUS = 8.0; // Vanilla TNT strength 4, NOT strength 2.
 
     private Rac1CrateBlast() {
     }
@@ -47,7 +46,7 @@ public final class Rac1CrateBlast {
     public static void detonate(ServerLevel level, Vec3 center,
             @Nullable Rac1CrateBlockEntity grounded, @Nullable Rac1FallingExplosive airborne) {
         Explosion context = new Explosion(level, airborne, center.x, center.y, center.z,
-                4.0F, false, Explosion.BlockInteraction.DESTROY);
+                (float) CRATE_RADIUS, false, Explosion.BlockInteraction.DESTROY);
         if (EventHooks.onExplosionStart(level, context)) {
             return; // Terminal suppressed state: no retries, removal, damage, chain or payout.
         }
@@ -63,14 +62,15 @@ public final class Rac1CrateBlast {
             }
         }
         List<Entity> entities = new ArrayList<>(level.getEntities((Entity) null,
-                new AABB(center, center).inflate(DAMAGE_RADIUS + 1), e ->
-                        !(e instanceof ItemEntity) && (e instanceof LivingEntity
+                new AABB(center, center).inflate(CRATE_RADIUS + 1.0E-6), e ->
+                        !(e instanceof ItemEntity) && (isLivingTarget(e)
+                        && Rac1CrateBlastPolicy.inRange(center, e.getBoundingBox(), e instanceof Player)
                         || e instanceof FallingBlockEntity falling
                         && falling.getBlockState().getBlock() instanceof Rac1CrateBlock
                         && inCrateRange(center, e.getBoundingBox()))));
         Set<Entity> originals = new HashSet<>(entities);
         context.getToBlow().addAll(blocks.keySet());
-        EventHooks.onExplosionDetonate(level, context, entities, DAMAGE_RADIUS);
+        EventHooks.onExplosionDetonate(level, context, entities, 2 * CRATE_RADIUS);
         Set<BlockPos> authorized = new HashSet<>(context.getToBlow());
         Set<Entity> authorizedEntities = new HashSet<>(entities);
         // Self-consumption is protected by the same event list as other targets.
@@ -109,7 +109,8 @@ public final class Rac1CrateBlast {
                     // Baseline falling crates have no payouts. Integration seam mirrors destroyCrate.
                     falling.discard();
                 }
-            } else if (entity instanceof LivingEntity living && !entity.ignoreExplosion(context)) {
+            } else if (entity instanceof LivingEntity living && isLivingTarget(entity)
+                    && !entity.ignoreExplosion(context)) {
                 damage(level, context, center, living, airborne);
             }
         }
@@ -144,24 +145,32 @@ public final class Rac1CrateBlast {
 
     private static void damage(ServerLevel level, Explosion context, Vec3 center,
             LivingEntity entity, @Nullable Entity source) {
-        double distance = Math.sqrt(entity.distanceToSqr(center)) / DAMAGE_RADIUS;
-        if (distance > 1.0) {
-            return;
-        }
-        Vec3 direction = new Vec3(entity.getX() - center.x,
-                entity.getEyeY() - center.y, entity.getZ() - center.z);
-        if (direction.lengthSqr() == 0) {
+        boolean player = entity instanceof Player;
+        double distance = Rac1CrateBlastPolicy.distance(center, entity.getBoundingBox());
+        if (distance > Rac1CrateBlastPolicy.radius(player)) {
             return;
         }
         double exposure = Explosion.getSeenPercent(center, entity);
-        entity.hurt(level.damageSources().explosion(context),
-                Rac1ExplosiveFuse.halfTntDamage(distance, exposure));
-        double impulse = (1.0 - distance) * exposure
+        float amount = Rac1CrateBlastPolicy.damage(exposure);
+        if (amount <= 0) {
+            // A fully blocking wall prevents hurt, push and entity-hit callbacks,
+            // but the independent crate query still crosses it.
+            return;
+        }
+        entity.hurt(level.damageSources().explosion(context), amount);
+        Vec3 direction = new Vec3(entity.getX() - center.x,
+                entity.getEyeY() - center.y, entity.getZ() - center.z);
+        double impulse = Rac1CrateBlastPolicy.knockback(distance, player, exposure)
                 * (1.0 - entity.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE));
         Vec3 push = EventHooks.getExplosionKnockback(level, context, entity,
                 direction.normalize().scale(impulse));
         entity.setDeltaMovement(entity.getDeltaMovement().add(push));
         entity.hurtMarked = true; // Includes authoritative player velocity synchronization.
         entity.onExplosionHit(source);
+    }
+
+    private static boolean isLivingTarget(Entity entity) {
+        return entity.isAlive() && !entity.isSpectator()
+                && (entity instanceof Player || entity instanceof Mob);
     }
 }
