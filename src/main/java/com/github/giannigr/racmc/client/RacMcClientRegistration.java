@@ -48,6 +48,7 @@ public final class RacMcClientRegistration {
 
     /** The renderer of the Blaster, when it was built. */
     private static BlasterItemRenderer renderer;
+    private static com.github.giannigr.racmc.client.render.Rac1BoltItemRenderer boltRenderer;
 
     /** The renderers of the crates of the game, by the key of the crate. */
     private static final Map<String, Rac1CrateItemRenderer> crateRenderers =
@@ -71,6 +72,8 @@ public final class RacMcClientRegistration {
      */
     @SubscribeEvent
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        event.registerEntityRenderer(RacMcEntities.BOLT.get(),
+                com.github.giannigr.racmc.client.render.Rac1BoltRenderer::new);
         event.registerEntityRenderer(RacMcEntities.BLASTER_ARROW.get(),
                 Rac1BlasterArrowRenderer::new);
         event.registerBlockEntityRenderer(RacMcBlockEntities.CRATE.get(), Rac1CrateRenderer::new);
@@ -89,6 +92,13 @@ public final class RacMcClientRegistration {
      */
     @SubscribeEvent
     public static void onRegisterClientExtensions(RegisterClientExtensionsEvent event) {
+        RacMcItems.BOLTS.values().forEach(item -> event.registerItem(new IClientItemExtensions() {
+            @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() {
+                if (boltRenderer == null) boltRenderer =
+                        new com.github.giannigr.racmc.client.render.Rac1BoltItemRenderer();
+                return boltRenderer;
+            }
+        }, item.get()));
         event.registerItem(new IClientItemExtensions() {
 
             @Override

@@ -197,6 +197,12 @@ public final class Rac1AssetCacheManager implements Closeable {
         try {
             Optional<Rac1CacheContent> cached = store.load(key);
             if (cached.isPresent()) {
+                for (var bolt : com.github.giannigr.racmc.asset.Rac1Bolts.definitions()) {
+                    var asset = cached.get().crate(bolt.key());
+                    if (asset == null || asset.classNumber() != bolt.classNumber()
+                            || asset.mesh().triangleCount() == 0)
+                        throw new IOException("The cache is missing original bolt assets.");
+                }
                 content = cached.get();
                 progress = 100;
                 step = "The assets are ready.";
@@ -255,6 +261,9 @@ public final class Rac1AssetCacheManager implements Closeable {
                 crates.put(definition.key(), Rac1AssetExtractor.readCrateAsset(assets, definition));
             }
             int[] handChain = Rac1AssetExtractor.readHandChain(assets);
+            for (var bolt : com.github.giannigr.racmc.asset.Rac1Bolts.definitions()) {
+                crates.put(bolt.key(), Rac1AssetExtractor.readCrateAsset(assets, bolt));
+            }
             int handJoint = handChain.length == 0 ? 0 : handChain[handChain.length - 1];
             step = "The cache is written.";
             progress = 95;

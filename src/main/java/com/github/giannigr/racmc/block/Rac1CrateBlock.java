@@ -24,10 +24,9 @@ import net.minecraft.world.level.storage.loot.LootParams;
  * the block entity, out of the mesh that was imported out of the disc. The block itself is
  * invisible and holds the space of one block.
  *
- * <p>The block is a solid block: it fills its space, it can be built on and it can be broken. It
- * drops nothing, because the crates of the mod are a picture of the game and not a part of the
- * game of blocks yet. The bolts, the health and the ammunition of the game are not part of this
- * block either.
+ * <p>No inventory-item loot. Genuine player/explosion destruction goes through the shared reward
+ * service; wooden and explosive crates emit currency. Health/ammo rewards and explosive
+ * activation are not implemented by this branch.
  *
  * <p>The block falls like the sand of the game of blocks: when the block below it is gone, it
  * falls down as a falling block and it comes to rest on the first block under it. The falling
@@ -54,6 +53,40 @@ public class Rac1CrateBlock extends FallingBlock implements EntityBlock {
 
     /** The description of the crate the block shows. */
     private final Rac1CrateDefinition definition;
+    private net.minecraft.nbt.CompoundTag fallingRewardData;
+
+    @Override
+    protected void tick(BlockState state, net.minecraft.server.level.ServerLevel level,
+                        BlockPos pos, net.minecraft.util.RandomSource random) {
+        BlockEntity entity = level.getBlockEntity(pos);
+        if (entity instanceof Rac1CrateBlockEntity crate) crate.initializeReward();
+        fallingRewardData = entity == null ? null : entity.saveWithoutMetadata(level.registryAccess());
+        try {
+            super.tick(state, level, pos, random);
+        } finally {
+            fallingRewardData = null;
+        }
+    }
+
+    @Override
+    public boolean onDestroyedByPlayer(BlockState state, net.minecraft.world.level.Level level,
+            BlockPos pos, net.minecraft.world.entity.player.Player player, boolean willHarvest,
+            net.minecraft.world.level.material.FluidState fluid) {
+        if (level instanceof net.minecraft.server.level.ServerLevel server) {
+            com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(server, pos, state, player);
+            return level.getBlockState(pos) != state;
+        }
+        return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
+    }
+
+    @Override
+    public void onBlockExploded(BlockState state, net.minecraft.world.level.Level level,
+            BlockPos pos, net.minecraft.world.level.Explosion explosion) {
+        if (level instanceof net.minecraft.server.level.ServerLevel server) {
+            com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(server, pos, state,
+                    explosion.getDirectSourceEntity());
+        }
+    }
 
     /**
      * Creates the block of a crate.
@@ -103,8 +136,7 @@ public class Rac1CrateBlock extends FallingBlock implements EntityBlock {
 
     @Override
     protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
-        // The crates of the mod drop nothing: they are a picture of the game and not a part of
-        // the game of blocks yet.
+        // Currency is emitted by the reward service, never by vanilla item loot.
         return List.of();
     }
 
@@ -115,6 +147,8 @@ public class Rac1CrateBlock extends FallingBlock implements EntityBlock {
         // still placed when it comes to rest, and it still comes to rest on the first block
         // under it.
         entity.dropItem = false;
+        // Vanilla transfers blockData back into the landed block entity.
+        if (fallingRewardData != null) entity.blockData = fallingRewardData.copy();
     }
 
     @Override

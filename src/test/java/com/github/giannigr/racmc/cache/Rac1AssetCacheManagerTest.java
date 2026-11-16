@@ -27,10 +27,23 @@ class Rac1AssetCacheManagerTest {
     Path tempDir;
 
     @Test
+    void currentVersionCacheMissingBoltsIsNotReady() throws IOException {
+        var store = new Rac1CacheStore(tempDir);
+        store.store(KEY, SyntheticAssets.content(KEY));
+        try (var manager = new Rac1AssetCacheManager(store, new Rac1DiscValidator())) {
+            manager.start(tempDir.resolve("missing.iso"), KEY);
+            waitFor(manager);
+            assertEquals(Rac1CacheState.FAILED, manager.state());
+            assertFalse(manager.isReady());
+            assertTrue(manager.content().isEmpty());
+        }
+    }
+
+    @Test
     @DisplayName("A cache that holds both assets is used")
     void aCacheThatHoldsBothAssetsIsUsed() throws IOException {
         Rac1CacheStore store = new Rac1CacheStore(tempDir);
-        store.store(KEY, SyntheticAssets.content(KEY));
+        store.store(KEY, SyntheticAssets.completeContent(KEY));
         try (Rac1AssetCacheManager manager = new Rac1AssetCacheManager(store,
                 new Rac1DiscValidator())) {
             manager.start(tempDir.resolve("missing.iso"), KEY);
@@ -49,7 +62,7 @@ class Rac1AssetCacheManagerTest {
     @DisplayName("A cache that is damaged is not used")
     void aDamagedCacheIsNotUsed() throws IOException {
         Rac1CacheStore store = new Rac1CacheStore(tempDir);
-        store.store(KEY, SyntheticAssets.content(KEY));
+        store.store(KEY, SyntheticAssets.completeContent(KEY));
         Path file = store.fileFor(KEY);
         byte[] bytes = Files.readAllBytes(file);
         bytes[bytes.length - 30] ^= 0x7F;
@@ -162,10 +175,10 @@ class Rac1AssetCacheManagerTest {
     @DisplayName("A cache that a run left half written is not used and the cache that was there is")
     void aHalfWrittenFileIsNotUsed() throws IOException {
         Rac1CacheStore store = new Rac1CacheStore(tempDir);
-        store.store(KEY, SyntheticAssets.content(KEY));
+        store.store(KEY, SyntheticAssets.completeContent(KEY));
         Path staging = store.fileFor(KEY)
                 .resolveSibling(store.fileFor(KEY).getFileName().toString() + ".staging");
-        byte[] file = Rac1CacheCodec.write(SyntheticAssets.content(KEY),
+        byte[] file = Rac1CacheCodec.write(SyntheticAssets.completeContent(KEY),
                 Rac1CacheStore.SCHEMA_VERSION);
         Files.write(staging, java.util.Arrays.copyOf(file, file.length / 2));
 
