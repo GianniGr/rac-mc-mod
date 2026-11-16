@@ -44,13 +44,18 @@ public final class Rac1CrateDrawing {
      */
     public static void drawInBlock(PoseStack pose, MultiBufferSource buffers, Rac1CrateAsset crate,
                                     ResourceLocation[] textures, int light) {
+        drawInBlock(pose, buffers, crate, textures, light, false);
+    }
+
+    public static void drawInBlock(PoseStack pose, MultiBufferSource buffers, Rac1CrateAsset crate,
+            ResourceLocation[] textures, int light, boolean red) {
         Rac1CrateFit.Place place = Rac1CrateFit.place(crate.mesh());
         pose.pushPose();
         try {
             pose.translate(0.5f, 0.0f, 0.5f);
             pose.scale(place.scale(), place.scale(), place.scale());
             pose.translate(place.offsetX(), place.offsetY(), place.offsetZ());
-            Rac1MeshRenderer.render(pose, buffers, crate.mesh(), textures, light, closes(buffers));
+            Rac1MeshRenderer.render(pose, buffers, crate.mesh(), textures, light, closes(buffers), red);
         } finally {
             pose.popPose();
         }
@@ -104,13 +109,18 @@ public final class Rac1CrateDrawing {
      * @param light the light the crate is drawn with
      */
     public static void drawAtOrigin(PoseStack pose, MultiBufferSource buffers,
-                                     Rac1CrateAsset crate, ResourceLocation[] textures, int light) {
+                                      Rac1CrateAsset crate, ResourceLocation[] textures, int light) {
+        drawAtOrigin(pose, buffers, crate, textures, light, false);
+    }
+
+    public static void drawAtOrigin(PoseStack pose, MultiBufferSource buffers,
+            Rac1CrateAsset crate, ResourceLocation[] textures, int light, boolean red) {
         Rac1CrateFit.Place place = Rac1CrateFit.place(crate.mesh());
         pose.pushPose();
         try {
             pose.scale(place.scale(), place.scale(), place.scale());
             pose.translate(place.offsetX(), place.offsetY(), place.offsetZ());
-            Rac1MeshRenderer.render(pose, buffers, crate.mesh(), textures, light, closes(buffers));
+            Rac1MeshRenderer.render(pose, buffers, crate.mesh(), textures, light, closes(buffers), red);
         } finally {
             pose.popPose();
         }

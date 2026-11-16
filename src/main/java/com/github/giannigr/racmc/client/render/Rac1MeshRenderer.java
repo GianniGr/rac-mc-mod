@@ -170,6 +170,12 @@ public final class Rac1MeshRenderer {
                 mesh.materials(), textures, light, closeRuns);
     }
 
+    public static void render(PoseStack pose, MultiBufferSource buffers, Rac1Mesh mesh,
+            ResourceLocation[] textures, int light, boolean closeRuns, boolean red) {
+        render(pose, buffers, mesh.positions(), mesh.normals(), mesh.uvs(), mesh.indices(),
+                mesh.materials(), textures, light, closeRuns, red);
+    }
+
     /**
      * Draws a mesh that follows the joints of a skeleton.
      *
@@ -212,8 +218,15 @@ public final class Rac1MeshRenderer {
     }
 
     private static void render(PoseStack pose, MultiBufferSource buffers, float[] positions,
-                               float[] normals, float[] uvs, int[] indices, int[] materials,
-                               ResourceLocation[] textures, int light, boolean closeRuns) {
+                                float[] normals, float[] uvs, int[] indices, int[] materials,
+                                ResourceLocation[] textures, int light, boolean closeRuns) {
+        render(pose, buffers, positions, normals, uvs, indices, materials, textures,
+                light, closeRuns, false);
+    }
+
+    private static void render(PoseStack pose, MultiBufferSource buffers, float[] positions,
+            float[] normals, float[] uvs, int[] indices, int[] materials,
+            ResourceLocation[] textures, int light, boolean closeRuns, boolean red) {
         int vertices = positions.length / 3;
         for (MaterialRun run : materialRuns(indices, materials, textures.length)) {
             ResourceLocation texture = run.slot() < 0 ? null : textures[run.slot()];
@@ -226,7 +239,7 @@ public final class Rac1MeshRenderer {
                 if (!writable(indices, triangle, vertices)) {
                     continue;
                 }
-                writeTriangle(consumer, pose, positions, normals, uvs, indices, triangle, light);
+                writeTriangle(consumer, pose, positions, normals, uvs, indices, triangle, light, red);
             }
             if (closeRuns && buffers instanceof MultiBufferSource.BufferSource source) {
                 // The run is finished, so the buffer can be closed before the next kind of
@@ -275,14 +288,19 @@ public final class Rac1MeshRenderer {
      * @param light the light the triangle is drawn with
      */
     static void writeTriangle(VertexConsumer consumer, PoseStack pose, float[] positions,
-                               float[] normals, float[] uvs, int[] indices, int triangle,
-                               int light) {
+                                float[] normals, float[] uvs, int[] indices, int triangle,
+                                int light) {
+        writeTriangle(consumer, pose, positions, normals, uvs, indices, triangle, light, false);
+    }
+
+    private static void writeTriangle(VertexConsumer consumer, PoseStack pose, float[] positions,
+            float[] normals, float[] uvs, int[] indices, int triangle, int light, boolean red) {
         for (int corner = 0; corner < 4; corner++) {
             int source = corner % 3;
             int vertex = indices[triangle * 3 + source];
             consumer.addVertex(pose.last(), positions[vertex * 3], positions[vertex * 3 + 1],
                     positions[vertex * 3 + 2])
-                    .setColor(255, 255, 255, 255)
+                    .setColor(255, red ? 48 : 255, red ? 48 : 255, 255)
                     .setUv(uvs[vertex * 2], uvs[vertex * 2 + 1])
                     .setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
                     .setLight(light)

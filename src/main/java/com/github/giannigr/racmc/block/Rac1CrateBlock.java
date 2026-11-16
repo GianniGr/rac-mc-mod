@@ -84,6 +84,56 @@ public class Rac1CrateBlock extends FallingBlock implements EntityBlock {
         return definition;
     }
 
+    public boolean explosive() {
+        return definition.classNumber() == 505;
+    }
+
+    @Override
+    protected void onExplosionHit(BlockState state, net.minecraft.world.level.Level level,
+            BlockPos pos, net.minecraft.world.level.Explosion explosion,
+            java.util.function.BiConsumer<ItemStack, BlockPos> drops) {
+        if (explosive()
+                && explosion.getBlockInteraction()
+                != net.minecraft.world.level.Explosion.BlockInteraction.TRIGGER_BLOCK) {
+            if (!level.isClientSide && level.getBlockEntity(pos) instanceof Rac1CrateBlockEntity crate) {
+                crate.arm(true);
+            }
+            // Also retain the block during client replay of vanilla explosion packets.
+            return;
+        }
+        super.onExplosionHit(state, level, pos, explosion, drops);
+    }
+
+    @Override
+    public <T extends BlockEntity> net.minecraft.world.level.block.entity.BlockEntityTicker<T>
+            getTicker(net.minecraft.world.level.Level level, BlockState state,
+                    net.minecraft.world.level.block.entity.BlockEntityType<T> type) {
+        if (level.isClientSide || type != RacMcBlockEntities.CRATE.get()) {
+            return null;
+        }
+        return (world, pos, current, entity) ->
+                Rac1CrateBlockEntity.serverTick(world, pos, current, (Rac1CrateBlockEntity) entity);
+    }
+
+    @Override
+    protected void tick(BlockState state, net.minecraft.server.level.ServerLevel level,
+            BlockPos pos, net.minecraft.util.RandomSource random) {
+        if (!explosive()) {
+            super.tick(state, level, pos, random);
+        } else if (isFree(level.getBlockState(pos.below())) && pos.getY() >= level.getMinBuildHeight()) {
+            Rac1FallingExplosive.fall(level, pos, state);
+        }
+    }
+
+    @Override
+    public void onLand(net.minecraft.world.level.Level level, BlockPos pos, BlockState state,
+            BlockState replaced, FallingBlockEntity entity) {
+        super.onLand(level, pos, state, replaced, entity);
+        if (!level.isClientSide && entity instanceof Rac1FallingExplosive explosive) {
+            explosive.landed(pos);
+        }
+    }
+
     @Override
     protected MapCodec<? extends Rac1CrateBlock> codec() {
         return CODEC;
