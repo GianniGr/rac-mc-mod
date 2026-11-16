@@ -8,6 +8,30 @@ Crate PR #38 remains separate/open; its worktree and branch are not modified.
 P22's vendor candidate is implemented; independent exact-tree T verification
 and in-game acceptance remain pending. No publication/merge is implied.
 
+### Owner's 2x world-scale correction
+
+World-only scale is now exactly twice the baseline; items keep their original
+vanilla-sized cube fit. Logo offsets/size scale with the world body. The
+antenna-free panel/corner enclosure measures about **1.017608 x 1.009107** blocks
+in footprint, while panel faces alone measure **.868347 x .868277**. Antennas
+span two blocks. No arbitrary further scale adjustment is made; see
+[vendor.md](vendor.md) for geometry selections and full dimensions.
+
+Collision/selection is a grounded one-block cube, excluding antennas/logo.
+Proximity retains its independent baseline thresholds, not a silently doubled
+radius. The real-disc check is revision-aware (NTSC logo 741 vertices, PAL 724,
+both 826 triangles) and retains pose/fit/spin/cache assertions for either disc.
+T11's baseline `8b0dfc1` verification is superseded for affected scale/runtime
+checks. The owner's running old-candidate client is preserved, not reloaded or
+used as evidence of the corrected source. No sound or other gameplay is added.
+
+Correction checks: Java compilation and **28 focused NTSC checks passed**,
+including all item-context regressions, world scale, collision/selection and
+unchanged proximity. The revision-aware **PAL real-disc check also passed**,
+including body bounds, logo pose/spin and in-memory cache round-trip. No full
+suite or corrected-client/server runtime was rerun. Exact-candidate independent
+T verification remains pending.
+
 ## Implemented — crate visual/physics slice (#10)
 
 - Original RaC1 bolt (500), blue health (501), ammo (511), explosive (505) crates.
@@ -37,7 +61,7 @@ remains closed and the logo grows/counter-spins. Shop, right-click and unfold
 remain deferred. See [vendor.md](vendor.md) for exact local defaults and known
 chrome/material/callback beam/glow/manipulator fidelity gaps.
 
-P22 measured Java compilation plus 39 focused passing checks, including one
+For the original `8b0dfc1` baseline, P22 measured Java compilation plus 39 focused passing checks, including one
 read-only NTSC real-disc extraction/pose/in-memory cache round-trip check. No
 full-suite, PAL or client/dedicated-server runtime acceptance is claimed.
 Initial compiler API mistakes and one synthetic quaternion-convention expectation

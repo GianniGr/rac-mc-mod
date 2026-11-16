@@ -26,8 +26,8 @@ public final class Rac1VendorItemRenderer extends BlockEntityWithoutLevelRendere
             return;
         }
         try {
-            Rac1VendorDrawing.draw(content, pose, buffers,
-                    context == ItemDisplayContext.GUI ? Rac1MeshRenderer.FULL_LIGHT : light, 0, 0);
+            Rac1VendorDrawing.drawAsItem(content, pose, buffers,
+                    context == ItemDisplayContext.GUI ? Rac1MeshRenderer.FULL_LIGHT : light);
         } catch (RuntimeException exception) {
             failedSource = content;
             RacMcMod.LOGGER.error("The Gadgetron vendor item could not be drawn.", exception);

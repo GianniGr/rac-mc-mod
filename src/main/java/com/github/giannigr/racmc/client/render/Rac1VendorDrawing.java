@@ -17,8 +17,19 @@ public final class Rac1VendorDrawing {
     private Rac1VendorDrawing() {
     }
 
-    public static void draw(Rac1CacheContent content, PoseStack pose, MultiBufferSource buffers,
-                            int light, float growth, float seconds) {
+    public static void drawInBlock(Rac1CacheContent content, PoseStack pose,
+                                    MultiBufferSource buffers, int light, float growth, float seconds) {
+        draw(content, pose, buffers, light, growth, seconds, true);
+    }
+
+    /** Item fitting deliberately ignores the owner-selected world enlargement. */
+    public static void drawAsItem(Rac1CacheContent content, PoseStack pose,
+                                   MultiBufferSource buffers, int light) {
+        draw(content, pose, buffers, light, 0, 0, false);
+    }
+
+    private static void draw(Rac1CacheContent content, PoseStack pose, MultiBufferSource buffers,
+                             int light, float growth, float seconds, boolean inWorld) {
         Rac1VendorAsset vendor = content.vendor();
         if (vendor == null) {
             return;
@@ -32,7 +43,7 @@ public final class Rac1VendorDrawing {
         pose.pushPose();
         try {
             // Translate BEFORE scaling: the half-block cube origin must not itself be scaled.
-            place(pose, fit);
+            place(pose, inWorld ? fit.inWorld() : fit);
             boolean close = buffers instanceof MultiBufferSource.BufferSource;
             Rac1MeshRenderer.render(pose, buffers, vendor.body().mesh(), closed.positions(),
                     closed.normals(), textures.body().toArray(ResourceLocation[]::new), light, close);

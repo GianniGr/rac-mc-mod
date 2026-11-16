@@ -21,8 +21,9 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 /** Grounded, visual-only kiosk. No falling physics, shop, use handler or rewards. */
 public final class Rac1VendorBlock extends BaseEntityBlock {
     public static final MapCodec<Rac1VendorBlock> CODEC = simpleCodec(Rac1VendorBlock::new);
-    // The retail collision class has no vertex hull. This grounded box is a Minecraft default.
-    private static final VoxelShape SHAPE = box(0, 0, 0, 16, 8.8, 16);
+    // Owner's main-body one-block interaction footprint. Antennas/logo never enlarge collision.
+    // The 2x interim visual enclosure is approximately one block; see measured bounds in vendor.md.
+    private static final VoxelShape SHAPE = box(0, 0, 0, 16, 16, 16);
 
     public Rac1VendorBlock(Properties properties) {
         super(properties);

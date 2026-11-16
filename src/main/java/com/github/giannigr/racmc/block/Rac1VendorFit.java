@@ -1,7 +1,17 @@
 package com.github.giannigr.racmc.block;
 
-/** Uniform fit of the CLOSED footprint, not the bind pose or the unfolded menu pose. */
+/** Uniform CLOSED item fit, with a separate owner-selected 2x world placement. */
 public record Rac1VendorFit(float scale, float x, float y, float z) {
+    /** Owner's interim world-only enlargement, not a claim that antenna-free body is exactly 1m. */
+    public static final float WORLD_ENLARGEMENT = 2.0f;
+
+    /** Enlarge around the block's grounded horizontal center, not its corner. */
+    public Rac1VendorFit inWorld() {
+        return new Rac1VendorFit(scale * WORLD_ENLARGEMENT,
+                0.5f + (x - 0.5f) * WORLD_ENLARGEMENT, y * WORLD_ENLARGEMENT,
+                0.5f + (z - 0.5f) * WORLD_ENLARGEMENT);
+    }
+
     public static Rac1VendorFit of(float[] closedPositions) {
         if (closedPositions.length == 0 || closedPositions.length % 3 != 0) {
             throw new IllegalArgumentException("The vendor has no complete closed vertices.");

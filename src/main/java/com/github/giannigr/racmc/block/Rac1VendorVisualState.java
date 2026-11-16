@@ -2,7 +2,10 @@ package com.github.giannigr.racmc.block;
 
 /** Client-local proximity state. No shop state, server authority or saved/networked data. */
 public final class Rac1VendorVisualState {
-    /** Measured closed footprint; thresholds use the same one-block scale as the kiosk. */
+    /**
+     * Baseline proximity calibration, deliberately independent of the owner's 2x world-only
+     * visual enlargement. A larger kiosk does not silently double the activation radius.
+     */
     public static final float REFERENCE_SCALE = 1.0f / 2.303f;
     public static final double ENTER_RADIUS = 16.0 * REFERENCE_SCALE;
     public static final double EXIT_RADIUS = 18.0 * REFERENCE_SCALE;

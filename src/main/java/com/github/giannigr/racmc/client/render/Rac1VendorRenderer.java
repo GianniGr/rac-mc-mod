@@ -18,9 +18,9 @@ public final class Rac1VendorRenderer implements BlockEntityRenderer<Rac1VendorB
     @Override
     public AABB getRenderBoundingBox(Rac1VendorBlockEntity entity) {
         var pos = entity.getBlockPos();
-        // Include the floating logo above the grounded half-height collision box.
-        return new AABB(pos.getX() - 1, pos.getY(), pos.getZ() - 1,
-                pos.getX() + 2, pos.getY() + 3, pos.getZ() + 2);
+        // The 2x world model includes antennas and a proportionally enlarged floating logo.
+        return new AABB(pos.getX() - 2, pos.getY(), pos.getZ() - 2,
+                pos.getX() + 3, pos.getY() + 6, pos.getZ() + 3);
     }
 
     @Override
@@ -34,7 +34,7 @@ public final class Rac1VendorRenderer implements BlockEntityRenderer<Rac1VendorB
             // Keep precision for the spin even in long-lived worlds.
             double elapsed = (entity.getLevel().getGameTime() + (double) partialTick) / 20.0;
             float seconds = (float) (elapsed % (Math.PI * 2 / 0.6));
-            Rac1VendorDrawing.draw(content, pose, buffers, light,
+            Rac1VendorDrawing.drawInBlock(content, pose, buffers, light,
                     entity.visual().growth(partialTick), seconds);
         } catch (RuntimeException exception) {
             failedSource = content;
