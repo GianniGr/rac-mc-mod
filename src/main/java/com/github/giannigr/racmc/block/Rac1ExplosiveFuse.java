@@ -63,10 +63,20 @@ public final class Rac1ExplosiveFuse {
     }
 
     public static boolean red(int remaining) {
+        return red(remaining, 0.0F);
+    }
+
+    /**
+     * Sample the original 60 Hz counter within a 20 TPS tick. Visual only: no client fuse
+     * advancement. The final original frame is held until the authoritative 60-tick removal.
+     */
+    public static boolean red(int remaining, float partialTick) {
         if (remaining <= 0 || remaining > FULL_TICKS) {
             return false;
         }
-        int originalCounter = Math.max(0, 179 - 3 * (FULL_TICKS - remaining));
+        double partial = Float.isFinite(partialTick) ? Math.clamp(partialTick, 0.0F, 1.0F) : 0.0;
+        int originalCounter = Math.max(1,
+                179 - (int) Math.floor(3.0 * (FULL_TICKS - remaining + partial)));
         return originalCounter % 60 > 40 || originalCounter < 15;
     }
 

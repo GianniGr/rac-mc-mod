@@ -67,7 +67,8 @@ public final class Rac1FallingBlockRenderer extends EntityRenderer<FallingBlockE
             ResourceLocation[] locations = Rac1CrateTextures.of(content.get(), crate);
             Rac1CrateDrawing.drawAtOrigin(poseStack, buffers, crate, locations, packedLight,
                     entity instanceof com.github.giannigr.racmc.block.Rac1FallingExplosive explosive
-                    && com.github.giannigr.racmc.block.Rac1ExplosiveFuse.red(explosive.visualFuse()));
+                    && com.github.giannigr.racmc.block.Rac1ExplosiveFuse.red(
+                            explosive.visualFuse(), partialTick));
             super.render(entity, entityYaw, partialTick, poseStack, buffers, packedLight);
         } catch (RuntimeException | LinkageError exception) {
             RacMcMod.LOGGER.error("A falling crate of the game could not be drawn. The crate is "

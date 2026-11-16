@@ -253,6 +253,40 @@ class Rac1MeshRendererTest {
                 "The buffer of the scenery is not closed after every run of a material");
     }
 
+    @Test
+    void crateAmbientChangesLightingPipelineNotTextureVertexColorNormalsOrWorldLight() {
+        RecordingBuffer buffers = new RecordingBuffer();
+        PoseStack pose = new PoseStack();
+        ResourceLocation texture = texture(0);
+        Rac1Mesh mesh = scenery(new int[]{0, 0});
+        int worldLight = 0x00A00070;
+        Rac1MeshRenderer.render(pose, buffers, mesh, new ResourceLocation[]{texture},
+                worldLight, true, true);
+        RenderType red = buffers.closed().getFirst();
+        assertEquals(Rac1CrateAmbientRenderType.of(texture), red);
+        Rac1MeshRenderer.render(pose, buffers, mesh, new ResourceLocation[]{texture},
+                worldLight, true, false);
+        RenderType normal = buffers.closed().getLast();
+        assertEquals(RenderType.entityCutoutNoCull(texture), normal);
+        assertTrue(red != normal);
+        Recording flashed = buffers.buffers.get(red);
+        Recording restored = buffers.buffers.get(normal);
+        assertEquals(flashed.vertices.size(), restored.vertices.size());
+        for (int vertex = 0; vertex < flashed.vertices.size(); vertex++) {
+            org.junit.jupiter.api.Assertions.assertArrayEquals(
+                    flashed.vertices.get(vertex), restored.vertices.get(vertex));
+            org.junit.jupiter.api.Assertions.assertArrayEquals(
+                    new int[]{255, 255, 255, 255}, flashed.colors.get(vertex));
+            org.junit.jupiter.api.Assertions.assertArrayEquals(
+                    restored.colors.get(vertex), flashed.colors.get(vertex));
+            org.junit.jupiter.api.Assertions.assertArrayEquals(
+                    restored.normals.get(vertex), flashed.normals.get(vertex));
+            org.junit.jupiter.api.Assertions.assertArrayEquals(
+                    new int[]{worldLight & 0xFFFF, worldLight >> 16 & 0xFFFF},
+                    flashed.lights.get(vertex));
+        }
+    }
+
     /**
      * The place of a texture of the checks.
      *
@@ -283,6 +317,9 @@ class Rac1MeshRendererTest {
     private static final class Recording implements VertexConsumer {
         /** The vertices that were written, five floats each. */
         private final List<float[]> vertices = new ArrayList<>();
+        private final List<int[]> colors = new ArrayList<>();
+        private final List<int[]> lights = new ArrayList<>();
+        private final List<float[]> normals = new ArrayList<>();
 
         @Override
         public VertexConsumer addVertex(float x, float y, float z) {
@@ -292,6 +329,7 @@ class Rac1MeshRendererTest {
 
         @Override
         public VertexConsumer setColor(int red, int green, int blue, int alpha) {
+            colors.add(new int[]{red, green, blue, alpha});
             return this;
         }
 
@@ -310,11 +348,13 @@ class Rac1MeshRendererTest {
 
         @Override
         public VertexConsumer setUv2(int u, int v) {
+            lights.add(new int[]{u, v});
             return this;
         }
 
         @Override
         public VertexConsumer setNormal(float x, float y, float z) {
+            normals.add(new float[]{x, y, z});
             return this;
         }
     }

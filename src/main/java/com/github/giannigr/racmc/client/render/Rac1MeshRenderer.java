@@ -230,7 +230,8 @@ public final class Rac1MeshRenderer {
         int vertices = positions.length / 3;
         for (MaterialRun run : materialRuns(indices, materials, textures.length)) {
             ResourceLocation texture = run.slot() < 0 ? null : textures[run.slot()];
-            RenderType type = typeOf(texture);
+            RenderType type = red ? Rac1CrateAmbientRenderType.of(texture == null
+                    ? ResourceLocation.withDefaultNamespace("missing") : texture) : typeOf(texture);
             // The buffer of the kind of the triangle is asked for again for every run, because the
             // renderer of the game of blocks closes a buffer as soon as another kind of triangle
             // is written to it.
@@ -239,7 +240,7 @@ public final class Rac1MeshRenderer {
                 if (!writable(indices, triangle, vertices)) {
                     continue;
                 }
-                writeTriangle(consumer, pose, positions, normals, uvs, indices, triangle, light, red);
+                writeTriangle(consumer, pose, positions, normals, uvs, indices, triangle, light);
             }
             if (closeRuns && buffers instanceof MultiBufferSource.BufferSource source) {
                 // The run is finished, so the buffer can be closed before the next kind of
@@ -290,17 +291,12 @@ public final class Rac1MeshRenderer {
     static void writeTriangle(VertexConsumer consumer, PoseStack pose, float[] positions,
                                 float[] normals, float[] uvs, int[] indices, int triangle,
                                 int light) {
-        writeTriangle(consumer, pose, positions, normals, uvs, indices, triangle, light, false);
-    }
-
-    private static void writeTriangle(VertexConsumer consumer, PoseStack pose, float[] positions,
-            float[] normals, float[] uvs, int[] indices, int triangle, int light, boolean red) {
         for (int corner = 0; corner < 4; corner++) {
             int source = corner % 3;
             int vertex = indices[triangle * 3 + source];
             consumer.addVertex(pose.last(), positions[vertex * 3], positions[vertex * 3 + 1],
                     positions[vertex * 3 + 2])
-                    .setColor(255, red ? 48 : 255, red ? 48 : 255, 255)
+                    .setColor(255, 255, 255, 255)
                     .setUv(uvs[vertex * 2], uvs[vertex * 2 + 1])
                     .setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
                     .setLight(light)

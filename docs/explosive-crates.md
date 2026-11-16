@@ -86,11 +86,35 @@ No production stub or reflection dependency on P24 exists.
 
 ## Visual/audio scope and remaining runtime gates
 
-Existing imported mesh/material textures are reused; original red predicate
-`counter % 60 > 40 || counter < 15`, sampled with `counter=179-3*elapsed`,
-modulates vertex color in world and airborne renderers. This is runtime material
-modulation, not a fabricated skeletal animation. Item transforms and Blaster
-render paths default to unchanged white tint.
+Existing imported mesh/material textures are reused. Original red predicate
+`counter % 60 > 40 || counter < 15` is sampled at original-frame boundaries:
+`counter=max(1,179-floor(3*(elapsedMCticks+clampedPartialTick)))`, with idle/terminal
+always normal. This is 60 Hz visual sampling inside 20 TPS, not modulo60 applied
+to MC ticks. The final `<15` phase is **solid red**, not an invented fast strobe.
+The final original frame is held until the owner's authoritative 60-tick removal
+(3s, versus original179/60 ~=2.983s). Client visuals do not advance gameplay; they
+use the latest synced remaining ticks plus render partialTick, do not extrapolate
+missed packets by wall-clock time, and use that same policy on initial tracking.
+
+R06's retained permissible original crate source saves the current light word and
+ambient bytes before full fuse initialization, sets ambient `[200,64,64,0]` during
+red phases, and restores the **saved lighting**, not constant white, otherwise
+and before break. The renderer now replaces only the MC entity-lighting **ambient
+term** during red phases: `min(1,RGB(200,64,64)/255 + MC_directional_diffuse)`.
+Imported texture/alpha, normals, directional shading, world lightmap, overlay and
+fog remain; all vertex colors remain white. Off-phases switch back to the exact
+preexisting stock RenderType with caller-supplied world light, so lighting state
+does not leak to idle crates, item meshes or the Blaster. No fullbright/emissive
+pass and no `(255,48,48)` hard multiplication remain.
+
+**Fidelity boundary:** this is an original-rule/color ambient adaptation, not
+bit-exact PS2 rendering. `/255` normalization, MC directional lights, MC lightmap
+and clipping are explicit adapter choices. Original light-word decoding,
+scene-specific ambient values and PS2 GS color scale/blending are not imported or
+established by the retained crate-update evidence. It would be false to claim
+exact PS2 luminance. The off-phase preserves existing MC lighting rather than
+inventing an original normal-ambient constant. Shader compilation/appearance and
+resource reload still require independent client verification.
 
 **No beeps, explosion sound, or blast/debris FX are implemented.** Original sample
 identity/audio pipeline belongs to R07/future work. Original debris/puff assets,
