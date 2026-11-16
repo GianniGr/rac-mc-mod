@@ -82,7 +82,7 @@ public final class Rac1CacheCodec {
     public static final int FORMAT_VERSION = 2;
 
     /** The version of the converter that writes cache files. */
-    public static final int CONVERTER_VERSION = 4;
+    public static final int CONVERTER_VERSION = 5;
 
     /** The offset of the version of the converter in the header. */
     private static final int CONVERTER_OFFSET = 12;
@@ -104,6 +104,7 @@ public final class Rac1CacheCodec {
 
     /** The kind of the section that holds the crates. */
     public static final int SECTION_CRATES = 4;
+    public static final int SECTION_HUD = 5;
 
     private Rac1CacheCodec() {
         throw new UnsupportedOperationException("Utility class");
@@ -150,8 +151,9 @@ public final class Rac1CacheCodec {
         byte[] animatedSection = writeAnimated(content);
         byte[] blasterSection = writeBlaster(content);
         byte[] cratesSection = writeCrates(content);
+        byte[] hudSection = Rac1HudCacheCodec.write(content.hud());
 
-        int sectionCount = 4;
+        int sectionCount = 5;
         int tableLength = sectionCount * SECTION_ENTRY_SIZE;
         int tableOffset = HEADER_SIZE;
         int keyOffset = tableOffset + tableLength;
@@ -159,9 +161,10 @@ public final class Rac1CacheCodec {
         int animatedOffset = staticOffset + staticSection.length;
         int blasterOffset = animatedOffset + animatedSection.length;
         int cratesOffset = blasterOffset + blasterSection.length;
+        int hudOffset = cratesOffset + cratesSection.length;
         int payloadOffset = keyOffset;
         int payloadLength = discKey.length + staticSection.length + animatedSection.length
-                + blasterSection.length + cratesSection.length;
+                + blasterSection.length + cratesSection.length + hudSection.length;
 
         byte[] file = new byte[payloadOffset + payloadLength];
         System.arraycopy(MAGIC, 0, file, 0, 4);
@@ -179,6 +182,7 @@ public final class Rac1CacheCodec {
         System.arraycopy(animatedSection, 0, file, animatedOffset, animatedSection.length);
         System.arraycopy(blasterSection, 0, file, blasterOffset, blasterSection.length);
         System.arraycopy(cratesSection, 0, file, cratesOffset, cratesSection.length);
+        System.arraycopy(hudSection, 0, file, hudOffset, hudSection.length);
         writeInt(file, 40, checksum(file, payloadOffset, payloadLength));
         writeInt(file, 44, checksum(file, 0, 44));
 
@@ -189,6 +193,7 @@ public final class Rac1CacheCodec {
                 blasterSection);
         writeSection(file, tableOffset + 3 * SECTION_ENTRY_SIZE, SECTION_CRATES, cratesOffset,
                 cratesSection);
+        writeSection(file, tableOffset + 4 * SECTION_ENTRY_SIZE, SECTION_HUD, hudOffset, hudSection);
         return file;
     }
 
@@ -264,6 +269,7 @@ public final class Rac1CacheCodec {
         byte[] animatedSection = null;
         byte[] blasterSection = null;
         byte[] cratesSection = null;
+        byte[] hudSection = null;
         for (int index = 0; index < sectionCount; index++) {
             int entry = tableOffset + index * SECTION_ENTRY_SIZE;
             int kind = readInt(file, entry);
@@ -286,16 +292,19 @@ public final class Rac1CacheCodec {
                 blasterSection = section;
             } else if (kind == SECTION_CRATES) {
                 cratesSection = section;
+            } else if (kind == SECTION_HUD) {
+                if (hudSection != null) throw new IOException("Duplicate HUD cache section");
+                hudSection = section;
             }
         }
         if (staticSection == null || animatedSection == null || blasterSection == null
-                || cratesSection == null) {
+                || cratesSection == null || hudSection == null) {
             throw new IOException("The cache file does not hold all of the assets.");
         }
         int handJoint = readInt(blasterSection, 0);
         Rac1CacheContent content = new Rac1CacheContent(discKey, readStatic(staticSection),
                 readAnimated(animatedSection), readBlaster(blasterSection), handJoint,
-                readCrates(cratesSection));
+                readCrates(cratesSection), Rac1HudCacheCodec.read(hudSection));
         return content;
     }
 

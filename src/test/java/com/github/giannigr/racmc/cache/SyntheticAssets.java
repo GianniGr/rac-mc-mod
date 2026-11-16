@@ -139,6 +139,7 @@ final class SyntheticAssets {
             assets.put(definition.key(), new Rac1CrateAsset(definition.key(),
                     definition.classNumber(), crate().mesh(), crate().textures()));
         }
-        return new Rac1CacheContent(discKey, staticAsset(), animatedAsset(), animatedAsset(), 56, assets);
+        return new Rac1CacheContent(discKey, staticAsset(), animatedAsset(), animatedAsset(), 56,
+                assets, SyntheticHud.assets());
     }
 }

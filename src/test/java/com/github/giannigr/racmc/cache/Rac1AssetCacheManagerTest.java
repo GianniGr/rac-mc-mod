@@ -27,6 +27,21 @@ class Rac1AssetCacheManagerTest {
     Path tempDir;
 
     @Test
+    void currentVersionCacheMissingOriginalHudIsNotReady() throws IOException {
+        var complete = SyntheticAssets.completeContent(KEY);
+        var noHud = new Rac1CacheContent(KEY, complete.staticAsset(), complete.animatedAsset(),
+                complete.blaster(), complete.handJoint(), complete.crates());
+        var store = new Rac1CacheStore(tempDir);
+        store.store(KEY, noHud);
+        try (var manager = new Rac1AssetCacheManager(store, new Rac1DiscValidator())) {
+            manager.start(tempDir.resolve("missing.iso"), KEY);
+            waitFor(manager);
+            assertEquals(Rac1CacheState.FAILED, manager.state());
+            assertFalse(manager.isReady());
+        }
+    }
+
+    @Test
     void currentVersionCacheMissingBoltsIsNotReady() throws IOException {
         var store = new Rac1CacheStore(tempDir);
         store.store(KEY, SyntheticAssets.content(KEY));

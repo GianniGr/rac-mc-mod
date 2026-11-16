@@ -79,22 +79,21 @@ Future vendors must adopt `Rac1BoltLedger.balance(UUID)` and
 only; no client purchase/credit request exists here. Owner-only one-way sync
 carries total/revision/pickup cause; login/respawn/spending do not trigger the HUD.
 
-## HUD blocker and cache
+## Original HUD and cache
 
-The current **temporary Minecraft-font text** is not original art. It hides
-4000 monotonic milliseconds after the last distinct successful pickup, including
-time in menus. New player/disconnect clears transient timing. Owner acceptance of
-this temporary presentation remains pending.
+The owner-authorized HUD follow-up resolves the prior decoder blocker: original
+panel, thirty icon frames, regular font/metrics and layout data import from both
+supported revisions into the local converted cache. Temporary native-font text is
+removed. See [HUD asset mapping and limitations](hud-assets.md).
 
-A bounded read-only probe confirms both discs' HUD header and five bank routes.
-Current importer still lacks proven icon-ID-to-frame/bank mapping, palette/alpha/
-UV decoding, and ordinary HUD font/metrics. Original panel/icon/font import is
-**blocked**, not proven impossible. No fake original art or broad new pipeline.
+The HUD hides 4000 monotonic milliseconds after the last distinct pickup, including
+menus, and clears transient state for a new player/disconnect. Original graphics
+are not substituted while the cache is incomplete.
 
-Existing keyed static-moby cache encoding stores four extra bolt assets.
-Converter 4, unchanged schema. Missing/wrong/empty bolt assets invalidate readiness.
-Vendor cache changes are **not integrated**; later consolidation must reconcile
-converter invalidation and required asset sets.
+The four bolt meshes still use the keyed static-moby map; reusable 2D HUD assets
+use a new bounded section. Schema5/converter5 invalidate older caches.
+Missing assets prevent readiness. Vendor cache changes are **not integrated**;
+later consolidation must reconcile invalidation and required asset sets.
 
 ## Verification status
 

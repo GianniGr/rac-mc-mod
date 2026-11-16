@@ -34,6 +34,7 @@ public final class Rac1CacheContent {
 
     /** The crates of the cache, by the key they are known by. */
     private final Map<String, Rac1CrateAsset> crates;
+    private final com.github.giannigr.racmc.asset.hud.Rac1HudAssets hud;
 
     /**
      * Creates the content of a cache.
@@ -62,14 +63,25 @@ public final class Rac1CacheContent {
      */
     public Rac1CacheContent(String discKey, Rac1StaticAsset staticAsset,
                             Rac1AnimatedAsset animatedAsset, Rac1AnimatedAsset blaster,
-                            int handJoint, Map<String, Rac1CrateAsset> crates) {
+                             int handJoint, Map<String, Rac1CrateAsset> crates) {
+        this(discKey, staticAsset, animatedAsset, blaster, handJoint, crates,
+                com.github.giannigr.racmc.asset.hud.Rac1HudAssets.empty());
+    }
+
+    public Rac1CacheContent(String discKey, Rac1StaticAsset staticAsset,
+                            Rac1AnimatedAsset animatedAsset, Rac1AnimatedAsset blaster,
+                            int handJoint, Map<String, Rac1CrateAsset> crates,
+                            com.github.giannigr.racmc.asset.hud.Rac1HudAssets hud) {
         this.discKey = discKey;
         this.staticAsset = staticAsset;
         this.animatedAsset = animatedAsset;
         this.blaster = blaster;
         this.handJoint = handJoint;
         this.crates = Collections.unmodifiableMap(new LinkedHashMap<>(crates));
+        this.hud = hud;
     }
+
+    public com.github.giannigr.racmc.asset.hud.Rac1HudAssets hud() { return hud; }
 
     /**
      * The identity of the disc the assets were read from.
