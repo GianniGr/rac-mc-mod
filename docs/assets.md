@@ -207,8 +207,12 @@ checked on its own:
 | Version | Where | What it means | When it is bumped |
 | --- | --- | --- | --- |
 | Format version (`Rac1CacheCodec.FORMAT_VERSION`, currently 2) | 0x04 | The layout of the container: the header, the table of the sections and the meaning of the words of the header | When a file of the old layout cannot be read any more. It is `2` because the word at 0x0C used to be the flags of the file and now holds the version of the converter |
-| Schema version (`Rac1CacheStore.SCHEMA_VERSION`, currently 4) | 0x08 | The layout of the bytes inside the sections - what the converter writes for the scenery, the hero, the Blaster and the crates | When the encoding of the assets changes, for example when a field is added to an asset |
-| Converter version (`Rac1CacheCodec.CONVERTER_VERSION`, currently 3) | 0x0C | The identity of the converter that wrote the file | When the conversion itself changes in a way that makes an older result unacceptable although the format and the schema are unchanged - a different level of detail, a different change of the axes or a different choice of the classes to convert |
+| Schema version (`Rac1CacheStore.SCHEMA_VERSION`, currently 5) | 0x08 | The layout of the bytes inside the sections - scenery, hero, Blaster, crates and the vendor/logo pair | When the encoding of the assets changes, for example when a field or required section is added |
+| Converter version (`Rac1CacheCodec.CONVERTER_VERSION`, currently 4) | 0x0C | The identity of the converter that wrote the file | When the conversion itself changes in a way that makes an older result unacceptable although the format and the schema are unchanged - a different level of detail, a different change of the axes or a different choice of the classes to convert |
+
+Section kind 5 now holds animated vendor body class 11 and hologram class 1143.
+Both are imported from level 1; older caches are rebuilt. See [vendor.md](vendor.md)
+for closed-pose scaling, proximity defaults, texture lifecycle and fidelity gaps.
 
 The converter version is not a copy of the schema version: a file can hold the current schema and
 still have been written by an older converter, and a file can hold the current converter version

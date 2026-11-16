@@ -6,6 +6,7 @@ import com.github.giannigr.racmc.asset.Rac1AssetExtractor;
 import com.github.giannigr.racmc.asset.Rac1CrateAsset;
 import com.github.giannigr.racmc.asset.Rac1CrateDefinition;
 import com.github.giannigr.racmc.asset.Rac1Crates;
+import com.github.giannigr.racmc.asset.Rac1VendorAsset;
 import com.github.giannigr.racmc.asset.Rac1StaticAsset;
 import com.github.giannigr.racmc.disc.DiscFormatException;
 import com.github.giannigr.racmc.disc.Rac1LevelAssets;
@@ -255,11 +256,16 @@ public final class Rac1AssetCacheManager implements Closeable {
                 crates.put(definition.key(), Rac1AssetExtractor.readCrateAsset(assets, definition));
             }
             int[] handChain = Rac1AssetExtractor.readHandChain(assets);
+            step = "The Gadgetron vendor and hologram are converted.";
+            progress = 93;
+            Rac1VendorAsset vendor = new Rac1VendorAsset(
+                    Rac1AssetExtractor.readAnimatedAsset(assets, Rac1VendorAsset.BODY_CLASS),
+                    Rac1AssetExtractor.readAnimatedAsset(assets, Rac1VendorAsset.HOLOGRAM_CLASS));
             int handJoint = handChain.length == 0 ? 0 : handChain[handChain.length - 1];
             step = "The cache is written.";
             progress = 95;
             return new Rac1CacheContent(key, staticAsset, animatedAsset, blaster, handJoint,
-                    crates);
+                    crates, vendor);
         }
     }
 

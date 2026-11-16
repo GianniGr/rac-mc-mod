@@ -1,10 +1,12 @@
-# Development handoff — 2026-11-10
+# Development handoff — vendor candidate 2026-11-16
 
 ## State
 
-Development paused by owner. No active workers; do not resume automatically.
-Branch: `feature/issue10-crate-blocks`, based on merged PR #37 (`c628aa3`).
-Latest implementation: `51f68ea`. No final independent acceptance of that snapshot.
+Owner resumed STANDARD vendor implementation on 2026-11-16: P22 followed by
+separate T. Branch: `feature/issue12-vendor-visual`, based on `26d9ff5`.
+Crate PR #38 remains separate/open; its worktree and branch are not modified.
+P22's vendor candidate is implemented; independent exact-tree T verification
+and in-game acceptance remain pending. No publication/merge is implied.
 
 ## Implemented — crate visual/physics slice (#10)
 
@@ -24,17 +26,29 @@ were subsequently corrected in code. Latest GUI/held/mining/falling behavior sti
 needs explicit in-game acceptance. Last client exited cleanly; clean exit is not
 proof of feature correctness. Sand/gravel renderer delegation needs runtime coverage.
 
-## Research complete, implementation NOT done
+## Vendor candidate and deferred features
 
 ### Gadgetron vendor (#12)
 
-R02 identified body class 11 and hologram class 1143. Owner selected uniform
-one-block footprint and original approach behavior: hologram appears, body remains
-closed. Shop, right-click interaction and unfold are deferred. P21 wrote NO
-production code; only diagnostics/design review. Start implementation with
-cache/extraction, then block/entity/rendering and focused tests. Original chrome
-pass and callback beam/glow effects are known fidelity gaps. Collision and nearest
-eligible-player semantics are proposed defaults, not original verified behavior.
+P22 implemented body class 11 and hologram class 1143 through the shared animated
+pipeline, schema 5/converter 4 cache, Creative block item, grounded collision and
+client-local proximity visuals. Uniform closed footprint fits one block; body
+remains closed and the logo grows/counter-spins. Shop, right-click and unfold
+remain deferred. See [vendor.md](vendor.md) for exact local defaults and known
+chrome/material/callback beam/glow/manipulator fidelity gaps.
+
+P22 measured Java compilation plus 39 focused passing checks, including one
+read-only NTSC real-disc extraction/pose/in-memory cache round-trip check. No
+full-suite, PAL or client/dedicated-server runtime acceptance is claimed.
+Initial compiler API mistakes and one synthetic quaternion-convention expectation
+were corrected before that passing run. Final independent T owns broader
+regression/runtime verification on the exact committed candidate.
+
+The initial specialist-register blocker was resolved by the canonical workflow
+repair, not by a P22 bypass. Resumed worktree registration/initial-use claim
+succeeded at private revision 61; evidence-directory registration at revision 62.
+Private claims/dispositions are reported through the documented wrapper at handoff;
+historical frozen cleanup incidents remain outside this feature's scope.
 
 ### Bolts (#10 / #11)
 

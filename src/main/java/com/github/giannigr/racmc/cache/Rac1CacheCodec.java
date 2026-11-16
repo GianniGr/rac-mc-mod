@@ -8,6 +8,7 @@ import com.github.giannigr.racmc.asset.Rac1SkinnedMesh;
 import com.github.giannigr.racmc.asset.Rac1Skeleton;
 import com.github.giannigr.racmc.asset.Rac1StaticAsset;
 import com.github.giannigr.racmc.asset.Rac1Texture;
+import com.github.giannigr.racmc.asset.Rac1VendorAsset;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -82,7 +83,7 @@ public final class Rac1CacheCodec {
     public static final int FORMAT_VERSION = 2;
 
     /** The version of the converter that writes cache files. */
-    public static final int CONVERTER_VERSION = 3;
+    public static final int CONVERTER_VERSION = 4;
 
     /** The offset of the version of the converter in the header. */
     private static final int CONVERTER_OFFSET = 12;
@@ -104,6 +105,7 @@ public final class Rac1CacheCodec {
 
     /** The kind of the section that holds the crates. */
     public static final int SECTION_CRATES = 4;
+    public static final int SECTION_VENDOR = 5;
 
     private Rac1CacheCodec() {
         throw new UnsupportedOperationException("Utility class");
@@ -150,8 +152,9 @@ public final class Rac1CacheCodec {
         byte[] animatedSection = writeAnimated(content);
         byte[] blasterSection = writeBlaster(content);
         byte[] cratesSection = writeCrates(content);
+        byte[] vendorSection = writeVendor(content.vendor());
 
-        int sectionCount = 4;
+        int sectionCount = 5;
         int tableLength = sectionCount * SECTION_ENTRY_SIZE;
         int tableOffset = HEADER_SIZE;
         int keyOffset = tableOffset + tableLength;
@@ -159,9 +162,10 @@ public final class Rac1CacheCodec {
         int animatedOffset = staticOffset + staticSection.length;
         int blasterOffset = animatedOffset + animatedSection.length;
         int cratesOffset = blasterOffset + blasterSection.length;
+        int vendorOffset = cratesOffset + cratesSection.length;
         int payloadOffset = keyOffset;
         int payloadLength = discKey.length + staticSection.length + animatedSection.length
-                + blasterSection.length + cratesSection.length;
+                + blasterSection.length + cratesSection.length + vendorSection.length;
 
         byte[] file = new byte[payloadOffset + payloadLength];
         System.arraycopy(MAGIC, 0, file, 0, 4);
@@ -179,6 +183,7 @@ public final class Rac1CacheCodec {
         System.arraycopy(animatedSection, 0, file, animatedOffset, animatedSection.length);
         System.arraycopy(blasterSection, 0, file, blasterOffset, blasterSection.length);
         System.arraycopy(cratesSection, 0, file, cratesOffset, cratesSection.length);
+        System.arraycopy(vendorSection, 0, file, vendorOffset, vendorSection.length);
         writeInt(file, 40, checksum(file, payloadOffset, payloadLength));
         writeInt(file, 44, checksum(file, 0, 44));
 
@@ -189,6 +194,8 @@ public final class Rac1CacheCodec {
                 blasterSection);
         writeSection(file, tableOffset + 3 * SECTION_ENTRY_SIZE, SECTION_CRATES, cratesOffset,
                 cratesSection);
+        writeSection(file, tableOffset + 4 * SECTION_ENTRY_SIZE, SECTION_VENDOR, vendorOffset,
+                vendorSection);
         return file;
     }
 
@@ -264,6 +271,7 @@ public final class Rac1CacheCodec {
         byte[] animatedSection = null;
         byte[] blasterSection = null;
         byte[] cratesSection = null;
+        byte[] vendorSection = null;
         for (int index = 0; index < sectionCount; index++) {
             int entry = tableOffset + index * SECTION_ENTRY_SIZE;
             int kind = readInt(file, entry);
@@ -286,16 +294,21 @@ public final class Rac1CacheCodec {
                 blasterSection = section;
             } else if (kind == SECTION_CRATES) {
                 cratesSection = section;
+            } else if (kind == SECTION_VENDOR) {
+                if (vendorSection != null) {
+                    throw new IOException("The cache file holds duplicate vendor sections.");
+                }
+                vendorSection = section;
             }
         }
         if (staticSection == null || animatedSection == null || blasterSection == null
-                || cratesSection == null) {
+                || cratesSection == null || vendorSection == null) {
             throw new IOException("The cache file does not hold all of the assets.");
         }
         int handJoint = readInt(blasterSection, 0);
         Rac1CacheContent content = new Rac1CacheContent(discKey, readStatic(staticSection),
                 readAnimated(animatedSection), readBlaster(blasterSection), handJoint,
-                readCrates(cratesSection));
+                readCrates(cratesSection), readVendor(vendorSection));
         return content;
     }
 
@@ -357,6 +370,49 @@ public final class Rac1CacheCodec {
 
     private static byte[] writeAnimated(Rac1CacheContent content) throws IOException {
         return writeAnimatedAsset(content.animatedAsset());
+    }
+
+    private static byte[] writeVendor(Rac1VendorAsset vendor) throws IOException {
+        Rac1Bytes.Writer out = new Rac1Bytes.Writer();
+        // Empty is supported for synthetic fixtures; the production builder always imports both.
+        out.putBoolean(vendor != null);
+        if (vendor != null) {
+            byte[] body = writeAnimatedAsset(vendor.body());
+            byte[] hologram = writeAnimatedAsset(vendor.hologram());
+            out.putInt(body.length);
+            out.putBytes(body);
+            out.putInt(hologram.length);
+            out.putBytes(hologram);
+        }
+        return out.toByteArray();
+    }
+
+    private static Rac1VendorAsset readVendor(byte[] section) throws IOException {
+        Rac1Bytes.Reader in = new Rac1Bytes.Reader(section);
+        if (!in.getBoolean()) {
+            if (in.remaining() != 0) {
+                throw new IOException("An empty vendor section has trailing data.");
+            }
+            return null;
+        }
+        Rac1AnimatedAsset[] pair = new Rac1AnimatedAsset[2];
+        for (int index = 0; index < pair.length; index++) {
+            int length = in.getInt();
+            if (length <= 0 || length > in.remaining()) {
+                throw new IOException("A vendor asset does not fit into its cache section.");
+            }
+            byte[] bytes = new byte[length];
+            in.getBytes(bytes);
+            pair[index] = readAnimatedAsset(bytes);
+        }
+        if (in.remaining() != 0) {
+            throw new IOException("The vendor section has trailing data.");
+        }
+        try {
+            return new Rac1VendorAsset(pair[0], pair[1]);
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("The cache holds an invalid vendor pair.", exception);
+        }
     }
 
     /**

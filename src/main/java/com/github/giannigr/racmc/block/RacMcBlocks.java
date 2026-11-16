@@ -29,6 +29,10 @@ public final class RacMcBlocks {
     public static final DeferredRegister.Blocks BLOCKS =
             DeferredRegister.createBlocks(RacMcConstants.MOD_ID);
 
+    public static final DeferredHolder<Block, Rac1VendorBlock> VENDOR =
+            BLOCKS.registerBlock("gadgetron_vendor", Rac1VendorBlock::new,
+                    Rac1VendorBlock.vendorProperties());
+
     /** The crates of the game, by the key they are known by. */
     private static final Map<String, DeferredHolder<Block, Rac1CrateBlock>> CRATES =
             new LinkedHashMap<>();

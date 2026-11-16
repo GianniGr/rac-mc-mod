@@ -27,6 +27,12 @@ they drop nothing, they do not explode and they do not give bolts, health or amm
 
 ## Vision
 
+The original Gadgetron vendor is also a Creative block (`racmc:gadgetron_vendor`).
+Its closed footprint fits one block with uniform scaling. Approaching players trigger
+the growing, counter-spinning hologram; the body stays closed. It has no shop or
+right-click action. Chrome and callback beam/glow effects are not reproduced;
+see [`docs/vendor.md`](docs/vendor.md) for defaults, limitations and verification scope.
+
 Build a Minecraft experience featuring Ratchet & Clank-inspired gameplay, with a focus on importing
 original game assets from a player's legally obtained game disc image rather than distributing
 those assets in the mod.

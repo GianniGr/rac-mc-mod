@@ -6,6 +6,7 @@
   "block.racmc.health_crate": "Health Crate",
   "block.racmc.ammo_crate": "Ammo Crate",
   "block.racmc.explosive_crate": "Explosive Crate",
+  "block.racmc.gadgetron_vendor": "Gadgetron Vendor",
   "screen.racmc.iso_selection.title": "Select a Ratchet & Clank disc image",
   "screen.racmc.iso_selection.open": "Disc image",
   "screen.racmc.iso_selection.pick": "Pick disc image",

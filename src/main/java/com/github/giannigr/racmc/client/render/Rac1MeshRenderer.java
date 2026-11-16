@@ -204,6 +204,14 @@ public final class Rac1MeshRenderer {
                 textures, light);
     }
 
+    /** Skinned meshes also support the non-closeable destruction/crack buffer. */
+    public static void render(PoseStack pose, MultiBufferSource buffers, Rac1SkinnedMesh mesh,
+                              float[] positions, float[] normals, ResourceLocation[] textures,
+                              int light, boolean closeRuns) {
+        render(pose, buffers, positions, normals, mesh.uvs(), mesh.indices(), mesh.materials(),
+                textures, light, closeRuns);
+    }
+
     private static void render(PoseStack pose, MultiBufferSource.BufferSource buffers, float[] positions,
                                float[] normals, float[] uvs, int[] indices, int[] materials,
                                ResourceLocation[] textures, int light) {

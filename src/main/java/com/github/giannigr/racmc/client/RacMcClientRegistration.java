@@ -7,6 +7,9 @@ import com.github.giannigr.racmc.client.render.Rac1BlasterArrowRenderer;
 import com.github.giannigr.racmc.client.render.Rac1CrateItemRenderer;
 import com.github.giannigr.racmc.client.render.Rac1CrateRenderer;
 import com.github.giannigr.racmc.client.render.Rac1FallingBlockRenderer;
+import com.github.giannigr.racmc.client.render.Rac1VendorRenderer;
+import com.github.giannigr.racmc.client.render.Rac1VendorItemRenderer;
+import com.github.giannigr.racmc.client.render.Rac1VendorDrawing;
 import com.github.giannigr.racmc.item.RacMcEntities;
 import com.github.giannigr.racmc.item.RacMcItems;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -29,6 +32,8 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.registries.DeferredItem;
@@ -48,6 +53,7 @@ public final class RacMcClientRegistration {
 
     /** The renderer of the Blaster, when it was built. */
     private static BlasterItemRenderer renderer;
+    private static Rac1VendorItemRenderer vendorRenderer;
 
     /** The renderers of the crates of the game, by the key of the crate. */
     private static final Map<String, Rac1CrateItemRenderer> crateRenderers =
@@ -74,6 +80,7 @@ public final class RacMcClientRegistration {
         event.registerEntityRenderer(RacMcEntities.BLASTER_ARROW.get(),
                 Rac1BlasterArrowRenderer::new);
         event.registerBlockEntityRenderer(RacMcBlockEntities.CRATE.get(), Rac1CrateRenderer::new);
+        event.registerBlockEntityRenderer(RacMcBlockEntities.VENDOR.get(), Rac1VendorRenderer::new);
         // The crates of the game fall like the sand of the game of blocks, so they are carried
         // by the falling block of the game of blocks. Its renderer draws the model of the block
         // that falls, and the crate of the game has no model, so the renderer is replaced by one
@@ -89,6 +96,17 @@ public final class RacMcClientRegistration {
      */
     @SubscribeEvent
     public static void onRegisterClientExtensions(RegisterClientExtensionsEvent event) {
+        event.registerItem(new IClientItemExtensions() {
+            @Override
+            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
+                if (vendorRenderer == null) {
+                    Minecraft minecraft = Minecraft.getInstance();
+                    vendorRenderer = new Rac1VendorItemRenderer(
+                            minecraft.getBlockEntityRenderDispatcher(), minecraft.getEntityModels());
+                }
+                return vendorRenderer;
+            }
+        }, RacMcItems.VENDOR.get());
         event.registerItem(new IClientItemExtensions() {
 
             @Override
@@ -157,6 +175,12 @@ public final class RacMcClientRegistration {
             crateRenderers.put(key, renderer);
         }
         return renderer;
+    }
+
+    @SubscribeEvent
+    public static void onReloadListeners(RegisterClientReloadListenersEvent event) {
+        event.registerReloadListener((ResourceManagerReloadListener) manager ->
+                Rac1VendorDrawing.clear());
     }
 
     /**
