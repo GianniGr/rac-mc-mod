@@ -29,8 +29,9 @@ they drop nothing, they do not explode and they do not give bolts, health or amm
 
 The original Gadgetron vendor is also a Creative block (`racmc:gadgetron_vendor`).
 Its world model uses a uniform 2× enlargement: the antenna-free enclosure is about
-one block wide, while the antenna tips span two. Item models still fit a normal
-item cube. Approaching players trigger
+one block wide, while the antenna tips span two. Items use a separate main-body
+fit so the kiosk is block-sized in the hand and recognizable in its GUI slot,
+without clipping the antenna tips. Approaching players trigger
 the growing, counter-spinning hologram; the body stays closed. It has no shop or
 right-click action. Chrome and callback beam/glow effects are not reproduced;
 see [`docs/vendor.md`](docs/vendor.md) for defaults, limitations and verification scope.

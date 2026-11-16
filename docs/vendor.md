@@ -13,11 +13,11 @@ projects' code.
 - Body **always** uses `sequence_0` at its first key (closed). Retail sequence 1
   is byte-identical. Unfold/open/fold belong to the retail menu, not proximity,
   and are not played here. No shop, menu, use handler, salesman or rewards.
-- Compute an item fit from the **posed closed** X/Z footprint, not the bind/open
-  pose. Items retain this one-block fit. Owner's interim world correction is
+- Compute the world baseline from the **posed closed** antenna-inclusive X/Z
+  footprint, not the bind/open pose. Owner's accepted world correction remains
   **exactly 2x that baseline** on every axis, centered horizontally on the block
   and grounded at the lowest closed vertex. Original antenna-inclusive width is
-  2.302903 units; item scale is .434235, world scale .868469. World antenna tips
+  2.302903 units; baseline scale is .434235, world scale .868469. World antenna tips
   therefore span **2 blocks**, with total closed height about 1.098 blocks.
   This is not an arbitrary re-fit of the blue panel surfaces.
 - Body and logo share the world outer scale. The logo is translated +2.95 original
@@ -54,6 +54,39 @@ projects' code.
   corner origin: **translate before uniform scale**, never scale the half-block
   origin offset. Block destruction buffers are supported without forced casts
   to closeable buffer types.
+
+### Item presentation — enclosure fit, not antenna fit
+
+The owner's follow-up request for larger GUI/held items supersedes the earlier
+instruction to preserve the original item size. The item now fits the posed
+material-1 panels plus material-2 corners (1016 triangles), excluding the
+material-0 antenna/cap surfaces **only when calculating its fit**. All original
+geometry is still drawn, uniformly scaled; nothing is clipped or hidden.
+
+Item scale is **.853442**, versus the old antenna-based **.434235**:
+**1.965394x larger linearly**. The enclosure fits 1.000000 x 1.008950 x .991647
+model blocks, centered on X/Z and grounded on Y. The complete antenna span is
+about 1.965 model blocks, deliberately permitted to protrude from the body cube.
+This does not reuse or modify the world's 2x transform. GUI/held/ground/fixed
+item contexts share the same enclosure fit and retain their existing vanilla
+display transforms.
+
+The vanilla GUI rotation places those thin, axial antennas diagonally, so their
+raw axis-aligned span does not imply slot overflow. Actual NTSC and PAL vertices
+through Minecraft's `ItemTransform` and `-.5` item-cube translation predict:
+
+- main enclosure: **14.038 x 14.519 GUI pixels**;
+- full closed geometry, including all antennas/cap: **14.097 x 14.519 pixels**;
+- complete-icon X bounds **[-7.048, 7.048]** and Y bounds **[-7.220, 7.299]**
+  relative to slot center, fully within the 16x16 slot;
+- horizontal center exactly centered; vertical center within **.04 pixels**.
+
+Real-transform tests cover seven display contexts and both hands. Main-body
+projected extents remain within 85–110% of the equivalent vanilla cube for each
+context, preventing a regression to the roughly half-sized body. GUI figures
+above are projected pixel measurements, **not** in-game screenshots or visual
+acceptance. Non-GUI values in diagnostic logs are 16-unit model references;
+held items' actual screen size also depends on the camera/hand transform.
 
 ### Measured body versus the one-block intent
 
@@ -108,8 +141,11 @@ uniform fit and ground alignment, seven item contexts and both hands, enter/exit
 boundaries, absent/dead/spectator/vertical player eligibility, growth/cadence,
 cache round-trip/corrupt lengths/missing sections/version invalidation, and
 texture reuse/release/retry. Additional scale regressions cover exactly doubled
-world placement, unchanged item cube, proportional logo offset/size, asymmetric
+world placement, proportional logo offset/size, asymmetric
 grounded centering, one-block collision/selection, and unchanged proximity bounds.
+Enclosure-based item fit is checked independently from that world baseline,
+including synthetic vanilla-cube origin tests and full real-mesh GUI slot bounds
+in `RealDiscVendorItemTransformTest` on NTSC and PAL.
 `RealDiscVendorTest` is an opt-in read-only check using `-Dracmc.isoImage=...`,
 with no extracted/cache files written. It asserts the actual supported revision:
 NTSC logo 741 vertices, PAL logo 724; both have 826 triangles, with posing, spin,
@@ -119,6 +155,6 @@ Separate T verification on the exact candidate remains required. Automated
 pose/resource tests are **not** in-game visual acceptance. Client placement,
 mining, GUI/held/dropped items, culling, reload, chunk unload/reload, multiplayer
 visibility, and dedicated-server startup must be reported separately.
-T11's previous verification targets baseline `8b0dfc1`, not this corrected tree;
-affected scale/collision/item/runtime checks must be rechecked. No active owner
+Earlier verification on `8b0dfc1` or `1a81737` is not verification of this item
+correction; affected item presentation/runtime checks must be rechecked. No active owner
 client was controlled, closed or reloaded for the correction.

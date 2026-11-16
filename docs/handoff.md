@@ -8,10 +8,31 @@ Crate PR #38 remains separate/open; its worktree and branch are not modified.
 P22's vendor candidate is implemented; independent exact-tree T verification
 and in-game acceptance remain pending. No publication/merge is implied.
 
+### Vendor item presentation correction
+
+Owner accepted world scale but requested larger GUI/held items. Item fitting now
+uses the actual panel/corner enclosure (materials 1+2), not the protruding antenna
+span. Item geometry is uniformly **1.965394x larger** than `1a81737`; body width
+is one model block. Complete geometry remains visible. The existing vanilla
+context transforms and correct item-cube origin are retained.
+
+NTSC/PAL real-transform checks predict full GUI bounds **14.097 x 14.519 pixels**
+inside a 16x16 slot, centered within .04 pixels. Seven contexts and both hands
+match a vanilla-block-sized main body. These are numeric transform checks, not
+runtime visual acceptance. Accepted 2x world size, collision, proximity and
+hologram behavior are unchanged.
+
+Compilation plus **14 focused NTSC checks passed**; the affected PAL real-mesh
+item-transform check also passed. No full suite or runtime was launched. T11
+explicitly quiesced its prior verifier before this source change; owner clients,
+including the separate explosives worktree/client, were untouched. Independent
+T rechecks affected item presentation on the exact new candidate.
+
 ### Owner's 2x world-scale correction
 
-World-only scale is now exactly twice the baseline; items keep their original
-vanilla-sized cube fit. Logo offsets/size scale with the world body. The
+The preceding `1a81737` correction made world-only scale exactly twice the
+baseline while leaving item fit unchanged at that stage; the later item
+correction above supersedes that item-size decision. Logo offsets/size scale with the world body. The
 antenna-free panel/corner enclosure measures about **1.017608 x 1.009107** blocks
 in footprint, while panel faces alone measure **.868347 x .868277**. Antennas
 span two blocks. No arbitrary further scale adjustment is made; see
