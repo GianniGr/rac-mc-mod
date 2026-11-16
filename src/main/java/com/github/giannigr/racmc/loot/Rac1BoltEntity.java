@@ -1,7 +1,6 @@
 package com.github.giannigr.racmc.loot;
 
 import java.util.Comparator;
-import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.*;
 import net.minecraft.server.level.ServerLevel;
@@ -10,20 +9,32 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.level.*;
 import net.minecraft.world.phys.Vec3;
+import com.github.giannigr.racmc.loot.Rac1BoltMotion.*;
 
 /** Non-inventory currency. Never awards XP and never becomes an ItemEntity. */
 public final class Rac1BoltEntity extends Entity {
     private static final EntityDataAccessor<Integer> VALUE =
             SynchedEntityData.defineId(Rac1BoltEntity.class, EntityDataSerializers.INT);
-    private UUID target;
-    private double speed;
+    private State motion;
+    private Vec3 interpolationTarget = Vec3.ZERO;
+    private int interpolationSteps;
 
     public Rac1BoltEntity(EntityType<? extends Rac1BoltEntity> type, Level level) {
         super(type, level);
-        noPhysics = true; // labelled Minecraft adaptation: homing may pass walls
+        noPhysics = true; // falling uses our sphere adapter; attraction may pass walls
     }
     public int value() { return entityData.get(VALUE); }
     public void setValue(int value) { entityData.set(VALUE, value); }
+    void restoreMotion(State state) {
+        motion = state;
+        V p = state.position(), v = state.velocity();
+        setPos(p.x(), p.y(), p.z());
+        setDeltaMovement(v.x() * 3, v.y() * 3, v.z() * 3);
+    }
+    @Override public void lerpTo(double x, double y, double z, float yaw, float pitch, int steps) {
+        interpolationTarget = new Vec3(x, y, z);
+        interpolationSteps = Math.max(1, steps);
+    }
     @Override protected void defineSynchedData(SynchedEntityData.Builder builder) { builder.define(VALUE, 1); }
     @Override protected void readAdditionalSaveData(CompoundTag tag) { setValue(tag.getInt("Value")); }
     @Override protected void addAdditionalSaveData(CompoundTag tag) { tag.putInt("Value", value()); }
@@ -36,38 +47,54 @@ public final class Rac1BoltEntity extends Entity {
     @Override
     public void tick() {
         // Do not inherit baseTick's void discard/fire policy. No expiry/distance deletion.
-        if (!(level() instanceof ServerLevel level)) return;
+        xo = getX(); yo = getY(); zo = getZ();
+        xOld = getX(); yOld = getY(); zOld = getZ();
+        tickCount++;
+        if (!(level() instanceof ServerLevel level)) {
+            if (interpolationSteps > 0) {
+                V p = Rac1BoltMotion.interpolate(new V(getX(), getY(), getZ()),
+                        new V(interpolationTarget.x, interpolationTarget.y, interpolationTarget.z), interpolationSteps);
+                setPos(p.x(), p.y(), p.z());
+                interpolationSteps--;
+            }
+            return;
+        }
         var ledger = Rac1BoltLedger.get(level);
         if (ledger.pickup(getUUID()) == null) { discard(); return; }
-        ServerPlayer player = target == null ? null : level.getServer().getPlayerList().getPlayer(target);
-        if (!eligible(player, level)) { player = null; target = null; speed = 0; }
-        if (player == null) {
-            player = level.players().stream().filter(p -> eligible(p, level))
-                    .filter(p -> Math.abs(p.getY() - getY()) < 1.75
-                            && horizontalDistance(p) < 9)
-                    .min(Comparator.comparingDouble((ServerPlayer p) -> distanceToSqr(p))
-                            .thenComparing(p -> p.getUUID().toString())).orElse(null);
-            if (player != null) target = player.getUUID();
+        if (motion == null) {
+            var record = ledger.pickup(getUUID());
+            restoreMotion(record.motion() == null
+                    ? Rac1BoltMotion.legacy(new V(getX(), getY(), getZ())) : record.motion());
         }
-        if (player != null) {
-            Vec3 destination = player.position().add(0, player.getBbHeight() * .5, 0);
-            Vec3 delta = destination.subtract(position());
-            // R05 48*dt speed, 16*dt² acceleration; fixed 20TPS dt=.05.
-            speed = Math.min(48 * .05, speed + 16 * .05 * .05);
-            if (delta.length() <= speed) {
-                if (ledger.collect(getUUID(), player)) discard();
-            } else setPos(position().add(delta.normalize().scale(speed)));
+        var collision = new Rac1BoltWorldCollision(level, this);
+        for (int frame = 0; frame < Rac1BoltMotion.SUBSTEPS; frame++) {
+            ServerPlayer player = motion.target() == null ? null
+                    : level.getServer().getPlayerList().getPlayer(motion.target());
+            if (!eligible(player, level)) player = null;
+            if (player == null) {
+                player = level.players().stream().filter(p -> eligible(p, level))
+                        .min(Comparator.comparingInt((ServerPlayer p) ->
+                                Rac1BoltMotion.inRange(motion.position(), new V(p.getX(), p.getY(), p.getZ())) ? 0 : 1)
+                                .thenComparingDouble(p -> distanceToSqr(p))
+                                .thenComparing(p -> p.getUUID().toString())).orElse(null);
+            }
+            Hero hero = player == null ? null : new Hero(player.getUUID(),
+                    new V(player.getX(), player.getY(), player.getZ()),
+                    new V(player.getX(), player.getY() + player.getBbHeight() * .5, player.getZ()));
+            var step = Rac1BoltMotion.step(motion, value(), collision, hero, random::nextDouble);
+            restoreMotion(step.state());
+            if (step.collect() && player != null && ledger.collect(getUUID(), player)) {
+                discard();
+                return;
+            }
         }
         if (getY() < level.getMinBuildHeight()) {
             // Retain/recover unclaimed currency above the void; no arbitrary beneficiary.
-            setPos(getX(), level.getMinBuildHeight() + 1, getZ());
+            // Existing value recovery policy, explicitly not an original PS2 hazard response.
+            motion = Rac1BoltMotion.legacy(new V(getX(), level.getMinBuildHeight() + 1, getZ()));
+            restoreMotion(motion);
         }
-        ledger.move(getUUID(), getX(), getY(), getZ());
-    }
-
-    private double horizontalDistance(ServerPlayer player) {
-        double x = player.getX() - getX(), z = player.getZ() - getZ();
-        return x*x + z*z;
+        ledger.move(getUUID(), motion);
     }
     private static boolean eligible(ServerPlayer player, ServerLevel level) {
         return player != null && player.isAlive() && !player.isSpectator()

@@ -38,6 +38,7 @@ public final class Rac1BoltGameTests {
         var entity = level.getEntitiesOfClass(Rac1BoltEntity.class,
                 new net.minecraft.world.phys.AABB(pos).inflate(1)).getFirst();
         Vec3 before = entity.position();
+        Vec3 velocityBefore = entity.getDeltaMovement();
         var tnt = EntityType.TNT.create(level);
         var creeper = EntityType.CREEPER.create(level);
         for (int i = 0; i < 3; i++) {
@@ -49,7 +50,7 @@ public final class Rac1BoltGameTests {
         }
         helper.assertTrue(!entity.isRemoved(), "Repeated blasts removed a bolt");
         helper.assertTrue(entity.position().equals(before), "Blast displaced bolt");
-        helper.assertTrue(entity.getDeltaMovement().equals(Vec3.ZERO), "Blast accelerated bolt");
+        helper.assertTrue(entity.getDeltaMovement().equals(velocityBefore), "Blast changed intentional launch velocity");
         helper.assertTrue(ledger.pickup(entity.getUUID()) != null, "Unclaimed value lost");
         helper.succeed();
     }
