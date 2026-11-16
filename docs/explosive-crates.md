@@ -100,7 +100,8 @@ R06's retained permissible original crate source saves the current light word an
 ambient bytes before full fuse initialization, sets ambient `[200,64,64,0]` during
 red phases, and restores the **saved lighting**, not constant white, otherwise
 and before break. The renderer now replaces only the MC entity-lighting **ambient
-term** during red phases: `min(1,RGB(200,64,64)/255 + MC_directional_diffuse)`.
+term** during red phases:
+`min(1,RGB(200,64,64)/255 + min(MC_directional_diffuse,1-MC_ambient))`.
 Imported texture/alpha, normals, directional shading, world lightmap, overlay and
 fog remain; all vertex colors remain white. Off-phases switch back to the exact
 preexisting stock RenderType with caller-supplied world light, so lighting state
@@ -115,6 +116,35 @@ established by the retained crate-update evidence. It would be false to claim
 exact PS2 luminance. The off-phase preserves existing MC lighting rather than
 inventing an original normal-ambient constant. Shader compilation/appearance and
 resource reload still require independent client verification.
+
+The diffuse cap retains only the contribution visible in stock MC lighting
+(`MC_ambient=0.4`, so diffuse headroom is `0.6`). Without it, upward normals under
+the two MC lights yield diffuse about `0.970`: even green/blue ambient64/255 then
+clips to 1, making the whole red phase white and visually identical to normal.
+The cap corrects that **MC adapter artifact**, not an original per-face exemption.
+It leaves standard vertical-side and downward-face samples unchanged; upward
+faces/trim retain diffuse shading but no longer lose all ambient chroma.
+
+The original crate update writes one moby-wide ambient value, with no face or
+material selection. The pinned public [ReRAC renderer](https://github.com/re-rac/rerac/blob/ae1e3432a0d5e21bd08d3872d3b04afef98be666/crates/rc-engine/assets/shaders/moby.wgsl)
+and [lighting notes](https://github.com/re-rac/rerac/blob/ae1e3432a0d5e21bd08d3872d3b04afef98be666/docs/plan/moby_render_notes.md)
+(ISC; port-source evidence, not a new retail capture) apply that instance
+ambient to ordinary lit vertices before packet RGBA multipliers and texture
+modulation. Glow/unlit paths can override lighting, so this is not a claim that
+every original packet/texel has identical brightness or that retail pixel output
+was measured. The current imported class 505 cache routes its 20 top/20 bottom
+triangles and 316 side/bevel triangles through the same material 0; top normals
+are +Y, bottom normals -Y. There is no top/bottom material bypass. A downward-face
+flash was already predicted by `6e20c88`; the proven defect is upward white clipping.
+The public port models GS color unity at 128 plus per-vertex packet multipliers;
+this correction intentionally retains the accepted MC `/255` side appearance,
+not a new wholesale PS2 lighting port or a guarantee of identical retail pixels.
+
+An opt-in automated test (`RACMC_TEST_SHADER_GPU=1`) compiles the real vertex
+shader plus vanilla fragment shader in a never-shown, unfocused 1×1 GL context
+and samples all six cardinal normals. It uses synthetic texture/worldlight
+values, not proprietary assets or the running Minecraft client. Normal tests
+also verify top/bottom pass routing and unchanged normals/UVs/worldlight.
 
 **No beeps, explosion sound, or blast/debris FX are implemented.** Original sample
 identity/audio pipeline belongs to R07/future work. Original debris/puff assets,

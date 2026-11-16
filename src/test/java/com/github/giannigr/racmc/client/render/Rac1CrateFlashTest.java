@@ -76,6 +76,7 @@ class Rac1CrateFlashTest {
         String shader = resource("rac1_crate_ambient.vsh");
         assertTrue(shader.contains("vec3(200.0, 64.0, 64.0) / 255.0"));
         assertTrue(shader.contains("ambient + vec3(diffuse)"));
+        assertTrue(shader.contains("diffuse = min(diffuse, 1.0 - MINECRAFT_AMBIENT_LIGHT)"));
         assertTrue(shader.contains("MINECRAFT_LIGHT_POWER"));
         assertTrue(shader.contains("dot(Light0_Direction, Normal)"));
         assertTrue(shader.contains("dot(Light1_Direction, Normal)"));

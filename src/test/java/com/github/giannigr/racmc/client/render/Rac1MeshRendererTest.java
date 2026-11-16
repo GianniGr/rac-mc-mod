@@ -287,6 +287,29 @@ class Rac1MeshRendererTest {
         }
     }
 
+    @Test
+    void topAndBottomUseSameAmbientMaterialPassAndKeepTheirOppositeNormals() {
+        float[] positions = {0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+        float[] normals = {0, 1, 0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0};
+        Rac1Mesh mesh = new Rac1Mesh(positions, normals,
+                new float[]{0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1},
+                new int[]{0, 1, 2, 3, 4, 5}, new int[]{0, 0});
+        RecordingBuffer buffers = new RecordingBuffer();
+        Rac1MeshRenderer.render(new PoseStack(), buffers, mesh,
+                new ResourceLocation[]{texture(0)}, 0x00700090, true, true);
+        assertEquals(1, buffers.buffers.size());
+        Recording recording = buffers.buffers.get(Rac1CrateAmbientRenderType.of(texture(0)));
+        assertEquals(8, recording.normals.size());
+        for (int i = 0; i < 8; i++) {
+            org.junit.jupiter.api.Assertions.assertArrayEquals(
+                    new float[]{0, i < 4 ? 1 : -1, 0}, recording.normals.get(i));
+            org.junit.jupiter.api.Assertions.assertArrayEquals(
+                    new int[]{255, 255, 255, 255}, recording.colors.get(i));
+            org.junit.jupiter.api.Assertions.assertArrayEquals(
+                    new int[]{0x0090, 0x0070}, recording.lights.get(i));
+        }
+    }
+
     /**
      * The place of a texture of the checks.
      *

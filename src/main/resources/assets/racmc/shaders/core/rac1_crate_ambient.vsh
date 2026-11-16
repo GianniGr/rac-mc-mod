@@ -34,6 +34,10 @@ void main() {
     vec3 ambient = vec3(200.0, 64.0, 64.0) / 255.0;
     float diffuse = (max(0.0, dot(Light0_Direction, Normal))
                    + max(0.0, dot(Light1_Direction, Normal))) * MINECRAFT_LIGHT_POWER;
+    // Stock MC already clips ambient + diffuse at 1. Keep only its visible diffuse
+    // range before replacing ambient; otherwise up-facing normals can clip EVERY
+    // channel to white and erase the global flash. Ordinary side lighting is unchanged.
+    diffuse = min(diffuse, 1.0 - MINECRAFT_AMBIENT_LIGHT);
     vertexColor = vec4(Color.rgb * min(vec3(1.0), ambient + vec3(diffuse)), Color.a);
 
     // Retain ordinary MC lightmap, overlay, texture and fog via the vanilla fragment shader.
