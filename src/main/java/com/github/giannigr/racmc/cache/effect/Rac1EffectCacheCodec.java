@@ -12,7 +12,7 @@ import java.util.List;
 /** Independently versioned EFFECTSIDECAR; never reads/writes RACM or SOUND sidecars.
  * SHA-256 detects corruption, not authenticity. No ISO paths are stored. */
 public final class Rac1EffectCacheCodec {
-    public static final int SCHEMA = 1, CONVERTER = 1, PROGRAM_VERSION = 1;
+    public static final int SCHEMA = 1, CONVERTER = 1, PROGRAM_VERSION = 2;
     public static final int MAX_FILE_BYTES = 2 * EffectTextureBank.MAX_BYTES + 128 * 1024;
     private static final byte[] MAGIC = {'R', 'A', 'C', 'E', 'F', 'X', 0, 1};
     private Rac1EffectCacheCodec() {}

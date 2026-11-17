@@ -100,12 +100,22 @@ public final class Rac1BlasterVisuals implements AutoCloseable {
         }
         smoke(point);
     }
+    /** Terminal bursts have their own event seed: late tracking/trail RNG consumption cannot
+     * change accepted impact presentation. */
+    public void impact(Point point, Point incoming, Point normal, long seed) {
+        random.setSeed(seed);
+        impact(point, incoming, normal);
+    }
 
     public void end(Point point) {
         if (closed) return;
         if (!active()) { close(); return; }
         close();
         smoke(point);
+    }
+    public void end(Point point, long seed) {
+        random.setSeed(seed);
+        end(point);
     }
 
     private void smoke(Point point) {

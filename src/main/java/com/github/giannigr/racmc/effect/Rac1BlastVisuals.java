@@ -16,6 +16,17 @@ public final class Rac1BlastVisuals {
                            long seed, boolean extraShellsAllowed) {
         Random random = new Random(seed);
         int before = runtime.size();
+        dust(runtime, sha1, owner, origin, random);
+        shell(runtime, sha1, owner, origin, random, 3.5f, 27, 0x40001060);
+        shell(runtime, sha1, owner, origin, random, 3, 29, 0x20000020);
+        if (extraShellsAllowed && origin.distanceSquared(camera) > 81) {
+            shell(runtime, sha1, owner, origin, random, 4, 15, 0x207f7f7f);
+            shell(runtime, sha1, owner, origin, random, 4, 24, 0x2000207f);
+            shell(runtime, sha1, owner, origin, random, 4, 20, 0x3000407f);
+        }
+        return runtime.size() - before;
+    }
+    public static void dust(EffectRuntime runtime, String sha1, UUID owner, Point origin, Random random) {
         EffectAssetRef dust = new EffectAssetRef(sha1, 1, EffectAssetRef.Bank.PARTICLE, 0);
         for (int puff = 0; puff < 6; puff++) {
             Point position = origin.add(jitter(random, .3), .3 + jitter(random, .3), jitter(random, .3));
@@ -25,14 +36,6 @@ public final class Rac1BlastVisuals {
                     (random.nextBoolean() ? 1 : -1) * (float) (Math.PI * 2 / 256),
                     0x40808080, runtime.profile().ticks(40), runtime.profile().ticks(10), EffectMaterial.ADDITIVE));
         }
-        shell(runtime, sha1, owner, origin, random, 3.5f, 27, 0x40001060);
-        shell(runtime, sha1, owner, origin, random, 3, 29, 0x20000020);
-        if (extraShellsAllowed && origin.distanceSquared(camera) > 81) {
-            shell(runtime, sha1, owner, origin, random, 4, 15, 0x207f7f7f);
-            shell(runtime, sha1, owner, origin, random, 4, 24, 0x2000207f);
-            shell(runtime, sha1, owner, origin, random, 4, 20, 0x3000407f);
-        }
-        return runtime.size() - before;
     }
     private static void shell(EffectRuntime runtime, String sha1, UUID owner, Point origin,
                               Random random, float size, int ticks, int colour) {

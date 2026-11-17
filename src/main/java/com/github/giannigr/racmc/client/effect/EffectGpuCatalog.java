@@ -13,6 +13,7 @@ public final class EffectGpuCatalog implements AutoCloseable {
     public record CpuTexture(EffectAssetRef ref, com.github.giannigr.racmc.asset.Rac1Texture texture) {}
     private record MaterialKey(EffectAssetRef ref, int slot, EffectMaterial material) {}
     private final Map<EffectAssetRef, ResourceLocation> textures = new HashMap<>();
+    private final Map<EffectAssetRef, ResourceLocation> repeats = new HashMap<>();
     private final Map<EffectAssetRef, EffectMeshAsset> meshes = new HashMap<>();
     private final Map<MaterialKey, RenderType> types = new HashMap<>();
     private final List<ResourceLocation> owned = new ArrayList<>();
@@ -43,6 +44,12 @@ public final class EffectGpuCatalog implements AutoCloseable {
                                 + "_" + entry.ref().sourceId(), entry.texture());
                 textures.put(entry.ref(), location);
                 owned.add(location);
+                if (entry.ref().bank() == EffectAssetRef.Bank.FX && entry.ref().sourceId() == 21) {
+                    ResourceLocation repeat = Rac1ClientTextures.register(prefix(generation, entry.ref())
+                            + "fx_21_repeat", entry.texture());
+                    repeats.put(entry.ref(), repeat);
+                    owned.add(repeat);
+                }
             }
             for (EffectMeshAsset mesh : meshes) {
                 if (this.meshes.putIfAbsent(mesh.source(), mesh) != null)
@@ -74,10 +81,9 @@ public final class EffectGpuCatalog implements AutoCloseable {
     }
     public RenderType type(EffectAssetRef ref, EffectMaterial material) {
         if (closed) return null;
-        ResourceLocation location = textures.get(ref);
+        ResourceLocation location = material.address() == EffectMaterial.Address.REPEAT
+                ? repeats.get(ref) : textures.get(ref);
         if (location == null) return null; // Missing original assets never become placeholder smoke.
-        if (material.address() != EffectMaterial.Address.CLAMP)
-            throw new IllegalArgumentException("Bank sprite requires clamp in first slice");
         return types.computeIfAbsent(new MaterialKey(ref, -1, material),
                 ignored -> EffectRenderTypes.create(location, material));
     }
@@ -97,6 +103,7 @@ public final class EffectGpuCatalog implements AutoCloseable {
         for (ResourceLocation location : owned) Rac1ClientTextures.release(location);
         owned.clear();
         textures.clear();
+        repeats.clear();
         meshes.clear();
         meshTextures.clear();
         types.clear();

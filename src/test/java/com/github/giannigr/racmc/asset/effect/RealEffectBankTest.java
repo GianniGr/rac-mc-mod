@@ -21,6 +21,17 @@ class RealEffectBankTest {
                     ? "aee9275384f739c9b24cd5de6f7e200292db7b01" : "ef304c641c7cd426ba492707dda5974679befbc0";
             var assets = Rac1LevelAssets.load(image, 1);
             var banks = Rac1EffectBankImporter.read(assets, sha1);
+            var nano = Rac1NanotechImporter.read(image);
+            assertEquals(870, nano.hemisphere().length);
+            var groups = com.github.giannigr.racmc.effect.Rac1NanotechVisuals.geometry(nano,
+                    new com.github.giannigr.racmc.effect.EffectSignal.Point(0, 0, 0),
+                    new com.github.giannigr.racmc.effect.EffectSignal.Point(3, 2, 4), 30);
+            assertEquals(3, groups.size());
+            assertEquals(32 * 4, groups.get(1).vertices().size());
+            assertEquals(4 * 4, groups.get(2).vertices().size());
+            var blastTables = Rac1BlastTables.read(image);
+            assertEquals(12, blastTables.debrisOffsets().length);
+            assertEquals(6, blastTables.sparkA().length);
             assertEquals(41, banks.particles().entries().size());
             assertEquals(49, banks.fx().entries().size());
             assertEquals(81, banks.definitions().count());

@@ -71,6 +71,8 @@ public final class Rac1CrateRenderer implements BlockEntityRenderer<Rac1CrateBlo
             ResourceLocation[] locations = texturesOf(content.get(), crate);
             Rac1CrateDrawing.drawInBlock(poseStack, buffers, crate, locations, packedLight,
                     blockEntity.visualRed(partialTick));
+            if (block.definition().classNumber() == 501)
+                com.github.giannigr.racmc.client.effect.Rac1EffectClient.healthVisible(blockEntity.getBlockPos());
         } catch (RuntimeException | LinkageError exception) {
             this.failure = exception.toString();
             RacMcMod.LOGGER.error("A crate of the game could not be drawn. The crate is not drawn "

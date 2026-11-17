@@ -7,7 +7,7 @@ import static com.github.giannigr.racmc.effect.EffectSignal.Point;
 /** Pure bounded fixed-update visual pool. No world/entity references or gameplay callbacks.
  * Caller owns authoritative anchors and calls clear on world/catalog replacement. */
 public final class EffectRuntime {
-    public enum Program { DUST13, SPARK27, SMOKE23_END, FLASH112, OWNER_SPRITE }
+    public enum Program { DUST13, SPARK27, SMOKE23_END, FLASH112, OWNER_SPRITE, TRAIL62, OWNER_MESH }
     public enum Geometry { BILLBOARD, MESH }
     public record Spawn(UUID owner, EffectAssetRef asset, Geometry geometry, Program program,
                         Point position, Point velocity, float size, float growth, Point rotation,
@@ -18,7 +18,8 @@ public final class EffectRuntime {
                     || velocity == null || material == null || !Float.isFinite(size) || size <= 0
                     || size > 4_000_000 || !Float.isFinite(growth) || growth < 0.9f || growth > 1.1f
                     || rotation == null || !Float.isFinite(spin) || Math.abs(spin) > 10
-                    || lifetime < 1 || lifetime > 600 || fadeIn < 0 || fadeIn >= lifetime
+                    || lifetime < 1 || lifetime > 600 || fadeIn < 0
+                    || (program == Program.TRAIL62 ? fadeIn < 1 || fadeIn > 127 : fadeIn >= lifetime)
                     || (geometry == Geometry.MESH) != (asset.bank() == EffectAssetRef.Bank.MOBY)
                     || Math.abs(velocity.x()) > 16 || Math.abs(velocity.y()) > 16
                     || Math.abs(velocity.z()) > 16)
@@ -26,7 +27,12 @@ public final class EffectRuntime {
         }
     }
     public record Draw(long handle, EffectAssetRef asset, Geometry geometry, Point position,
-                       float size, Point rotation, int rgba, EffectMaterial material) {}
+                       float size, Point rotation, int rgba, EffectMaterial material, double near, double far) {
+        public Draw(long handle, EffectAssetRef asset, Geometry geometry, Point position,
+                    float size, Point rotation, int rgba, EffectMaterial material) {
+            this(handle, asset, geometry, position, size, rotation, rgba, material, 1, 128);
+        }
+    }
     private static final class Active {
         final long handle;
         final Spawn spec;
@@ -34,6 +40,8 @@ public final class EffectRuntime {
         float previousSize, size;
         Point previousRotation, rotation;
         int age, alpha;
+        int colour;
+        double near = 1, far = 128;
         Active(long handle, Spawn spec) {
             this.handle = handle;
             this.spec = spec;
@@ -42,6 +50,7 @@ public final class EffectRuntime {
                     ? spec.size() * spec.fadeIn() / spec.lifetime() : spec.size();
             rotation = previousRotation = spec.rotation();
             alpha = spec.originalColour() >>> 24;
+            colour = spec.originalColour();
         }
     }
     private final int capacity;
@@ -66,8 +75,28 @@ public final class EffectRuntime {
         return handle;
     }
     public void stop(long handle) { active.remove(handle); }
+    public void bounds(long handle, double near, double far) {
+        if (!Double.isFinite(near) || !Double.isFinite(far) || near < 0 || far <= near || far > 500)
+            throw new IllegalArgumentException("Invalid effect distance bounds");
+        Active value = active.get(handle);
+        if (value != null) { value.near = near; value.far = far; }
+    }
     public void stopOwner(UUID owner) { active.values().removeIf(value -> value.spec.owner().equals(owner)); }
     public void clear() { active.clear(); clock.reset(); }
+    /** Typed procedural controllers submit draw state only, not game/entity physics. */
+    public boolean pose(long handle, Point point, float size, Point rotation, int originalColour) {
+        Active value = active.get(handle);
+        if (value == null || (value.spec.program() != Program.OWNER_SPRITE
+                && value.spec.program() != Program.OWNER_MESH)) return false;
+        if (!Float.isFinite(size) || size < 0 || size > 4_000_000) { stop(handle); return false; }
+        value.previous = value.position;
+        value.position = Objects.requireNonNull(point);
+        value.previousSize = value.size; value.size = size;
+        value.previousRotation = value.rotation; value.rotation = Objects.requireNonNull(rotation);
+        value.colour = originalColour;
+        value.alpha = originalColour >>> 24;
+        return true;
+    }
 
     /** Owner-controlled sprites have no autonomous motion. A stale/missing handle is harmless. */
     public boolean anchor(long handle, Point point) {
@@ -79,9 +108,15 @@ public final class EffectRuntime {
     }
 
     public EffectClock.Advance advance(double seconds, boolean paused) {
+        return advance(seconds, paused, () -> {});
+    }
+    public EffectClock.Advance advance(double seconds, boolean paused, Runnable fixedUpdate) {
         EffectClock.Advance advance = clock.advance(seconds, paused);
         if (advance.discontinuity()) active.clear();
-        for (int step = 0; step < advance.steps(); step++) update();
+        for (int step = 0; step < advance.steps(); step++) {
+            update();
+            fixedUpdate.run();
+        }
         return advance;
     }
 
@@ -98,7 +133,7 @@ public final class EffectRuntime {
             value.previous = value.position;
             value.previousSize = value.size;
             value.previousRotation = value.rotation;
-            if (spec.program() != Program.OWNER_SPRITE) {
+            if (spec.program() != Program.OWNER_SPRITE && spec.program() != Program.OWNER_MESH) {
                 Point velocity = spec.velocity();
                 try {
                     value.position = value.position.add(velocity.x(), velocity.y(), velocity.z());
@@ -128,7 +163,8 @@ public final class EffectRuntime {
                     value.alpha = Math.min(startAlpha, startAlpha * 2
                             * (spec.lifetime() - spec.fadeIn() - value.age) / spec.lifetime());
                 }
-                case OWNER_SPRITE -> { }
+                case OWNER_SPRITE, OWNER_MESH -> { }
+                case TRAIL62 -> value.alpha = startAlpha - value.age * spec.fadeIn();
             }
             if (!Float.isFinite(value.size) || value.size > 4_000_000) iterator.remove();
         }
@@ -146,13 +182,13 @@ public final class EffectRuntime {
             Point point = new Point(value.previous.x() + (value.position.x() - value.previous.x()) * t,
                     value.previous.y() + (value.position.y() - value.previous.y()) * t,
                     value.previous.z() + (value.position.z() - value.previous.z()) * t);
-            int colour = (spec.originalColour() & 0xffffff) | Math.min(128, Math.max(0, value.alpha)) << 24;
+            int colour = (value.colour & 0xffffff) | Math.min(128, Math.max(0, value.alpha)) << 24;
             draws.add(new Draw(value.handle, spec.asset(), spec.geometry(), point,
                     (float) (value.previousSize + (value.size - value.previousSize) * t),
                     new Point(value.previousRotation.x() + (value.rotation.x() - value.previousRotation.x()) * t,
                             value.previousRotation.y() + (value.rotation.y() - value.previousRotation.y()) * t,
                             value.previousRotation.z() + (value.rotation.z() - value.previousRotation.z()) * t),
-                    EffectMaterial.rgba(colour), spec.material()));
+                    EffectMaterial.rgba(colour), spec.material(), value.near, value.far));
         }
         draws.sort(Comparator.comparing((Draw draw) -> draw.material().blend())
                 .thenComparing(Comparator.comparingDouble((Draw draw) ->

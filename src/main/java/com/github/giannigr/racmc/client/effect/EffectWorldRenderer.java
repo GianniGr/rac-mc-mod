@@ -10,9 +10,9 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import org.joml.Quaternionf;
 
-/** Bounded world backend; caller supplies camera-relative view pose before projection.
- * Sprite width = source size / 210000 is explicitly a world-scale approximation, NOT
- * PS2 pixel-accurate projection. Actual-texture fixture + owner acceptance remain mandatory.
+/** Bounded world backend; caller supplies object pose, with view/projection already in RenderSystem.
+ * Sprite geometry uses source type0 projection adapted to the current MC camera, not a mesh.
+ * Original framebuffer/colour parity still needs owner acceptance.
  * Stable normal sorting/interleaving is preserved by flushing each draw; additive follows.
  * Mesh material routing reuses Rac1MeshRenderer, but preserves tint/alpha and soft depth state. */
 public final class EffectWorldRenderer {
@@ -30,13 +30,21 @@ public final class EffectWorldRenderer {
                     RenderType type = catalog.type(draw.asset(), draw.material());
                     if (type == null) continue;
                     pose.mulPose(cameraOrientation);
-                    pose.mulPose(new Quaternionf().rotationZ((float) draw.rotation().z()));
-                    float half = draw.size() / 420000;
+                    var forward = new org.joml.Vector3f(0, 0, -1).rotate(cameraOrientation);
+                    double depth = (draw.position().x() - camera.x()) * forward.x
+                            + (draw.position().y() - camera.y()) * forward.y
+                            + (draw.position().z() - camera.z()) * forward.z;
+                    var window = net.minecraft.client.Minecraft.getInstance().getWindow();
+                    double globalFar = net.minecraft.client.Minecraft.getInstance().gameRenderer.getMainCamera()
+                            .getFluidInCamera() == net.minecraft.world.level.material.FogType.WATER ? 64 : 500;
+                    var quad = EffectSpriteProjection.project(draw.size(), draw.rotation().z(), depth,
+                            window.getWidth() / (double) window.getHeight(), draw.near(), Math.min(globalFar, draw.far()));
+                    if (quad == null) continue;
+                    int rgba = (draw.rgba() & ~255) | (int) ((draw.rgba() & 255) * quad.alpha());
                     VertexConsumer vertex = buffers.getBuffer(type);
-                    put(vertex, pose, -half, -half, 0, 0, 1, draw.rgba());
-                    put(vertex, pose, half, -half, 0, 1, 1, draw.rgba());
-                    put(vertex, pose, half, half, 0, 1, 0, draw.rgba());
-                    put(vertex, pose, -half, half, 0, 0, 0, draw.rgba());
+                    for (int corner = 0; corner < 4; corner++)
+                        put(vertex, pose, quad.xy()[corner * 2], quad.xy()[corner * 2 + 1], 0,
+                                quad.uv()[corner * 2], quad.uv()[corner * 2 + 1], rgba);
                     buffers.endBatch(type);
                 } else {
                     var asset = catalog.mesh(draw.asset());

@@ -6,7 +6,8 @@ import java.util.UUID;
  * Lifecycle UUID includes spawn generation; numeric entity IDs alone are insufficient. */
 public record EffectSignal(Semantic semantic, String dimension, UUID lifecycle, long sequence,
                            long serverTick, long seed, Op op, Point anchor, Impact impact) {
-    public enum Semantic { CRATE_TNT_BLAST, BLASTER_SHOT, BLASTER_IMPACT, BLASTER_END }
+    public enum Semantic { CRATE_TNT_BLAST, BLASTER_SHOT, BLASTER_IMPACT, BLASTER_END,
+        CRATE_BREAK_WOOD, CRATE_BREAK_HEALTH }
     public enum Op { START, STOP }
     public record Impact(Point tangent, Point normal) {
         public Impact {
