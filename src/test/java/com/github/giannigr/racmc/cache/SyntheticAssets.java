@@ -128,6 +128,12 @@ final class SyntheticAssets {
      */
     static Rac1CacheContent content(String discKey) {
         return new Rac1CacheContent(discKey, staticAsset(), animatedAsset(), animatedAsset(), 56,
-                Map.of("bolt_crate", crate()));
+                Map.of("bolt_crate", crate()), wrench());
+    }
+
+    static Rac1AnimatedAsset wrench() {
+        Rac1AnimatedAsset source = animatedAsset();
+        return new Rac1AnimatedAsset(71, "gadget_71", source.mesh(), source.skeleton(),
+                source.animations(), source.textures());
     }
 }

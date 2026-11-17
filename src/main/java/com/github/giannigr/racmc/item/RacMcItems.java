@@ -35,6 +35,9 @@ public final class RacMcItems {
     public static final DeferredItem<BlasterItem> BLASTER =
             ITEMS.registerItem("blaster", BlasterItem::new, new Item.Properties().stacksTo(1));
 
+    public static final DeferredItem<Rac1WrenchItem> OMNIWRENCH =
+            ITEMS.registerItem("omniwrench", Rac1WrenchItem::new, new Item.Properties());
+
     /**
      * The picture of the tab of the creative mode of the mod.
      *

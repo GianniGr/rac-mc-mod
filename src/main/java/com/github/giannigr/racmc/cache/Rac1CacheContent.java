@@ -29,6 +29,8 @@ public final class Rac1CacheContent {
     /** The weapon of the cache. */
     private final Rac1AnimatedAsset blaster;
 
+    private final Rac1AnimatedAsset wrench;
+
     /** The joint of the skeleton the weapon is held on. */
     private final int handJoint;
 
@@ -63,10 +65,18 @@ public final class Rac1CacheContent {
     public Rac1CacheContent(String discKey, Rac1StaticAsset staticAsset,
                             Rac1AnimatedAsset animatedAsset, Rac1AnimatedAsset blaster,
                             int handJoint, Map<String, Rac1CrateAsset> crates) {
+        this(discKey, staticAsset, animatedAsset, blaster, handJoint, crates, null);
+    }
+
+    public Rac1CacheContent(String discKey, Rac1StaticAsset staticAsset,
+                            Rac1AnimatedAsset animatedAsset, Rac1AnimatedAsset blaster,
+                            int handJoint, Map<String, Rac1CrateAsset> crates,
+                            Rac1AnimatedAsset wrench) {
         this.discKey = discKey;
         this.staticAsset = staticAsset;
         this.animatedAsset = animatedAsset;
         this.blaster = blaster;
+        this.wrench = wrench;
         this.handJoint = handJoint;
         this.crates = Collections.unmodifiableMap(new LinkedHashMap<>(crates));
     }
@@ -105,6 +115,11 @@ public final class Rac1CacheContent {
      */
     public Rac1AnimatedAsset blaster() {
         return blaster;
+    }
+
+    /** Imported gadget 71; null only in incomplete/synthetic content. */
+    public Rac1AnimatedAsset wrench() {
+        return wrench;
     }
 
     /**
