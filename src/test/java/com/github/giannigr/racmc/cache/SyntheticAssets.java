@@ -130,4 +130,16 @@ final class SyntheticAssets {
         return new Rac1CacheContent(discKey, staticAsset(), animatedAsset(), animatedAsset(), 56,
                 Map.of("bolt_crate", crate()));
     }
+
+    static Rac1CacheContent completeContent(String discKey) {
+        var assets = new java.util.LinkedHashMap<String, Rac1CrateAsset>();
+        var definitions = new java.util.ArrayList<>(com.github.giannigr.racmc.asset.Rac1Crates.definitions());
+        definitions.addAll(com.github.giannigr.racmc.asset.Rac1Bolts.definitions());
+        for (var definition : definitions) {
+            assets.put(definition.key(), new Rac1CrateAsset(definition.key(),
+                    definition.classNumber(), crate().mesh(), crate().textures()));
+        }
+        return new Rac1CacheContent(discKey, staticAsset(), animatedAsset(), animatedAsset(), 56,
+                assets, SyntheticHud.assets());
+    }
 }

@@ -44,6 +44,14 @@ public final class RacMcItems {
      */
     public static final DeferredItem<Item> TAB_ICON =
             ITEMS.registerItem("tab_icon", Item::new, new Item.Properties().stacksTo(1));
+    /** Creative cosmetics only: no redemption, pickup or minting path. */
+    public static final Map<String, DeferredItem<Item>> BOLTS = new LinkedHashMap<>();
+
+    static {
+        for (var bolt : com.github.giannigr.racmc.asset.Rac1Bolts.definitions()) {
+            BOLTS.put(bolt.key(), ITEMS.registerItem(bolt.key(), Item::new, new Item.Properties()));
+        }
+    }
 
     public static final DeferredItem<BlockItem> VENDOR =
             ITEMS.registerSimpleBlockItem("gadgetron_vendor", RacMcBlocks.VENDOR);

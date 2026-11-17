@@ -30,6 +30,15 @@ public final class Rac1ClientTextures {
      * @return the place of the texture
      */
     public static ResourceLocation register(String name, Rac1Texture texture) {
+        return register(name, texture, false);
+    }
+
+    /** Full-extent 2D HUD pages need linear filtering without opposite-edge wrapping. */
+    public static ResourceLocation registerClamped(String name, Rac1Texture texture) {
+        return register(name, texture, true);
+    }
+
+    private static ResourceLocation register(String name, Rac1Texture texture, boolean clamp) {
         ResourceLocation location = ResourceLocation.fromNamespaceAndPath(NAMESPACE,
                 "textures/" + name + ".png");
         DynamicTexture dynamic = new DynamicTexture(texture.width(), texture.height(), true);
@@ -45,6 +54,7 @@ public final class Rac1ClientTextures {
         // neighbour.
         dynamic.upload();
         dynamic.setFilter(true, false);
+        if (clamp) Rac1HudSampling.clampBoundTexture();
         // A texture that is registered again - because the screen that drew it was built again -
         // must not be left in the texture manager of the game.
         release(location);

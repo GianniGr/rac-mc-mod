@@ -198,6 +198,14 @@ public final class Rac1AssetCacheManager implements Closeable {
         try {
             Optional<Rac1CacheContent> cached = store.load(key);
             if (cached.isPresent()) {
+                if (!com.github.giannigr.racmc.asset.hud.Rac1BoltHudDefinition.complete(cached.get().hud()))
+                    throw new IOException("The cache is missing the original bolt HUD.");
+                for (var bolt : com.github.giannigr.racmc.asset.Rac1Bolts.definitions()) {
+                    var asset = cached.get().crate(bolt.key());
+                    if (asset == null || asset.classNumber() != bolt.classNumber()
+                            || asset.mesh().triangleCount() == 0)
+                        throw new IOException("The cache is missing original bolt assets.");
+                }
                 content = cached.get();
                 progress = 100;
                 step = "The assets are ready.";
@@ -261,11 +269,16 @@ public final class Rac1AssetCacheManager implements Closeable {
             Rac1VendorAsset vendor = new Rac1VendorAsset(
                     Rac1AssetExtractor.readAnimatedAsset(assets, Rac1VendorAsset.BODY_CLASS),
                     Rac1AssetExtractor.readAnimatedAsset(assets, Rac1VendorAsset.HOLOGRAM_CLASS));
+            for (var bolt : com.github.giannigr.racmc.asset.Rac1Bolts.definitions()) {
+                crates.put(bolt.key(), Rac1AssetExtractor.readCrateAsset(assets, bolt));
+            }
             int handJoint = handChain.length == 0 ? 0 : handChain[handChain.length - 1];
             step = "The cache is written.";
             progress = 95;
+            step = "The original HUD is converted.";
+            var hud = com.github.giannigr.racmc.asset.hud.Rac1HudImporter.read(outcome.image(), assets);
             return new Rac1CacheContent(key, staticAsset, animatedAsset, blaster, handJoint,
-                    crates, vendor);
+                    crates, vendor, hud);
         }
     }
 
