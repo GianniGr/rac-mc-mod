@@ -12,6 +12,12 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public class Rac1CrateBlockEntity extends BlockEntity {
     public final Rac1ExplosiveFuse fuse = new Rac1ExplosiveFuse();
+    private final Rac1CrateFlashClock flashClock = new Rac1CrateFlashClock();
+
+    public boolean visualRed(float partialTick) {
+        return level != null && flashClock.red(
+                fuse.remaining(), fuse.lastTick(), level.getGameTime(), partialTick);
+    }
 
     public boolean arm(boolean chain) {
         if (level == null || level.isClientSide || !fuse.arm(chain, level.getGameTime())) {

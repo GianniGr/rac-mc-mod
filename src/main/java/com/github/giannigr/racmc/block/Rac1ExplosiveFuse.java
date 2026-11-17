@@ -67,16 +67,24 @@ public final class Rac1ExplosiveFuse {
     }
 
     /**
-     * Sample the original 60 Hz counter within a 20 TPS tick. Visual only: no client fuse
-     * advancement. The final original frame is held until the authoritative 60-tick removal.
+     * Stateless reference sampler for an aligned counter/fraction pair. Live renderers must
+     * use Rac1CrateFlashClock: an unchanged packet counter plus a wrapping fraction rewinds.
      */
     public static boolean red(int remaining, float partialTick) {
         if (remaining <= 0 || remaining > FULL_TICKS) {
             return false;
         }
         double partial = Float.isFinite(partialTick) ? Math.clamp(partialTick, 0.0F, 1.0F) : 0.0;
+        return redAtElapsed(FULL_TICKS - remaining + partial);
+    }
+
+    /** Original 60 Hz predicate; hold the final frame until authoritative removal. */
+    public static boolean redAtElapsed(double elapsedTicks) {
+        if (!Double.isFinite(elapsedTicks) || elapsedTicks < 0) {
+            return false;
+        }
         int originalCounter = Math.max(1,
-                179 - (int) Math.floor(3.0 * (FULL_TICKS - remaining + partial)));
+                179 - (int) Math.floor(3.0 * Math.min(FULL_TICKS, elapsedTicks)));
         return originalCounter % 60 > 40 || originalCounter < 15;
     }
 }

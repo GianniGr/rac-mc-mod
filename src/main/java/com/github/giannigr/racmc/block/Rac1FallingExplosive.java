@@ -17,7 +17,10 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class Rac1FallingExplosive extends FallingBlockEntity {
     private static final EntityDataAccessor<Integer> FUSE = SynchedEntityData.defineId(
             Rac1FallingExplosive.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Long> FUSE_TICK = SynchedEntityData.defineId(
+            Rac1FallingExplosive.class, EntityDataSerializers.LONG);
     public final Rac1ExplosiveFuse fuse = new Rac1ExplosiveFuse();
+    private final Rac1CrateFlashClock flashClock = new Rac1CrateFlashClock();
     private double originY;
 
     public Rac1FallingExplosive(EntityType<? extends Rac1FallingExplosive> type, Level level) {
@@ -29,10 +32,15 @@ public final class Rac1FallingExplosive extends FallingBlockEntity {
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
         builder.define(FUSE, Rac1ExplosiveFuse.IDLE);
+        builder.define(FUSE_TICK, Long.MIN_VALUE);
     }
 
     public int visualFuse() {
         return entityData.get(FUSE);
+    }
+
+    public boolean visualRed(float partialTick) {
+        return flashClock.red(visualFuse(), entityData.get(FUSE_TICK), level().getGameTime(), partialTick);
     }
 
     public static void fall(ServerLevel level, BlockPos pos, BlockState state) {
@@ -98,6 +106,7 @@ public final class Rac1FallingExplosive extends FallingBlockEntity {
         }
         fuse.save(blockData);
         entityData.set(FUSE, fuse.remaining());
+        entityData.set(FUSE_TICK, fuse.lastTick());
     }
 
     public void landed(BlockPos pos) {

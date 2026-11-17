@@ -101,8 +101,10 @@ class Rac1CrateFlashTest {
     void bothWorldRenderersSupplyPartialTickAndAmbientStateRetainsLightmap() {
         String ground = ModSource.of("com/github/giannigr/racmc/client/render/Rac1CrateRenderer.java");
         String air = ModSource.of("com/github/giannigr/racmc/client/render/Rac1FallingBlockRenderer.java");
-        assertTrue(ground.contains("blockEntity.fuse.remaining(), partialTick"));
-        assertTrue(air.contains("explosive.visualFuse(), partialTick"));
+        assertTrue(ground.contains("blockEntity.visualRed(partialTick)"));
+        assertTrue(air.contains("explosive.visualRed(partialTick)"));
+        assertFalse(ground.contains("Rac1ExplosiveFuse.red("));
+        assertFalse(air.contains("Rac1ExplosiveFuse.red("));
         String state = ModSource.of(
                 "com/github/giannigr/racmc/client/render/Rac1CrateAmbientRenderType.java");
         assertTrue(state.contains(".setLightmapState(LIGHTMAP)"));

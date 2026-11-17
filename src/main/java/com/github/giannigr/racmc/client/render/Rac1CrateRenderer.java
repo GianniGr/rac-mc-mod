@@ -70,8 +70,7 @@ public final class Rac1CrateRenderer implements BlockEntityRenderer<Rac1CrateBlo
             // broken and the crack of the game of blocks is drawn over it.
             ResourceLocation[] locations = texturesOf(content.get(), crate);
             Rac1CrateDrawing.drawInBlock(poseStack, buffers, crate, locations, packedLight,
-                    com.github.giannigr.racmc.block.Rac1ExplosiveFuse.red(
-                            blockEntity.fuse.remaining(), partialTick));
+                    blockEntity.visualRed(partialTick));
         } catch (RuntimeException | LinkageError exception) {
             this.failure = exception.toString();
             RacMcMod.LOGGER.error("A crate of the game could not be drawn. The crate is not drawn "

@@ -120,9 +120,37 @@ Existing imported mesh/material textures are reused. Original red predicate
 always normal. This is 60 Hz visual sampling inside 20 TPS, not modulo60 applied
 to MC ticks. The final `<15` phase is **solid red**, not an invented fast strobe.
 The final original frame is held until the owner's authoritative 60-tick removal
-(3s, versus original179/60 ~=2.983s). Client visuals do not advance gameplay; they
-use the latest synced remaining ticks plus render partialTick, do not extrapolate
-missed packets by wall-clock time, and use that same policy on initial tracking.
+(3s, versus original179/60 ~=2.983s). Client visuals do not advance gameplay.
+They pair the synced remaining count with its processed server tick and sample
+`60-remaining+clamp(clientTick-serverTick+partialTick,0,1)`, retaining the furthest
+presentation phase within that object's active fuse. This predicts at most one
+loaded tick, never a missed-packet/offline interval, and cannot rewind on a
+partial-tick rollover, stale snapshot or backward client-time correction.
+Idle/terminal state clears this transient, nonserialized presentation clock.
+Unknown timestamps disable extrapolation. Grounded block entities already carry
+`RacFuseTick`; falling entities additionally track that timestamp beside their
+remaining count. Initial tracking and representation transfers use the same pair.
+
+A deterministic 120 FPS sweep with packets arriving 1/4 client tick after each
+boundary reproduced **7 red windows instead of 4** before this clock fix:
+wrapping `partialTick` with an unchanged received count briefly re-entered red
+after each of the first three off edges. The fixed path preserves four windows
+across 30/60/120/144/240 FPS and five packet phases. These tests do not claim exact
+network-independent phase alignment during arbitrary packet loss or time skew.
+
+A bounded GPU temporal probe used one visible imported-texture triangle-centroid
+UV sample per cardinal face, unchanged geometry and world light, four lighting
+scenarios (above/opposed lights, world-light 1.0/0.25), and 366 frames per case
+(360 fuse frames at 120 FPS plus six terminal normal frames). Actual shader
+readbacks reproduced the old three extra red frames, with maximum off-reference
+RGB error up to 0.355292 in float readback units. The fixed path had four red
+windows/eight on-off edges including terminal restoration, versus seven/fourteen
+before; all reference-off RGB and linear weighted-luminance residuals were zero
+(assertion tolerance 1e-6). Thus the tested shader switch restores normal lighting
+without a residual afterpulse; the measured defect was phase rewind, not a reason
+to retune ambient/highlight coefficients. This isolated sampler is not Minecraft
+buffer-order, moving-worldlight, postprocessing or live-network scene verification,
+and does not establish the sole cause of the owner's reported scene.
 
 R06's retained permissible original crate source saves the current light word and
 ambient bytes before full fuse initialization, sets ambient `[200,64,64,0]` during
