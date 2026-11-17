@@ -10,7 +10,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * Single ordinary-crate destruction seam, reached only from the native validated harvest path.
- * No rewards are rolled here. Consolidation installs the genuine P24 transaction once.
+ * No rewards are rolled here. Mod bootstrap installs the genuine shared P24 transaction once.
  */
 public final class Rac1WrenchCrateHits {
     @FunctionalInterface
@@ -23,7 +23,7 @@ public final class Rac1WrenchCrateHits {
     public enum ContactKind { HELD, SLAM, THROWN }
     @FunctionalInterface
     public interface ContactHandler {
-        /** Future P25: arm/shorten this expected explosive lifecycle, NEVER remove/reward here. */
+        /** Arm/shorten the real P25 explosive lifecycle, NEVER remove/reward here. */
         boolean hit(ServerPlayer player, BlockPos pos, BlockState expectedState,
                 net.minecraft.world.level.block.entity.BlockEntity expectedLifecycle, ContactKind kind);
     }

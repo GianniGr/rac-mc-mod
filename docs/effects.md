@@ -88,7 +88,8 @@ seed independently of trail RNG, so spawn/packet ordering does not change them.
 
 `EffectTriggeredEvent` is a **server-local non-cancellable observation** of the
 accepted semantic fact, before its optional effects packet dispatch. P30 can be
-consolidated deliberately against this seam later; no sound hookup is installed.
+consolidated deliberately against this seam. P32 now preserves the distinct shared
+reward sound hook alongside this visual hook; no sound lookup is embedded in effects.
 The four existing hook files (`Rac1BlasterServer`, `Rac1BlasterArrow`,
 `Rac1CrateBlast`, `Rac1CrateRewards`) require single-writer conflict review when
 consolidating sound/wrench/debris. Never copy or merge their other branches merely

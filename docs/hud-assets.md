@@ -13,8 +13,9 @@ revision/notification protocol and four-second timeout are unchanged.
 - `Rac1BoltHudDefinition`: this HUD's selectors and completeness requirements.
 - `Rac1HudImporter`: validated-disc extraction of the required bank assets, regular
   font and retail layout values; no raw source container in the converted cache.
-- `Rac1HudCacheCodec`: bounded, versioned 2D cache section. Outer cache schema **5**,
-  converter **5**, new section kind **5**. Old/incomplete caches rebuild.
+- `Rac1HudCacheCodec`: bounded, versioned 2D cache section. Final P32 outer cache
+  schema **7**, converter **7**, section kind **6** (vendor uses5, wrench71).
+  Historical standalone5/5/section5 is invalidated. Old/incomplete caches rebuild.
 - Shared client drawing/texture lifecycle supports cache replacement, resource
   reload and logout; textures are not allocated per frame.
 
@@ -102,7 +103,8 @@ and layout, reference pixel/metric digests and converted-cache roundtrip.
 Actual Minecraft overlay placement, blending, readability at GUI scales, resource
 reload under the graphics driver and pickup-driven presentation remain **runtime
 unverified**. Separate T13 and owner playtesting are required before integration.
-This work adds no sounds or original bolt launch motion and combines no branches.
+The standalone HUD slice added no sounds or bolt launch motion. The final P32
+union includes those separately approved features; see [integration.md](integration.md).
 
 The owner subsequently previewed the HUD and reported thin lines outside both cap
 quads. A bounded isolated GPU regression reproduced 52 visible pixels per outside

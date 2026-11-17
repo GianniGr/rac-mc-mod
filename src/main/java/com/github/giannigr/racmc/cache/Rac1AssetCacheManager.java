@@ -1,13 +1,7 @@
 package com.github.giannigr.racmc.cache;
 
 import com.github.giannigr.racmc.asset.AssetFormatException;
-import com.github.giannigr.racmc.asset.Rac1AnimatedAsset;
-import com.github.giannigr.racmc.asset.Rac1AssetExtractor;
-import com.github.giannigr.racmc.asset.Rac1CrateAsset;
-import com.github.giannigr.racmc.asset.Rac1CrateDefinition;
 import com.github.giannigr.racmc.asset.Rac1Crates;
-import com.github.giannigr.racmc.asset.Rac1VendorAsset;
-import com.github.giannigr.racmc.asset.Rac1StaticAsset;
 import com.github.giannigr.racmc.disc.DiscFormatException;
 import com.github.giannigr.racmc.iso.Rac1DiscValidator;
 import com.github.giannigr.racmc.iso.Rac1IsoSelectionResult;

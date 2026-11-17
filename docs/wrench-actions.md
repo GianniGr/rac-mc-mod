@@ -1,7 +1,8 @@
 # Wrench actions — consolidated implementation candidate
 
-This branch consolidates P27 core/server-local data (`996dc61`) with P28 actions,
-not vendor/bolts/explosive-gameplay/rewards/audio branches. T14 runtime verification is pending.
+P32 now consolidates P27 core/server-local data (`996dc61`) and approved P28 actions
+with gameplay, sound and effects; [integration.md](integration.md) is authoritative.
+Prior bounded T14/owner acceptance is retained; exact merged-tree T18 remains required.
 
 ## Controls and availability
 
@@ -80,12 +81,12 @@ callbacks and rechecked after the pre-hook and again at the removal seam after B
 Native `destroyBlock` reaches the ONE `Rac1WrenchCrateHits` adapter through `onDestroyedByPlayer`;
 there is no parallel removal/reward path. One action cannot harvest the same position again through
 ray/tip/body overlap. Vendor/protected and explosive blocks cannot enter this ordinary-crate path.
-Explosives remain non-removable pending later P25 short-fuse integration. Vanilla/unknown blocks
+Explosives remain non-removable but now dispatch the P25 short-fuse integration. Vanilla/unknown blocks
 are not action-destroyed. Thrown ordinary-crate contact is an exact radius0.4 swept sphere between
 posed head samples, with authoritative flight reach and once-per-block-entity-lifecycle dispatch.
-Throw does not impose a blanket world-LOS gate on return contacts. Explosive contact has a future
-P25 handler seam, but no handler is installed here: absent one, explosives remain unchanged,
-never silently removed/disarmed. There is no duplicate reward or currency-attraction implementation.
+Throw does not impose a blanket world-LOS gate on return contacts. P32 installs the same real
+short-fuse handler for held/slam/thrown contacts: 5–15 source updates round up to 2–5 MC ticks,
+shorten-only and no payout until actual detonation. There is no duplicate reward or currency-attraction implementation.
 
 Protocol `wrench-actions-3` uses a10-byte C2S serial/intent/default-or-slim flag. The flag selects
 one of two fixed native rigs, not a client pose/target. The server owns clocks/collision/damage.
@@ -123,7 +124,7 @@ These are headless geometry measurements, not live mob damage, armor, plugin or 
 
 Source sequence10 genuinely deforms: peak grip/head distance1.81484 blocks and mesh span2.25316,
 versus held grip/head~0.43. No duplicate class-scale multiplication was found. The action-only
-deformation parameter remains **1.0** pending owner approval; the proposed0.4 (~0.98 peak
+deformation parameter remains **1.0**, explicitly owner-accepted as a known limitation; proposed0.4 (~0.98 peak
 grip/head) is not applied. Do not attribute all previous misses to the handle size.
 T14/owner must still accept actual anatomy/grip/layers, combat/protection/native hurt, crate
 transactions and multiplayer on the exact corrected commit.

@@ -1,7 +1,7 @@
 # Imported-material vanilla block debris — bounded P29 correction
 
-Follow-up to integrated `86ca1f7`, conditionally approved by the owner pending this
-correction. This is **not** the original sound/effect/particle pipeline (#35).
+Owner-approved `56147b7` follow-up to integrated `86ca1f7`, now included in the
+P32 union. This is **not** the original sound/effect/particle pipeline (#35).
 It changes only standard client mining/destroy debris for all four crates and the
 Gadgetron vendor. No gameplay, proximity, world/item transform, HUD, bolt motion,
 payout, damage or explosive flash behavior changes.
@@ -59,7 +59,8 @@ not a biome tint, flat material color or fullbright replacement.
   This correction does not replace other particle providers (running/falling dust
   or server-authored block particle options), add original explosion effects, or
   change server event/network contracts.
-- Schema/converter remain **6/6**. No assets, PNGs or cache bytes are committed.
+- This correction originally kept schema/converter **6/6**; P32's later union is
+  **7/7** (see [integration.md](integration.md)). No assets, PNGs or cache bytes are committed.
 
 ## Measured P checks
 

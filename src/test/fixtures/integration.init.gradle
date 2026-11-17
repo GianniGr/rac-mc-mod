@@ -5,7 +5,8 @@ allprojects {
             throw new GradleException('Supply -PintegrationDirectory=<absolute private directory outside Git>')
         }
         def directory = file(project.property('integrationDirectory'))
-        def fixture = new File(directory, 'resources/data/racmc_integration/structure/empty.nbt')
+        def namespace = project.findProperty('integrationNamespace') ?: 'racmc_integration'
+        def fixture = new File(directory, "resources/data/${namespace}/structure/empty.nbt")
         sourceSets.main.resources.srcDir(new File(directory, 'resources'))
         tasks.register('generateIntegrationFixture') {
             outputs.file(fixture)
@@ -26,6 +27,6 @@ allprojects {
         }
         tasks.named('processResources') { dependsOn('generateIntegrationFixture') }
         neoForge.runs.gameTestServer.gameDirectory = new File(directory, 'runtime')
-        neoForge.runs.gameTestServer.systemProperty('neoforge.enabledGameTestNamespaces', 'racmc_integration')
+        neoForge.runs.gameTestServer.systemProperty('neoforge.enabledGameTestNamespaces', namespace)
     }
 }

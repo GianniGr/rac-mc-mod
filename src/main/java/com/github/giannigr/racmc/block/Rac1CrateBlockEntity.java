@@ -63,6 +63,14 @@ public class Rac1CrateBlockEntity extends BlockEntity {
         }
     }
 
+    public boolean wrenchHit() {
+        if (level == null || level.isClientSide || isRemoved()
+                || !(getBlockState().getBlock() instanceof Rac1CrateBlock block) || !block.explosive()
+                || !fuse.wrenchHit(5 + level.random.nextInt(11), level.getGameTime())) return false;
+        sync();
+        return true;
+    }
+
     public static void serverTick(net.minecraft.world.level.Level level, BlockPos pos,
             BlockState state, Rac1CrateBlockEntity crate) {
         if (!(state.getBlock() instanceof Rac1CrateBlock block) || !block.explosive()) {

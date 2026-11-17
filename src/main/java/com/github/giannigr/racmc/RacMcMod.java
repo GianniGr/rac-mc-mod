@@ -53,5 +53,14 @@ public class RacMcMod {
         // The tab of the creative mode of the mod is registered with the same bus.
         RacMcCreativeTabs.register(modEventBus);
         com.github.giannigr.racmc.sound.Rac1Sounds.register(modEventBus);
+        com.github.giannigr.racmc.item.Rac1WrenchCrateHits.install((player, pos, state) -> {
+            com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(
+                    player.serverLevel(), pos, state, player);
+            return player.level().getBlockState(pos) != state;
+        });
+        com.github.giannigr.racmc.item.Rac1WrenchCrateHits.installContactHandler(
+                (player, pos, state, lifecycle, kind) ->
+                        lifecycle instanceof com.github.giannigr.racmc.block.Rac1CrateBlockEntity crate
+                                && crate.wrenchHit());
     }
 }

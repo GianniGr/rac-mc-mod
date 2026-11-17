@@ -81,17 +81,6 @@ public class Rac1CrateBlock extends FallingBlock implements EntityBlock {
     }
 
     @Override
-    public boolean onDestroyedByPlayer(BlockState state, net.minecraft.world.level.Level level,
-            BlockPos pos, net.minecraft.world.entity.player.Player player, boolean willHarvest,
-            net.minecraft.world.level.material.FluidState fluid) {
-        if (level instanceof net.minecraft.server.level.ServerLevel server) {
-            com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(server, pos, state, player);
-            return level.getBlockState(pos) != state;
-        }
-        return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
-    }
-
-    @Override
     public void onBlockExploded(BlockState state, net.minecraft.world.level.Level level,
             BlockPos pos, net.minecraft.world.level.Explosion explosion) {
         if (level instanceof net.minecraft.server.level.ServerLevel server) {
@@ -201,6 +190,10 @@ public class Rac1CrateBlock extends FallingBlock implements EntityBlock {
                         () -> super.onDestroyedByPlayer(state, level, pos, player,
                                 willHarvest, fluid));
             }
+        }
+        if (level instanceof net.minecraft.server.level.ServerLevel server) {
+            com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(server, pos, state, player);
+            return level.getBlockState(pos) != state;
         }
         return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
     }

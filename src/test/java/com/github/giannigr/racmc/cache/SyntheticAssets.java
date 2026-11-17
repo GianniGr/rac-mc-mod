@@ -146,6 +146,7 @@ final class SyntheticAssets {
                     definition.classNumber(), crate().mesh(), crate().textures()));
         }
         return new Rac1CacheContent(discKey, staticAsset(), animatedAsset(), animatedAsset(), 56,
-                assets, com.github.giannigr.racmc.asset.SyntheticVendor.vendor(), SyntheticHud.assets());
+                assets, com.github.giannigr.racmc.asset.SyntheticVendor.vendor(), SyntheticHud.assets(),
+                wrench());
     }
 }

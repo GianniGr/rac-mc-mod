@@ -62,6 +62,14 @@ public final class Rac1WrenchEvents {
             return;
         }
         var state = event.getLevel().getBlockState(event.getPos());
+        if (action(state) == Rac1WrenchBlockPolicy.Action.EXPLOSIVE_ADAPTER_REQUIRED
+                && !WrenchActions.deliveringContact(event.getEntity())
+                && event.getAction() == PlayerInteractEvent.LeftClickBlock.Action.START
+                && event.getEntity() instanceof ServerPlayer player
+                && event.getUseBlock() != net.neoforged.neoforge.common.util.TriState.FALSE
+                && event.getUseItem() != net.neoforged.neoforge.common.util.TriState.FALSE) {
+            WrenchActions.heldExplosiveContact(player, event.getPos());
+        }
         boolean approvedContactAdapter = action(state)
                 == Rac1WrenchBlockPolicy.Action.EXPLOSIVE_ADAPTER_REQUIRED
                 && WrenchActions.deliveringContact(event.getEntity())

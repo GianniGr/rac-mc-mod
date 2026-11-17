@@ -1,4 +1,88 @@
-# P29 combined candidate
+# P32 final approved-feature candidate — 2026-11-17
+
+See [integration.md](integration.md) for the current approved matrix and conscious
+merge choices. Owner requested **one big PR** after approving combined gameplay,
+sound, effects and corrected wrench. P32 is sole local integration writer on
+`integration/approved-feature-wave`; original branches/worktrees are untouched.
+All workers in this wave use owner-authorized Sol Medium. No push, public PR,
+GitHub edits or provider/main merge by P32; T18 verifies before orchestrator publication.
+
+## Exact inputs and history
+
+- Base: `56147b76c546bafbac3e38ee7d382e8972e65b33`.
+- Sound: `739248ad66e2c135f91bc0df186bcb5c0c96a235`, merge
+  `5c6f9b8dd12309e42b4fc42a6bb6410285c81fe3`.
+- Effects: `7106e9dbd3a0daa0be735c3223c194a1068bee57`, merge
+  `0881dbf2c5499bf73ea5d8f48d443107578eb5f2`.
+- Wrench: `afca22185bbdda39af269e709c435a3ac4eaec0b`, includes `996dc61`,
+  merge `8a7501a673c93f2b063c4d78459e0cc10b2b04e4`.
+- Final integration commit is the commit containing this handoff plus the follow-up
+  shared-reward/short-fuse fixes; obtain its full identity with `git rev-parse HEAD`.
+  All merges preserve parent histories.
+
+## Verification and evidence
+
+P32 uses only synthetic assets and an isolated headless GameTest world. No owner
+client was launched, controlled, closed or reloaded; no ISO was accessed. Private
+logs/runtime are retained under
+`%LOCALAPPDATA%\Temp\opencode\p32-release-integration`.
+Java/NeoForge target remains Java21 / Minecraft1.21.1.
+
+Focused command (not the complete T18 suite):
+
+```powershell
+.\gradlew.bat test --tests '*Rac1IntegratedCacheTest' --tests '*Rac1AssetCacheManagerTest' --tests '*Rac1CacheCodecTest' --tests '*Rac1VendorCacheTest' --tests '*Rac1HudCacheCodecTest' --tests '*Rac1Wrench*Test' --tests '*Rac1SoundPipelineTest' --tests '*EffectCacheTest' --tests '*EffectNetworkTest' --tests '*Rac1BoltPayoutTest' --tests '*Rac1ExplosiveTest' --tests '*Rac1CrateFallTest' build --console=plain
+
+.\gradlew.bat --no-configuration-cache -I src/test/fixtures/integration.init.gradle "-PintegrationDirectory=<private evidence>/headless" -PintegrationNamespace=racmc_release runGameTestServer --console=plain
+
+.\gradlew.bat --no-configuration-cache -I src/test/fixtures/integration.init.gradle "-PintegrationDirectory=<private evidence>/prior-integration" runGameTestServer --console=plain
+```
+
+The new checks cover the union asset catalog, missing-required rebuild/failure,
+main/sound/effects sidecar coexistence and corrupt-sidecar isolation, distinct payload
+IDs, original wrench fuse bounds/persistence/nonextension, native held/slam/thrown
+ordinary crate reward/event idempotence, protection veto, real held/slam/thrown
+explosive short-fuse dispatch, grounded/airborne reward + sound + FX once and
+creative vendor denial with unchanged vanilla mining.
+
+Measured final result: **115/115 focused JUnit checks passed, 0 skipped/failed**;
+Gradle compilation/packaging/build passed. New `racmc_release` headless namespace:
+**4/4 required tests passed**. Existing `racmc_integration` regression namespace:
+**4/4 required tests passed**. Both isolated GameTest servers exited normally after
+saving; all P32 jobs ended. No claim of the complete independent T18 suite.
+`build/libs/racmc-0.1.0.jar` was produced; its archive inventory contains no
+ISO/RACM/RACS/RACEFX/NBT fixture entries. It is local output, not a published release.
+`git diff --check` passed.
+
+Initial compile exposed Git's unconflicted duplicate destruction method; a later
+compile corrected the NeoForge START enum type. Headless fixture initially used
+ServerPlayer bookkeeping `tick()` rather than connection-driven `doTick()` for
+attack charge. The charged-account probe then exposed the genuine standalone item
+`canAttackBlock` denial before BreakEvent. The fix permits only validated
+non-removing contact dispatch, never native explosive mining. Failed logs are
+retained; no failed run is represented as passing.
+
+## Remaining gates / next session
+
+T18 must verify the exact committed result, including full relevant suites, required
+real-disc and runtime/client/server checks. No new combined GPU/visual, remote
+network/late-join, HUD end-to-end reload or ground/fall synchronization pass is
+claimed. Packet-sink accounts prove server behavior, **not client synchronization**.
+
+Wrench amplitude1.0 is explicitly accepted with its known visual limitation.
+Returning-wrench bolt attraction is excluded, not approved implementation.
+Vendor/Blaster/wrench sound bindings stay UNBOUND. Procedural FX/material fidelity
+limits remain documented; no false 1:1 claim. **Nanotech next session:** released/
+falling health drops, pickup sound and healing, not implemented now. Grounded
+health-crate visuals do not heal. No broad Blaster #11 change.
+
+Specialist artifacts are retained for T18/owner; all owned build/runtime jobs must
+have ended before release of P32 active-use claims. No deletion or cleanup
+certification is implied.
+
+---
+
+# Historical P29 combined candidate
 
 See [integration.md](integration.md) for the approved-tip union, reward/cache/falling
 decisions, measured focused checks and pending exact-tree independent T/client gates.

@@ -19,8 +19,15 @@ public final class Rac1WrenchItem extends Item {
             net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos,
             net.minecraft.world.entity.player.Player player) {
         var action = Rac1WrenchEvents.action(state);
+        if (action == Rac1WrenchBlockPolicy.Action.EXPLOSIVE_ADAPTER_REQUIRED) {
+            // CommonHooks.fireBlockBreak consults this BEFORE posting BreakEvent.
+            // Permit only the validated non-removing short-fuse dispatch, never native mining.
+            return com.github.giannigr.racmc.actions.WrenchActions.deliveringContact(player)
+                    && Rac1WrenchCrateHits.hasContactHandler()
+                    && com.github.giannigr.racmc.actions.WrenchActions.validHarvestLifecycle(
+                            level, pos, player);
+        }
         return action != Rac1WrenchBlockPolicy.Action.PROTECTED
-                && action != Rac1WrenchBlockPolicy.Action.EXPLOSIVE_ADAPTER_REQUIRED
                 && super.canAttackBlock(state, level, pos, player);
     }
 

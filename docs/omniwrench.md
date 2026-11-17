@@ -75,7 +75,7 @@ If the installed transaction returns false, the server explicitly sends the
 current block/BE state to undo predicted air; native harvest's return alone
 does not reliably communicate a removal-hook rejection.
 
-At consolidation, wire **one** genuine P24 destruction transaction. Its known
+P32 consolidation installs **one** genuine P24 destruction transaction. Its
 `Rac1CrateRewards.destroy(ServerLevel, BlockPos, BlockState, @Nullable Entity)`
 returns void: the integration handler must determine actual removal afterward
 without treating that void as success, rerolling rewards, calling native removal
@@ -83,20 +83,21 @@ again, or installing a second payout from `playerDestroy`. P24 owns lifecycle
 UUID/admission, reentrancy and exactly-once rewards. Do not independently infer
 identity from a cached blockstate across asynchronous actions.
 
-### Explosive boundary — not implemented
+### Explosive boundary — P32 integration
 
 `racmc:explosive_crate` returns `EXPLOSIVE_ADAPTER_REQUIRED`, progress 0, and is
-currently denied for wrench mining **including creative**. It is never silently
+denied for native wrench mining **including creative**. It is never silently
 deleted, disarmed, rewarded or detonated by this core.
 
-The next integration must replace that temporary denial with P25's real,
+The installed shared contact adapter invokes P25's real,
 server-validated short-fuse hit transaction: **5–15 original 60-Hz updates,
 roughly 0.08–0.25 seconds, not 5–15 Minecraft ticks**. P25 owns quantization,
 already-armed shortening without extension, falling/detonating states, flash,
 blast and chain races. No reward on the arming hit; call P24 only at actual
 destruction. Creative's early native destroy path and survival's validated
 block attack path need deliberate shared dispatch and authoritative resync;
-do not mutate from the pre-validation left-click event.
+the START adapter performs these validations and a real BreakEvent before mutating,
+never a direct removal. Server clock quantization rounds up to 2–5 ticks.
 
 ## Imported drawing and P28 API
 
@@ -105,15 +106,13 @@ offset-zero moby geometry entry, not geometry sliced from Ratchet. Original
 texture/skeleton/sequences use the existing independent Java converters. No GPL
 implementation was copied/transliterated and no dependency was added.
 
-`Rac1CacheContent.wrench()` holds the result. This standalone branch uses schema
-**6**, converter **5**, section kind **71**. Missing/wrong/duplicate wrench
+`Rac1CacheContent.wrench()` holds the result. The final union uses schema
+**7**, converter **7**, section kind **71**. Missing/wrong/duplicate wrench
 sections and version mismatch fail closed; deliberately incomplete synthetic
 content can hold null, but the production manager rebuilds it rather than
 reporting READY. Old cache files are rebuilt, not reused as complete.
-**These version numbers are branch-local**. The first core commit used 5/4,
-coincidentally also used by the separate vendor slice; 6/5 adds timing and
-attachment metadata. Consolidation must reconcile all sections and select a
-new combined schema/converter; never overwrite a combined cache with this slice.
+Historical core versions 5/4 and 6/5 are invalidated. Vendor section5 and HUD6
+coexist with wrench71; sound and effects remain separately versioned sidecars.
 
 `Rac1ImportedItemDrawing` shares texture lifecycle, item-cube origin correction,
 GUI fullbright lighting and mesh submission with the existing Blaster renderer.

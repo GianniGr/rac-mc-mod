@@ -63,7 +63,7 @@ public final class WrenchActions {
 
     /** For P27's hook: allow protection dispatch but do not start a second normal attack here. */
     public static boolean deliveringContact(Player player) {
-        return delivering == player;
+        return player != null && delivering == player;
     }
 
     public static void normalAttackAccepted(ServerPlayer player) {
@@ -275,6 +275,37 @@ public final class WrenchActions {
 
     static void explosiveContact(ServerPlayer player, WrenchSlamBlocks.Candidate candidate,
             ThrowReach ranged) {
+        explosiveContact(player, candidate, ranged, ranged == null
+                ? com.github.giannigr.racmc.item.Rac1WrenchCrateHits.ContactKind.SLAM
+                : com.github.giannigr.racmc.item.Rac1WrenchCrateHits.ContactKind.THROWN);
+    }
+
+    /** Direct hits use the same protection event, identity check and short-fuse adapter as actions. */
+    public static void heldExplosiveContact(ServerPlayer player, net.minecraft.core.BlockPos pos) {
+        var level = player.serverLevel();
+        if (busy(player) || !valid(player) || !player.isAlive() || !isWrench(player.getMainHandItem())
+                || !normalAttackAllowed(player) || player.getAttackStrengthScale(0) < .999F
+                || !level.hasChunkAt(pos) || level.isOutsideBuildHeight(pos)
+                || !level.getWorldBorder().isWithinBounds(pos) || !player.canInteractWithBlock(pos, 0)
+                || !level.mayInteract(player, pos)
+                || player.blockActionRestricted(level, pos, player.gameMode.getGameModeForPlayer())) return;
+        var hit = level.clip(new ClipContext(player.getEyePosition(), Vec3.atCenterOf(pos),
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
+        if (hit.getType() != HitResult.Type.BLOCK || !hit.getBlockPos().equals(pos)) return;
+        var state = level.getBlockState(pos);
+        if (com.github.giannigr.racmc.item.Rac1WrenchEvents.action(state)
+                != com.github.giannigr.racmc.item.Rac1WrenchBlockPolicy.Action.EXPLOSIVE_ADAPTER_REQUIRED)
+            return;
+        var lifecycle = level.getBlockEntity(pos);
+        if (lifecycle == null) return;
+        explosiveContact(player, new WrenchSlamBlocks.Candidate(pos, state, lifecycle), null,
+                com.github.giannigr.racmc.item.Rac1WrenchCrateHits.ContactKind.HELD);
+        normalAttackAccepted(player);
+        player.resetAttackStrengthTicker();
+    }
+
+    private static void explosiveContact(ServerPlayer player, WrenchSlamBlocks.Candidate candidate,
+            ThrowReach ranged, com.github.giannigr.racmc.item.Rac1WrenchCrateHits.ContactKind kind) {
         if (!com.github.giannigr.racmc.item.Rac1WrenchCrateHits.hasContactHandler()) return;
         Harvest previous = harvest;
         ServerPlayer priorDelivery = delivering;
@@ -285,9 +316,7 @@ public final class WrenchActions {
                     player.gameMode.getGameModeForPlayer(), player, candidate.pos(), candidate.state());
             if (!event.isCanceled() && validHarvestLifecycle(player.level(), candidate.pos(), player)) {
                 com.github.giannigr.racmc.item.Rac1WrenchCrateHits.contact(player, candidate.pos(),
-                        candidate.state(), candidate.entity(), ranged == null
-                                ? com.github.giannigr.racmc.item.Rac1WrenchCrateHits.ContactKind.SLAM
-                                : com.github.giannigr.racmc.item.Rac1WrenchCrateHits.ContactKind.THROWN);
+                        candidate.state(), candidate.entity(), kind);
             }
         } finally {
             harvest = previous;

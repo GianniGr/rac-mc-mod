@@ -67,7 +67,9 @@ memory. Future catalog expansion must review this bound as well as its versions.
 The module reuses the existing complete converted asset cache/catalog instead
 of inventing a second binary animation format. That cache also includes existing
 visual assets; they remain local and are never networked.
-Cache schema6/converter5 are reused unchanged. When combining vendor/bolt/other
+Historical standalone cache schema6/converter5 are superseded by P32's union7/7.
+The shared importer includes vendor, bolts, HUD and wrench; see [integration.md](integration.md).
+The original consolidation caution was: when combining vendor/bolt/other
 feature catalogs later, reconcile their additions in `Rac1CacheImporter` and bump
 the combined versions; do not resurrect competing client/server builders.
 

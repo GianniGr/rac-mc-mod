@@ -43,6 +43,18 @@ public final class Rac1ExplosiveFuse {
         return false;
     }
 
+    /** Original wrench hit: 5..15 updates at 60 Hz, rounded UP to the 20 Hz server clock.
+     * Repeated contacts can shorten, never extend or resurrect an already terminal fuse. */
+    public boolean wrenchHit(int sourceUpdates, long gameTime) {
+        if (sourceUpdates < 5 || sourceUpdates > 15)
+            throw new IllegalArgumentException("Wrench fuse requires 5..15 source updates");
+        int ticks = (sourceUpdates + 2) / 3;
+        if (remaining == TERMINAL || remaining != IDLE && remaining <= ticks) return false;
+        remaining = ticks;
+        lastTick = gameTime;
+        return true;
+    }
+
     public long lastTick() {
         return lastTick;
     }

@@ -1,4 +1,76 @@
-# Approved gameplay integration candidate — P29
+# Approved feature-wave integration candidate — P32
+
+Owner decision, 2026-11-17: consolidate **one big PR**, after acceptance of
+combined gameplay/material debris, sound `739248a`, effects `7106e9d` and wrench
+`afca221`. This is local integration authority only: no push, public PR or provider
+merge by P32. T18 must independently verify the exact final committed candidate;
+the orchestrator owns publication and the owner alone merges.
+
+Branch: `integration/approved-feature-wave`, exclusive worktree
+`C:\Personal Repos\rac\mc\rac-mc-mod-release-integration`.
+
+| Included feature | Approved history / current boundary |
+|---|---|
+| Crates, vendor, bolts, HUD, motion, explosives, material debris | Combined base `56147b76c546bafbac3e38ee7d382e8972e65b33`; individual heads below |
+| Sound | `739248ad66e2c135f91bc0df186bcb5c0c96a235`; verified crate/beep/blast/bolt-attraction mappings only |
+| Effects | `7106e9dbd3a0daa0be735c3223c194a1068bee57`; imported banks + accepted procedural preview, not 1:1 original fidelity |
+| Wrench | `afca22185bbdda39af269e709c435a3ac4eaec0b`, includes server-local provider `996dc61`; held/slam/thrown crate adapters wired |
+
+## Final integration choices
+
+- RACM format stays 2, **schema/converter 7/7** invalidate both standalone and old
+  combined caches. Sections: static 1, hero 2, Blaster 3, crate/bolt map 4, vendor 5,
+  HUD 6, wrench 71. Client and server use one union importer. Client readiness checks
+  wrench as well as vendor, HUD and every crate/bolt; incomplete caches rebuild/fail,
+  never silently READY. Incomplete synthetic codec fixtures may still represent null.
+- Sound remains independently versioned RACS v1; effects remain independently
+  schema/converter-versioned RACEFX. Neither writes a RACM section. Cosmetic RNG
+  does not advance payout/fuse RNG. Optional cosmetic transport failure cannot
+  suppress the accepted reward or blast.
+- Both branches' break hooks coexist **after the one shared reward transaction**.
+  Detonation still uses the P24 ledger and placement UUID for grounded/airborne
+  self-consumption, neighboring crates and deferred chains. No payout on arming,
+  no bolt denominations/profile changes. Sound and effect each emit once on an
+  accepted detonation; veto/duplicate/stale callbacks do not create another.
+- Git's unconflicted duplicate `onDestroyedByPlayer` methods were consciously
+  unified. Held ordinary instant breaks and native slam/thrown harvests all enter
+  `Rac1WrenchCrateHits` then `Rac1CrateRewards`, not superclass/direct removal.
+  Non-wrench destruction retains the combined reward path.
+- Direct held explosive START is checked for loaded/border/build height, reach,
+  visibility, mode, cooldown, interaction permission and the real BreakEvent.
+  The captured state/BE/held lifecycle is rechecked before the same installed
+  short-fuse adapter used by authoritative slam/thrown contacts. Explosives are
+  never wrench-mined. Original 5–15 updates at 60 Hz (~0.08–0.25 s) are rounded
+  **up** to 2–5 server ticks (0.10–0.25 s). Re-hits may shorten but never extend,
+  resurrect or pay. NBT retains reward UUID/base/consumed + fuse/processed tick.
+- Vendor registry identity is a hard deny even in creative, for every wrench mode;
+  datapack tags cannot allow it. Vanilla blocks retain native mining. Damage
+  remains normal/throw 5.1 HP, slam 10.2 HP, no extra crit; authoritative source
+  sampling and the 37-source-update throw receiver gate are unchanged.
+- Client registration is a union: wrench singleton, vendor, bolt, crate and falling
+  renderers coexist. Effect world drawing/reload and wrench pose/detached hooks are
+  separate subscribers; neither replaces the other's renderer or duplicates payload IDs.
+
+## Known limits and explicitly excluded next work
+
+Owner accepted wrench extension amplitude **1.0**; it remains a known visual
+limitation, not a secretly applied 0.4 correction. Returning-wrench bolt attraction
+is research-ready but **not approved or implemented**. Vendor/Blaster/wrench audio
+mappings stay **UNBOUND**, not guessed. Existing procedural FX/material/PS2 fidelity
+limits in [effects.md](effects.md) remain; this is not 1:1 emulation.
+
+**Nanotech next session only:** released/falling health orbs, pickup sound and
+healing gameplay. Current health-crate orbs are grounded visuals only, grant no
+health and do not establish a completed pickup system. No broad Blaster #11 refactor,
+shop/unfold feature, GPL implementation/dependency or proprietary Git assets added.
+
+Live dedicated/client synchronization, remote observations/late join, ground/fall
+transitions, HUD scale/reload and new combined in-world visuals are not proven by
+headless tests. Prior owner branch playtests are acceptance of those branches, not
+automatic validation of the merged candidate. See [handoff.md](handoff.md)
+for P32 commands/results and the remaining T18 gate.
+
+## Historical P29 integration record
 
 **Bounded follow-up:** standard imported-material mining/destroy debris replaces
 the white model-placeholder path; see [block-debris.md](block-debris.md). T15's base
@@ -6,7 +78,7 @@ the white model-placeholder path; see [block-debris.md](block-debris.md). T15's 
 confirmation of the new commit are still pending.
 
 Local branch `integration/crates-vendor-bolts`, crate base `26d9ff5`.
-Only the following owner-approved tips are merged, preserving their histories:
+The earlier combined base merged these owner-approved tips, preserving histories:
 
 | Feature | Exact approved tip |
 |---|---|
@@ -15,9 +87,9 @@ Only the following owner-approved tips are merged, preserving their histories:
 | Bolt motion, tests and documentation | `a6f45618669b7f53f8dc4ce5af292d25af2b8094` (production `ee1237a`) |
 | Explosive behavior and temporal flash correction | `c4b2cca7d9f836acf5f0fb5caf60a72ccf31aee5` |
 
-Individual owner acceptance is not independent verification of this combined tree.
-Original branches/worktrees are untouched. No wrench, sound/particle pipeline,
-shop/unfold feature or Blaster refactor is included.
+Original branches/worktrees remain untouched. The P29 record below predates the
+final sound/effects/wrench consolidation above; its 6/6 versions and exclusions
+are historical, not the current release matrix.
 
 ## Conflict and integration decisions
 

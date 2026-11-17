@@ -93,7 +93,8 @@ menus, and clears transient state for a new player/disconnect. Original graphics
 are not substituted while the cache is incomplete.
 
 The four bolt meshes still use the keyed static-moby map; reusable 2D HUD assets
-use a bounded section. Schema6/converter6 invalidate older standalone caches.
+use a bounded section. P32 schema7/converter7 invalidate older standalone and
+combined caches; see [integration.md](integration.md).
 Vendor/HUD have separate sections; all four crates, all four bolt meshes, vendor
 and HUD are required for readiness.
 

@@ -35,9 +35,17 @@ public record Rac1AudioSignal(Rac1AudioEvent event, double x, double y, double z
         }
     }
     public static void emit(ServerLevel level, Vec3 at, Rac1AudioEvent event) {
-        var signal = new Rac1AudioSignal(event, at.x, at.y, at.z, level.random.nextLong(), level.dimension().location());
-        for (var player : level.players()) {
-            if (player.distanceToSqr(at) <= 32 * 32) PacketDistributor.sendToPlayer(player, signal);
+        // Cosmetic variation must not advance gameplay RNG (payout profiles, spreads, fuses).
+        var signal = new Rac1AudioSignal(event, at.x, at.y, at.z,
+                java.util.concurrent.ThreadLocalRandom.current().nextLong(), level.dimension().location());
+        try {
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new Rac1AudioEmittedEvent(signal));
+            for (var player : level.players()) {
+                if (player.distanceToSqr(at) <= 32 * 32) PacketDistributor.sendToPlayer(player, signal);
+            }
+        } catch (RuntimeException failure) {
+            com.github.giannigr.racmc.RacMcMod.LOGGER.debug("Optional audio signal unavailable: {}",
+                    failure.toString());
         }
     }
     /** Original thresholds crossed at MC tick resolution; no replay of skipped/unloaded time. */

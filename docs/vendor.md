@@ -110,7 +110,8 @@ Collision remains a one-block body approximation, not a two-block antenna hull.
 
 ## Cache and resource lifetime
 
-Schema **5**, converter **4**, container format unchanged (**2**). Mandatory
+P32 union schema **7**, converter **7**, container format unchanged (**2**);
+historical standalone5/4 is invalidated. Mandatory
 section kind **5** holds the kiosk/logo pair with bounded length-prefixed
 animated assets. Old crate schema/converter files are rejected and rebuilt by
 the existing cache manager. The production builder always imports both classes;
