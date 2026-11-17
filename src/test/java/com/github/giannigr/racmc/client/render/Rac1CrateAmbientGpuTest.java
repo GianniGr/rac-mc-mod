@@ -72,32 +72,61 @@ class Rac1CrateAmbientGpuTest {
                 glActiveTexture(GL_TEXTURE0 + unit);
                 glBindTexture(GL_TEXTURE_2D, textures[unit]);
             }
-            for (float[] face : new float[][]{
-                    {0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}) {
-                glVertexAttrib3f(5, face[0], face[1], face[2]);
-                float[] off = sample(normal);
-                float[] on = sample(flash);
-                double diffuse = diffuse(face);
-                double visibleDiffuse = Math.min(0.6, diffuse);
-                boolean changed = false;
-                for (int c = 0; c < 3; c++) {
-                    double ambient = (c == 0 ? 200.0 : 64.0) / 255.0;
-                    double factor = Math.min(1, ambient + visibleDiffuse);
-                    assertEquals(TEXTURE[c] * WORLD_LIGHT[c] * factor, on[c], 1e-5,
-                            "Ambient + visible diffuse, channel " + c);
-                    assertEquals(TEXTURE[c] * WORLD_LIGHT[c] * Math.min(1, 0.4 + diffuse),
-                            off[c], 1e-5, "Unchanged normal lighting");
-                    if (diffuse <= 0.6) {
-                        assertEquals(TEXTURE[c] * WORLD_LIGHT[c] * Math.min(1, ambient + diffuse),
-                                on[c], 1e-5, "Accepted side/bottom appearance unchanged");
+            for (int lighting = 0; lighting < 4; lighting++) {
+                float level = lighting % 2 == 0 ? 1.0F : 0.25F;
+                float[] worldLight = {level, level, level, 1};
+                float secondLightY = lighting < 2 ? 1 : -1;
+                glActiveTexture(GL_TEXTURE2);
+                glBindTexture(GL_TEXTURE_2D, textures[2]);
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1, 1, GL_RGBA, GL_FLOAT, worldLight);
+                float previousAngledGreen = -1;
+                for (float[] face : new float[][]{
+                        {0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1},
+                        {(float) Math.sqrt(0.84), 0.4F, 0},
+                        {(float) Math.sqrt(0.75), 0.5F, 0},
+                        {(float) (0.2 / Math.sqrt(0.53)), 0, (float) (-0.7 / Math.sqrt(0.53))}}) {
+                    glVertexAttrib3f(5, face[0], face[1], face[2]);
+                    float[] off = sample(normal, secondLightY);
+                    float[] on = sample(flash, secondLightY);
+                    double diffuse = diffuse(face, secondLightY);
+                    double sideBudget = 0.6 * Math.sqrt(0.53 / 1.53);
+                    double visibleDiffuse = Math.min(0.6, diffuse);
+                    visibleDiffuse -= 0.75 * Math.max(0, visibleDiffuse - sideBudget);
+                    boolean changed = false;
+                    double differenceSquared = 0, baselineSquared = 0;
+                    for (int c = 0; c < 3; c++) {
+                        double ambient = (c == 0 ? 200.0 : 64.0) / 255.0;
+                        double factor = Math.min(1, ambient + visibleDiffuse);
+                        assertEquals(TEXTURE[c] * worldLight[c] * factor, on[c], 1e-5,
+                                "Ambient + monotonic diffuse adaptation, channel " + c);
+                        assertEquals(TEXTURE[c] * worldLight[c] * Math.min(1, 0.4 + diffuse),
+                                off[c], 1e-5, "Unchanged normal lighting");
+                        if (diffuse <= sideBudget + 1e-6) {
+                            assertEquals(TEXTURE[c] * worldLight[c] * Math.min(1, ambient + diffuse),
+                                    on[c], 1e-5, "Accepted side/unlit-bottom appearance unchanged");
+                        }
+                        changed |= Math.abs(on[c] - off[c]) > 1e-4;
+                        differenceSquared += (on[c] - off[c]) * (on[c] - off[c]);
+                        baselineSquared += off[c] * off[c];
                     }
-                    changed |= Math.abs(on[c] - off[c]) > 1e-4;
+                    assertTrue(changed, "Visible flash for normal " + java.util.Arrays.toString(face));
+                    assertArrayEquals(off, sample(normal, secondLightY), 1e-6F, "Exact off-phase restoration");
+                    double greenDrop = (off[1] - on[1]) / off[1];
+                    double rgbContrast = Math.sqrt(differenceSquared / baselineSquared);
+                    if (Math.abs(face[1]) == 1) {
+                        assertTrue(greenDrop >= (lighting < 2 ? 0.30 : 0.25),
+                                "Quantified horizontal-phase contrast floor");
+                        assertTrue(rgbContrast >= 0.20, "Horizontal RGB contrast signal");
+                    } else if (face[1] > 0) {
+                        assertTrue(on[1] > previousAngledGreen, "Preserve monotonic bevel shading");
+                        previousAngledGreen = on[1];
+                    }
+                    System.out.printf(java.util.Locale.ROOT,
+                            "lighting=%d world=%.2f normal=%s diffuse=%.6f greenDrop=%.4f rgbContrast=%.4f off=%s flash=%s%n",
+                            lighting, level, java.util.Arrays.toString(face), diffuse,
+                            greenDrop, rgbContrast,
+                            java.util.Arrays.toString(off), java.util.Arrays.toString(on));
                 }
-                assertTrue(changed, "Visible flash for normal " + java.util.Arrays.toString(face));
-                assertArrayEquals(off, sample(normal), 1e-6F, "Exact off-phase restoration");
-                System.out.printf(java.util.Locale.ROOT, "normal=%s diffuse=%.6f off=%s flash=%s%n",
-                        java.util.Arrays.toString(face), diffuse,
-                        java.util.Arrays.toString(off), java.util.Arrays.toString(on));
             }
             assertEquals(GL_NO_ERROR, glGetError());
         } finally {
@@ -116,10 +145,10 @@ class Rac1CrateAmbientGpuTest {
         }
     }
 
-    private static double diffuse(float[] n) {
+    private static double diffuse(float[] n, float secondLightY) {
         double length = Math.sqrt(1.53);
         return 0.6 * (Math.max(0, (0.2 * n[0] + n[1] - 0.7 * n[2]) / length)
-                + Math.max(0, (-0.2 * n[0] + n[1] + 0.7 * n[2]) / length));
+                + Math.max(0, (-0.2 * n[0] + secondLightY * n[1] + 0.7 * n[2]) / length));
     }
 
     private static int texture(float[] rgba) {
@@ -131,7 +160,7 @@ class Rac1CrateAmbientGpuTest {
         return id;
     }
 
-    private static float[] sample(int program) {
+    private static float[] sample(int program, float secondLightY) {
         glUseProgram(program);
         float[] identity = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
         glUniformMatrix4fv(glGetUniformLocation(program, "ModelViewMat"), false, identity);
@@ -139,7 +168,8 @@ class Rac1CrateAmbientGpuTest {
         glUniform4f(glGetUniformLocation(program, "ColorModulator"), 1, 1, 1, 1);
         float length = (float) Math.sqrt(1.53);
         glUniform3f(glGetUniformLocation(program, "Light0_Direction"), 0.2F / length, 1 / length, -0.7F / length);
-        glUniform3f(glGetUniformLocation(program, "Light1_Direction"), -0.2F / length, 1 / length, 0.7F / length);
+        glUniform3f(glGetUniformLocation(program, "Light1_Direction"),
+                -0.2F / length, secondLightY / length, 0.7F / length);
         glUniform1f(glGetUniformLocation(program, "FogStart"), 100);
         glUniform1f(glGetUniformLocation(program, "FogEnd"), 200);
         glUniform4f(glGetUniformLocation(program, "FogColor"), 0, 0, 0, 0);

@@ -38,6 +38,16 @@ void main() {
     // range before replacing ambient; otherwise up-facing normals can clip EVERY
     // channel to white and erase the global flash. Ordinary side lighting is unchanged.
     diffuse = min(diffuse, 1.0 - MINECRAFT_AMBIENT_LIGHT);
+    // Readability adaptation, not a retail lighting claim: preserve the entire
+    // diffuse range available to any horizontal normal, then retain 25% of excess
+    // white highlight. This is continuous/monotonic, not a per-face color mask.
+    vec2 horizontal0 = Light0_Direction.xz;
+    vec2 horizontal1 = Light1_Direction.xz;
+    float sideBudget = MINECRAFT_LIGHT_POWER * max(
+        max(length(horizontal0), length(horizontal1)), length(horizontal0 + horizontal1));
+    sideBudget = min(sideBudget, 1.0 - MINECRAFT_AMBIENT_LIGHT);
+    float whiteExcess = max(0.0, diffuse - sideBudget);
+    diffuse -= 0.75 * whiteExcess;
     vertexColor = vec4(Color.rgb * min(vec3(1.0), ambient + vec3(diffuse)), Color.a);
 
     // Retain ordinary MC lightmap, overlay, texture and fog via the vanilla fragment shader.

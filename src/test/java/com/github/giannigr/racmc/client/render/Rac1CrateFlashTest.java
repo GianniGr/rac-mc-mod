@@ -77,6 +77,8 @@ class Rac1CrateFlashTest {
         assertTrue(shader.contains("vec3(200.0, 64.0, 64.0) / 255.0"));
         assertTrue(shader.contains("ambient + vec3(diffuse)"));
         assertTrue(shader.contains("diffuse = min(diffuse, 1.0 - MINECRAFT_AMBIENT_LIGHT)"));
+        assertTrue(shader.contains("length(horizontal0 + horizontal1)"));
+        assertTrue(shader.contains("diffuse -= 0.75 * whiteExcess"));
         assertTrue(shader.contains("MINECRAFT_LIGHT_POWER"));
         assertTrue(shader.contains("dot(Light0_Direction, Normal)"));
         assertTrue(shader.contains("dot(Light1_Direction, Normal)"));

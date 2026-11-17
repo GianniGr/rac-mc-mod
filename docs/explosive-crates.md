@@ -127,9 +127,10 @@ missed packets by wall-clock time, and use that same policy on initial tracking.
 R06's retained permissible original crate source saves the current light word and
 ambient bytes before full fuse initialization, sets ambient `[200,64,64,0]` during
 red phases, and restores the **saved lighting**, not constant white, otherwise
-and before break. The renderer now replaces only the MC entity-lighting **ambient
-term** during red phases:
-`min(1,RGB(200,64,64)/255 + min(MC_directional_diffuse,1-MC_ambient))`.
+and before break. During red phases the renderer applies that RGB as its MC
+**ambient term**, plus an explicit readability adaptation for white highlights:
+`D=min(MC_diffuse,1-MC_ambient)`, `D'=D-0.75*max(0,D-sideBudget)`,
+then `min(1,RGB(200,64,64)/255+D')`.
 Imported texture/alpha, normals, directional shading, world lightmap, overlay and
 fog remain; all vertex colors remain white. Off-phases switch back to the exact
 preexisting stock RenderType with caller-supplied world light, so lighting state
@@ -137,21 +138,35 @@ does not leak to idle crates, item meshes or the Blaster. No fullbright/emissive
 pass and no `(255,48,48)` hard multiplication remain.
 
 **Fidelity boundary:** this is an original-rule/color ambient adaptation, not
-bit-exact PS2 rendering. `/255` normalization, MC directional lights, MC lightmap
-and clipping are explicit adapter choices. Original light-word decoding,
-scene-specific ambient values and PS2 GS color scale/blending are not imported or
+bit-exact PS2 rendering. `/255` normalization, MC directional lights, MC lightmap,
+clipping and white-highlight compression are explicit adapter choices. Original
+light-word decoding, scene-specific ambient values and PS2 GS color scale/blending are not imported or
 established by the retained crate-update evidence. It would be false to claim
 exact PS2 luminance. The off-phase preserves existing MC lighting rather than
-inventing an original normal-ambient constant. Shader compilation/appearance and
-resource reload still require independent client verification.
+inventing an original normal-ambient constant. GPU probes below verify shader
+compilation/linking; client appearance and resource reload still require
+independent verification.
 
 The diffuse cap retains only the contribution visible in stock MC lighting
 (`MC_ambient=0.4`, so diffuse headroom is `0.6`). Without it, upward normals under
 the two MC lights yield diffuse about `0.970`: even green/blue ambient64/255 then
 clips to 1, making the whole red phase white and visually identical to normal.
 The cap corrects that **MC adapter artifact**, not an original per-face exemption.
-It leaves standard vertical-side and downward-face samples unchanged; upward
-faces/trim retain diffuse shading but no longer lose all ambient chroma.
+Under the ordinary above-facing lights, standard vertical sides and the unlit
+downward face stay unchanged; upward faces/trim no longer lose all ambient chroma.
+
+The later owner visibility revision also compresses white diffuse **above the
+maximum available to any vertical face**, retaining 25% of that excess.
+For horizontal projections `h0=Light0.xz`, `h1=Light1.xz`, the bound is
+`sideBudget=min(0.6,0.6*max(length(h0),length(h1),length(h0+h1)))`.
+This is the exact maximum of the two clamped directional contributions for a
+horizontal normal. Below it lighting is unchanged; above it the slope stays
+positive (0.25), preserving a continuous, monotonic normal-based gradient rather
+than flattening faces or introducing a top/bottom texture mask.
+All vertices still receive the same global ambient rule and source RGB.
+This legibility compression is **not original PS2 lighting** and does not claim
+retail pixel parity. It does not alter source textures, normals, world-light
+modulation, off-phase restoration, fuse cadence, alpha, overlay or fog.
 
 The original crate update writes one moby-wide ambient value, with no face or
 material selection. The pinned public [ReRAC renderer](https://github.com/re-rac/rerac/blob/ae1e3432a0d5e21bd08d3872d3b04afef98be666/crates/rc-engine/assets/shaders/moby.wgsl)
@@ -163,7 +178,8 @@ every original packet/texel has identical brightness or that retail pixel output
 was measured. The current imported class 505 cache routes its 20 top/20 bottom
 triangles and 316 side/bevel triangles through the same material 0; top normals
 are +Y, bottom normals -Y. There is no top/bottom material bypass. A downward-face
-flash was already predicted by `6e20c88`; the proven defect is upward white clipping.
+flash was already predicted by `6e20c88`; the initial upward-face defect was white
+clipping, followed by the readability limits quantified below.
 The public port models GS color unity at 128 plus per-vertex packet multipliers;
 this correction intentionally retains the accepted MC `/255` side appearance,
 not a new wholesale PS2 lighting port or a guarantee of identical retail pixels.
@@ -173,6 +189,28 @@ shader plus vanilla fragment shader in a never-shown, unfocused 1×1 GL context
 and samples all six cardinal normals. It uses synthetic texture/worldlight
 values, not proprietary assets or the running Minecraft client. Normal tests
 also verify top/bottom pass routing and unchanged normals/UVs/worldlight.
+GPU coverage includes sunlight/shade world-light levels 1.0/0.25, both ordinary
+above-facing lights and opposing above/below lights, plus bevel-gradient and
+maximum-side-bound samples. Numeric contrast is evidence of a stronger signal,
+not a substitute for the owner's in-world visual acceptance.
+
+A further read-only GPU probe used existing imported textures with bilinear
+filtering at triangle-centroid UVs and the mesh's actual flat face normals
+(32 samples each for +Y/-Y, 42 each for +X/-X, 36 each for +Z/-Z). Mean relative
+RGB contrast, `length(flash-normal)/length(normal)`, changed as follows:
+
+| Directional lighting | Upward samples: before → after | Downward samples: before → after |
+|---|---|---|
+| Both lights above | 5.6% → 12.6% | 89.3% → 89.3% |
+| Opposing above/below | 13.6% → 16.0% | 13.7% → 16.3% |
+
+The same relative results held at world-light levels 1.0 and 0.25; absolute
+brightness still scales with world light. Actual vertical-side pixels and
+off-phase readbacks were unchanged. The original albedo therefore limits the
+upward signal more than a generic synthetic color suggests: this is a bounded
+increase, not a claim that all faces now have equal perceived contrast. No
+textures were changed or exported, and no retail or owner-client screenshot
+was measured. Final scene-level legibility remains an owner playtest gate.
 
 **No beeps, explosion sound, or blast/debris FX are implemented.** Original sample
 identity/audio pipeline belongs to R07/future work. Original debris/puff assets,
