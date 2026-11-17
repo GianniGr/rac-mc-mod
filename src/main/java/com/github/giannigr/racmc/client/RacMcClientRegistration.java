@@ -3,6 +3,7 @@ package com.github.giannigr.racmc.client;
 import com.github.giannigr.racmc.RacMcConstants;
 import com.github.giannigr.racmc.block.RacMcBlockEntities;
 import com.github.giannigr.racmc.client.render.BlasterItemRenderer;
+import com.github.giannigr.racmc.client.render.Rac1WrenchItemRenderer;
 import com.github.giannigr.racmc.client.render.Rac1BlasterArrowRenderer;
 import com.github.giannigr.racmc.client.render.Rac1CrateItemRenderer;
 import com.github.giannigr.racmc.client.render.Rac1CrateRenderer;
@@ -55,6 +56,7 @@ public final class RacMcClientRegistration {
     private static BlasterItemRenderer renderer;
     private static Rac1VendorItemRenderer vendorRenderer;
     private static com.github.giannigr.racmc.client.render.Rac1BoltItemRenderer boltRenderer;
+    private static Rac1WrenchItemRenderer wrenchRenderer;
 
     /** The renderers of the crates of the game, by the key of the crate. */
     private static final Map<String, Rac1CrateItemRenderer> crateRenderers =
@@ -119,6 +121,12 @@ public final class RacMcClientRegistration {
                 return vendorRenderer;
             }
         }, RacMcItems.VENDOR.get());
+        event.registerItem(new IClientItemExtensions() {
+            @Override
+            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
+                return wrenchRenderer();
+            }
+        }, RacMcItems.OMNIWRENCH.get());
         event.registerItem(new IClientItemExtensions() {
 
             @Override
@@ -210,5 +218,15 @@ public final class RacMcClientRegistration {
             renderer = new BlasterItemRenderer(dispatcher, models);
         }
         return renderer;
+    }
+
+    /** Reuse this client singleton for item and cosmetic detached rendering after consolidation. */
+    public static Rac1WrenchItemRenderer wrenchRenderer() {
+        if (wrenchRenderer == null) {
+            Minecraft minecraft = Minecraft.getInstance();
+            wrenchRenderer = new Rac1WrenchItemRenderer(
+                    minecraft.getBlockEntityRenderDispatcher(), minecraft.getEntityModels());
+        }
+        return wrenchRenderer;
     }
 }

@@ -19,6 +19,9 @@ license="${mod_license}"
 # Where to report problems with this mod.
 issueTrackerURL="https://github.com/GianniGr/rac-mc-mod/issues"
 
+[[mixins]]
+config="racmc.wrench-actions.mixins.json"
+
 # A list of mods - how many allowed here is determined by the individual mod loader.
 [[mods]] #mandatory
 

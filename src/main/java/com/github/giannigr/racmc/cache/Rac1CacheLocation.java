@@ -138,6 +138,15 @@ public record Rac1CacheLocation(Path directory, String failure) {
      * @return the location, which holds either the directory or the reason why it cannot be used
      */
     public static Rac1CacheLocation resolve(Path file, Path configDirectory) {
+        return resolve(file, configDirectory, true);
+    }
+
+    /** Locate an existing shared cache without creating directories or requiring write access. */
+    public static Rac1CacheLocation resolveForRead(Path file, Path configDirectory) {
+        return resolve(file, configDirectory, false);
+    }
+
+    private static Rac1CacheLocation resolve(Path file, Path configDirectory, boolean writable) {
         Path base = configDirectory.toAbsolutePath().normalize();
         String raw;
         try {
@@ -174,6 +183,9 @@ public record Rac1CacheLocation(Path directory, String failure) {
         candidate = candidate.normalize();
         if (Files.exists(candidate) && !Files.isDirectory(candidate)) {
             return refused(file, raw, "\"" + candidate + "\" is a file and not a directory");
+        }
+        if (!writable) {
+            return new Rac1CacheLocation(candidate, null);
         }
         try {
             Files.createDirectories(candidate);

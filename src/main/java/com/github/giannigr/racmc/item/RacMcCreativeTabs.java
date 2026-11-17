@@ -53,6 +53,7 @@ public final class RacMcCreativeTabs {
                         output.accept(RacMcItems.BLASTER.get());
                         output.accept(RacMcItems.VENDOR.get());
                         RacMcItems.BOLTS.values().forEach(item -> output.accept(item.get()));
+                        output.accept(RacMcItems.OMNIWRENCH.get());
                         // Every crate of the game is in the tab, in the order of the table of
                         // the crates.
                         for (Rac1CrateDefinition definition : Rac1Crates.definitions()) {

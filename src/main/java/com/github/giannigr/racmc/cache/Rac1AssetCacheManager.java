@@ -9,15 +9,12 @@ import com.github.giannigr.racmc.asset.Rac1Crates;
 import com.github.giannigr.racmc.asset.Rac1VendorAsset;
 import com.github.giannigr.racmc.asset.Rac1StaticAsset;
 import com.github.giannigr.racmc.disc.DiscFormatException;
-import com.github.giannigr.racmc.disc.Rac1LevelAssets;
 import com.github.giannigr.racmc.iso.Rac1DiscValidator;
 import com.github.giannigr.racmc.iso.Rac1IsoSelectionResult;
 import com.github.giannigr.racmc.wad.WadFormatException;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -229,6 +226,10 @@ public final class Rac1AssetCacheManager implements Closeable {
 
     /** Readiness is the union of every approved feature, not merely a valid container. */
     static void requireAssets(Rac1CacheContent assets) throws IOException {
+        if (assets.wrench() == null || assets.wrench().classNumber() != 71
+                || assets.wrench().mesh().triangleCount() == 0
+                || assets.wrench().textures().length == 0)
+            throw new IOException("The cache is missing the original OmniWrench.");
         if (assets.vendor() == null) throw new IOException("The cache is missing the Gadgetron vendor.");
         if (!com.github.giannigr.racmc.asset.hud.Rac1BoltHudDefinition.complete(assets.hud()))
             throw new IOException("The cache is missing the original bolt HUD.");
@@ -250,44 +251,11 @@ public final class Rac1AssetCacheManager implements Closeable {
             if (!outcome.isSupported()) {
                 throw new IOException(outcome.result().message());
             }
-            step = "The assets of the level are read.";
-            progress = 20;
-            Rac1LevelAssets assets = Rac1LevelAssets.load(outcome.image(),
-                    Rac1AssetExtractor.LEVEL);
-            step = "The scenery is converted.";
-            progress = 40;
-            Rac1StaticAsset staticAsset = Rac1AssetExtractor.readStaticAsset(assets,
-                    Rac1AssetExtractor.STATIC_CLASS);
-            step = "The character is converted.";
-            progress = 60;
-            Rac1AnimatedAsset animatedAsset = Rac1AssetExtractor.readAnimatedAsset(assets,
-                    Rac1AssetExtractor.ANIMATED_CLASS);
-            step = "The weapon is converted.";
-            progress = 80;
-            Rac1AnimatedAsset blaster = Rac1AssetExtractor.readGadgetAsset(assets,
-                    Rac1AssetExtractor.BLASTER_CLASS);
-            step = "The crates are converted.";
-            progress = 90;
-            Map<String, Rac1CrateAsset> crates = new LinkedHashMap<>();
-            for (Rac1CrateDefinition definition : Rac1Crates.definitions()) {
-                crates.put(definition.key(), Rac1AssetExtractor.readCrateAsset(assets, definition));
-            }
-            int[] handChain = Rac1AssetExtractor.readHandChain(assets);
-            step = "The Gadgetron vendor and hologram are converted.";
-            progress = 93;
-            Rac1VendorAsset vendor = new Rac1VendorAsset(
-                    Rac1AssetExtractor.readAnimatedAsset(assets, Rac1VendorAsset.BODY_CLASS),
-                    Rac1AssetExtractor.readAnimatedAsset(assets, Rac1VendorAsset.HOLOGRAM_CLASS));
-            for (var bolt : com.github.giannigr.racmc.asset.Rac1Bolts.definitions()) {
-                crates.put(bolt.key(), Rac1AssetExtractor.readCrateAsset(assets, bolt));
-            }
-            int handJoint = handChain.length == 0 ? 0 : handChain[handChain.length - 1];
+            Rac1CacheContent converted = Rac1CacheImporter.read(outcome.image(), key,
+                    (message, percent) -> { step = message; progress = percent; });
             step = "The cache is written.";
             progress = 95;
-            step = "The original HUD is converted.";
-            var hud = com.github.giannigr.racmc.asset.hud.Rac1HudImporter.read(outcome.image(), assets);
-            return new Rac1CacheContent(key, staticAsset, animatedAsset, blaster, handJoint,
-                    crates, vendor, hud);
+            return converted;
         }
     }
 

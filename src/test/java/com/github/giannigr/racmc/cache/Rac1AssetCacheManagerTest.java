@@ -96,6 +96,23 @@ class Rac1AssetCacheManagerTest {
     }
 
     @Test
+    void anIncompleteCacheWithoutWrenchCannotReportReady() throws IOException {
+        Rac1CacheStore store = new Rac1CacheStore(tempDir);
+        var complete = SyntheticAssets.content(KEY);
+        store.store(KEY, new Rac1CacheContent(KEY, complete.staticAsset(),
+                complete.animatedAsset(), complete.blaster(), complete.handJoint(),
+                complete.crates()));
+        try (Rac1AssetCacheManager manager = new Rac1AssetCacheManager(store,
+                new Rac1DiscValidator())) {
+            manager.start(tempDir.resolve("missing.iso"), KEY);
+            waitFor(manager);
+            assertEquals(Rac1CacheState.FAILED, manager.state());
+            assertFalse(manager.isReady());
+            assertTrue(manager.content().isEmpty());
+        }
+    }
+
+    @Test
     @DisplayName("A disc image that is missing is reported")
     void aMissingDiscImageIsReported() {
         Rac1CacheStore store = new Rac1CacheStore(tempDir);

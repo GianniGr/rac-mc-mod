@@ -6,6 +6,7 @@ import com.github.giannigr.racmc.asset.Rac1CrateAsset;
 import com.github.giannigr.racmc.asset.Rac1Mesh;
 import com.github.giannigr.racmc.asset.Rac1SkinnedMesh;
 import com.github.giannigr.racmc.asset.Rac1Skeleton;
+import com.github.giannigr.racmc.asset.Rac1SourceTiming;
 import com.github.giannigr.racmc.asset.Rac1StaticAsset;
 import com.github.giannigr.racmc.asset.Rac1Texture;
 import com.github.giannigr.racmc.asset.Rac1VendorAsset;
@@ -83,7 +84,7 @@ public final class Rac1CacheCodec {
     public static final int FORMAT_VERSION = 2;
 
     /** The version of the converter that writes cache files. */
-    public static final int CONVERTER_VERSION = 6;
+    public static final int CONVERTER_VERSION = 7;
 
     /** The offset of the version of the converter in the header. */
     private static final int CONVERTER_OFFSET = 12;
@@ -107,6 +108,9 @@ public final class Rac1CacheCodec {
     public static final int SECTION_CRATES = 4;
     public static final int SECTION_VENDOR = 5;
     public static final int SECTION_HUD = 6;
+
+    /** Gadget 71, distinct from vendor 5 and HUD 6. Sound/effects use separate sidecars. */
+    public static final int SECTION_WRENCH = 71;
 
     private Rac1CacheCodec() {
         throw new UnsupportedOperationException("Utility class");
@@ -155,8 +159,10 @@ public final class Rac1CacheCodec {
         byte[] cratesSection = writeCrates(content);
         byte[] vendorSection = writeVendor(content.vendor());
         byte[] hudSection = Rac1HudCacheCodec.write(content.hud());
+        byte[] wrenchSection = content.wrench() == null ? new byte[0]
+                : writeAnimatedAsset(content.wrench());
 
-        int sectionCount = 6;
+        int sectionCount = 7;
         int tableLength = sectionCount * SECTION_ENTRY_SIZE;
         int tableOffset = HEADER_SIZE;
         int keyOffset = tableOffset + tableLength;
@@ -166,9 +172,11 @@ public final class Rac1CacheCodec {
         int cratesOffset = blasterOffset + blasterSection.length;
         int vendorOffset = cratesOffset + cratesSection.length;
         int hudOffset = vendorOffset + vendorSection.length;
+        int wrenchOffset = hudOffset + hudSection.length;
         int payloadOffset = keyOffset;
         int payloadLength = discKey.length + staticSection.length + animatedSection.length
-                + blasterSection.length + cratesSection.length + vendorSection.length + hudSection.length;
+                + blasterSection.length + cratesSection.length + vendorSection.length
+                + hudSection.length + wrenchSection.length;
 
         byte[] file = new byte[payloadOffset + payloadLength];
         System.arraycopy(MAGIC, 0, file, 0, 4);
@@ -188,6 +196,7 @@ public final class Rac1CacheCodec {
         System.arraycopy(cratesSection, 0, file, cratesOffset, cratesSection.length);
         System.arraycopy(vendorSection, 0, file, vendorOffset, vendorSection.length);
         System.arraycopy(hudSection, 0, file, hudOffset, hudSection.length);
+        System.arraycopy(wrenchSection, 0, file, wrenchOffset, wrenchSection.length);
         writeInt(file, 40, checksum(file, payloadOffset, payloadLength));
         writeInt(file, 44, checksum(file, 0, 44));
 
@@ -201,6 +210,8 @@ public final class Rac1CacheCodec {
         writeSection(file, tableOffset + 4 * SECTION_ENTRY_SIZE, SECTION_VENDOR, vendorOffset,
                 vendorSection);
         writeSection(file, tableOffset + 5 * SECTION_ENTRY_SIZE, SECTION_HUD, hudOffset, hudSection);
+        writeSection(file, tableOffset + 6 * SECTION_ENTRY_SIZE, SECTION_WRENCH, wrenchOffset,
+                wrenchSection);
         return file;
     }
 
@@ -278,6 +289,7 @@ public final class Rac1CacheCodec {
         byte[] cratesSection = null;
         byte[] vendorSection = null;
         byte[] hudSection = null;
+        byte[] wrenchSection = null;
         for (int index = 0; index < sectionCount; index++) {
             int entry = tableOffset + index * SECTION_ENTRY_SIZE;
             int kind = readInt(file, entry);
@@ -308,16 +320,26 @@ public final class Rac1CacheCodec {
             } else if (kind == SECTION_HUD) {
                 if (hudSection != null) throw new IOException("Duplicate HUD cache section");
                 hudSection = section;
+            } else if (kind == SECTION_WRENCH) {
+                if (wrenchSection != null) {
+                    throw new IOException("The cache has duplicate wrench sections.");
+                }
+                wrenchSection = section;
             }
         }
         if (staticSection == null || animatedSection == null || blasterSection == null
-                || cratesSection == null || vendorSection == null || hudSection == null) {
+                || cratesSection == null || vendorSection == null || hudSection == null
+                || wrenchSection == null) {
             throw new IOException("The cache file does not hold all of the assets.");
         }
         int handJoint = readInt(blasterSection, 0);
         Rac1CacheContent content = new Rac1CacheContent(discKey, readStatic(staticSection),
                 readAnimated(animatedSection), readBlaster(blasterSection), handJoint,
-                readCrates(cratesSection), readVendor(vendorSection), Rac1HudCacheCodec.read(hudSection));
+                readCrates(cratesSection), readVendor(vendorSection), Rac1HudCacheCodec.read(hudSection),
+                wrenchSection.length == 0 ? null : readAnimatedAsset(wrenchSection));
+        if (content.wrench() != null && content.wrench().classNumber() != 71) {
+            throw new IOException("The wrench section does not hold gadget 71.");
+        }
         return content;
     }
 
@@ -527,6 +549,12 @@ public final class Rac1CacheCodec {
         putFloats(out, skeleton.inverseBind());
         putFloats(out, skeleton.restTranslations());
         putInts(out, skeleton.parents());
+        out.putInt(asset.attachmentChainCount());
+        for (int list = 0; list < asset.attachmentChainCount(); list++) {
+            int[] chain = asset.attachmentChain(list);
+            out.putInt(chain.length);
+            putInts(out, chain);
+        }
         for (Rac1Animation animation : asset.animations()) {
             byte[] sequenceName = animation.name().getBytes(StandardCharsets.UTF_8);
             out.putInt(sequenceName.length);
@@ -554,6 +582,14 @@ public final class Rac1CacheCodec {
                         animation.scaleValues()[index * 3 + 2] });
                 out.putBoolean(animation.scaleInherited()[index]);
             }
+            Rac1SourceTiming timing = animation.sourceTiming();
+            out.putInt(timing.sequenceRateBits());
+            out.putInt(timing.headerTimes16().length);
+            putInts(out, timing.headerTimes16());
+            putInts(out, timing.keyRateBits());
+            putFloats(out, timing.sourceSeconds());
+            out.putInt(timing.sampledSourceKeys().length);
+            putInts(out, timing.sampledSourceKeys());
         }
         putTextures(out, asset.textures());
         return out.toByteArray();
@@ -601,6 +637,23 @@ public final class Rac1CacheCodec {
         float[] inverseBind = getFloats(in, jointCount * 16);
         float[] restTranslations = getFloats(in, jointCount * 3);
         int[] parents = getInts(in, jointCount);
+        int chainCount = in.getInt();
+        if (chainCount < 0 || chainCount > 1024) {
+            throw new IOException("Invalid attachment list count.");
+        }
+        int[][] chains = new int[chainCount][];
+        for (int list = 0; list < chainCount; list++) {
+            int count = in.getInt();
+            if (count < 0 || count > 256) {
+                throw new IOException("Invalid attachment chain length.");
+            }
+            chains[list] = getInts(in, count);
+            for (int joint : chains[list]) {
+                if (joint < 0 || joint >= jointCount) {
+                    throw new IOException("Invalid attachment joint.");
+                }
+            }
+        }
         Rac1Animation[] animations = new Rac1Animation[sequenceCount];
         for (int index = 0; index < sequenceCount; index++) {
             int nameLength = in.getInt();
@@ -654,16 +707,38 @@ public final class Rac1CacheCodec {
                 scaleValues[record * 3 + 2] = in.getFloat();
                 scaleInherited[record] = in.getBoolean();
             }
+            int sequenceRateBits = in.getInt();
+            int sourceCount = in.getInt();
+            if (sourceCount < 0 || sourceCount > 255) {
+                throw new IOException("Invalid original key count.");
+            }
+            int[] headerTimes16 = getInts(in, sourceCount);
+            int[] keyRateBits = getInts(in, sourceCount);
+            float[] sourceSeconds = getFloats(in, sourceCount);
+            int mappingCount = in.getInt();
+            if (mappingCount < 0 || mappingCount > 256
+                    || (sourceCount > 0 && mappingCount != keyCount)
+                    || (sourceCount == 0 && mappingCount != 0)) {
+                throw new IOException("Invalid original/sampled key mapping count.");
+            }
+            int[] sampledSourceKeys = getInts(in, mappingCount);
+            Rac1SourceTiming sourceTiming;
+            try {
+                sourceTiming = new Rac1SourceTiming(sequenceRateBits, headerTimes16,
+                        keyRateBits, sourceSeconds, sampledSourceKeys);
+            } catch (IllegalArgumentException invalid) {
+                throw new IOException("Invalid original timing metadata.", invalid);
+            }
             animations[index] = new Rac1Animation(new String(name, StandardCharsets.UTF_8), times,
                     loop, rotations, translationKeys, translationJoints, translationValues,
-                    scaleKeys, scaleJoints, scaleValues, scaleInherited);
+                    scaleKeys, scaleJoints, scaleValues, scaleInherited, sourceTiming);
         }
         Rac1Texture[] textures = getTextures(in, textureCount);
         Rac1SkinnedMesh mesh = new Rac1SkinnedMesh(positions, normals, uvs, indices, materials,
                 joints, weights);
         Rac1Skeleton skeleton = new Rac1Skeleton(inverseBind, parents, restTranslations);
         return new Rac1AnimatedAsset(classNumber, new String(assetName, StandardCharsets.UTF_8), mesh,
-                skeleton, animations, textures);
+                skeleton, animations, textures, chains);
     }
 
     private static void putTextures(Rac1Bytes.Writer out, Rac1Texture[] textures) {

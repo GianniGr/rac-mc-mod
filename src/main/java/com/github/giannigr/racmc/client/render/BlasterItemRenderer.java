@@ -60,10 +60,8 @@ public final class BlasterItemRenderer extends BlockEntityWithoutLevelRenderer {
     private final Rac1BlasterPose pose = new Rac1BlasterPose();
 
     /** The textures of the weapon, when they were registered. */
-    private ResourceLocation[] textures;
-
-    /** The content of the cache the textures belong to. */
-    private Rac1CacheContent textureSource;
+    private final Rac1ItemTextureLease<ResourceLocation> textures =
+            Rac1ImportedItemDrawing.textures("blaster_item");
 
     /** The failure of the drawing, when there was one. */
     private String failure;
@@ -87,6 +85,7 @@ public final class BlasterItemRenderer extends BlockEntityWithoutLevelRenderer {
         try {
             Optional<Rac1CacheContent> content = RacMcClient.assets().content();
             if (content.isEmpty()) {
+                textures.clear();
                 // The assets of the game are not in the cache: there is nothing to draw.
                 return;
             }
@@ -95,7 +94,8 @@ public final class BlasterItemRenderer extends BlockEntityWithoutLevelRenderer {
             if (blaster == null || blaster.mesh().triangleCount() == 0) {
                 return;
             }
-            ResourceLocation[] locations = texturesOf(cache, blaster);
+            ResourceLocation[] locations = textures.get(cache, Rac1ImportedItemDrawing.epoch(),
+                    blaster.textures()).toArray(ResourceLocation[]::new);
 
             Minecraft minecraft = Minecraft.getInstance();
             float tick = tickOf(minecraft);
@@ -108,39 +108,17 @@ public final class BlasterItemRenderer extends BlockEntityWithoutLevelRenderer {
             if (positions.length == 0) {
                 return;
             }
-            // The picture of the item in the lists of the game is always drawn with the full
-            // light, so that the weapon can be seen in the lists.
-            int usedLight = context == ItemDisplayContext.GUI ? Rac1MeshRenderer.FULL_LIGHT : light;
             if (!(buffers instanceof MultiBufferSource.BufferSource source)) {
                 // The buffers of the game are needed to close the run of the triangles of a
                 // material. Without them the weapon cannot be drawn.
                 return;
             }
-            poseStack.pushPose();
-            try {
-                // The game moves the cube of the item by half a block in every direction before
-                // it hands the item to this renderer, because the cube of an item of the game
-                // stands in the middle of the place of the item. The weapon of the game does not
-                // use that cube: its own origin is the point of the game that holds it, and the
-                // weapon keeps the size it was imported with. The move of the game is therefore
-                // taken back, exactly, before anything else is done to the weapon.
-                poseStack.translate(0.5f, 0.5f, 0.5f);
-                if (context.firstPerson()) {
-                    // The game of blocks draws the weapon in the hand of the player with its own
-                    // projection, and the shot of the weapon leaves the mouth of the weapon in
-                    // the world, which is drawn with the projection of the world. The mouth of
-                    // the drawn weapon is therefore moved to the place of the screen where the
-                    // mouth of the weapon in the world is drawn, so that the shot stands over the
-                    // mouth of the drawn weapon. The move is limited in the height, so that the
-                    // crosshair of the screen stays clear and the weapon of the game stays in
-                    // the lower right of the screen.
-                    alignWithWorldMuzzle(poseStack, context);
-                }
-                Rac1MeshRenderer.render(poseStack, source, blaster.mesh(), positions,
-                        this.pose.normals(), locations, usedLight);
-            } finally {
-                poseStack.popPose();
-            }
+            Rac1ImportedItemDrawing.draw(poseStack, source, blaster, positions,
+                    this.pose.normals(), locations, context, light, false, adjusted -> {
+                        if (context.firstPerson()) {
+                            alignWithWorldMuzzle(adjusted, context);
+                        }
+                    });
         } catch (RuntimeException | LinkageError exception) {
             this.failure = exception.toString();
             RacMcMod.LOGGER.error("The Blaster could not be drawn. The weapon is not drawn again.",
@@ -205,52 +183,4 @@ public final class BlasterItemRenderer extends BlockEntityWithoutLevelRenderer {
                 + minecraft.getTimer().getGameTimeDeltaPartialTick(false);
     }
 
-    /**
-     * The places of the textures of the weapon.
-     *
-     * <p>The textures are put into the texture manager of the game once for every content of the
-     * cache of the assets. The textures of a content that is not the one of the moment are
-     * released, so that the images of the textures do not stay in the texture manager.
-     *
-     * @param content the content of the cache of the assets
-     * @param blaster the weapon of the game
-     * @return the places of the textures
-     */
-    private ResourceLocation[] texturesOf(Rac1CacheContent content, Rac1AnimatedAsset blaster) {
-        if (this.textureSource != content) {
-            release(this.textures);
-            this.textureSource = content;
-            this.textures = register(blaster);
-        }
-        return this.textures;
-    }
-
-    /**
-     * Puts the textures of the weapon into the texture manager of the game.
-     *
-     * @param blaster the weapon of the game
-     * @return the places of the textures
-     */
-    private static ResourceLocation[] register(Rac1AnimatedAsset blaster) {
-        ResourceLocation[] locations = new ResourceLocation[blaster.textures().length];
-        for (int index = 0; index < locations.length; index++) {
-            locations[index] = Rac1ClientTextures.register("blaster_item_" + index,
-                    blaster.textures()[index]);
-        }
-        return locations;
-    }
-
-    /**
-     * Releases a list of places of textures.
-     *
-     * @param locations the places of the textures
-     */
-    private static void release(ResourceLocation[] locations) {
-        if (locations == null) {
-            return;
-        }
-        for (ResourceLocation location : locations) {
-            Rac1ClientTextures.release(location);
-        }
-    }
 }

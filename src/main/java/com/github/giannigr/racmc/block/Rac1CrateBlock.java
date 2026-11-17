@@ -1,13 +1,19 @@
 package com.github.giannigr.racmc.block;
 
 import com.github.giannigr.racmc.asset.Rac1CrateDefinition;
+import com.github.giannigr.racmc.item.Rac1WrenchBlockPolicy;
+import com.github.giannigr.racmc.item.Rac1WrenchCrateHits;
+import com.github.giannigr.racmc.item.Rac1WrenchEvents;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.item.FallingBlockEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.RenderShape;
@@ -15,6 +21,7 @@ import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.storage.loot.LootParams;
 
 /**
@@ -164,6 +171,38 @@ public class Rac1CrateBlock extends FallingBlock implements EntityBlock {
         if (!level.isClientSide && entity instanceof Rac1FallingExplosive explosive) {
             explosive.landed(pos);
         }
+    }
+
+    @Override
+    protected float getDestroyProgress(BlockState state,
+            Player player, BlockGetter level, BlockPos pos) {
+        if (Rac1WrenchEvents.holdingWrench(player)) {
+            return switch (Rac1WrenchEvents.action(state)) {
+                case INSTANT_CRATE -> 1.0f;
+                case PROTECTED, EXPLOSIVE_ADAPTER_REQUIRED -> 0.0f;
+                default -> super.getDestroyProgress(state, player, level, pos);
+            };
+        }
+        return super.getDestroyProgress(state, player, level, pos);
+    }
+
+    @Override
+    public boolean onDestroyedByPlayer(BlockState state, Level level,
+            BlockPos pos, Player player, boolean willHarvest, FluidState fluid) {
+        if (Rac1WrenchEvents.holdingWrench(player)) {
+            var action = Rac1WrenchEvents.action(state);
+            if (action == Rac1WrenchBlockPolicy.Action.PROTECTED
+                    || action == Rac1WrenchBlockPolicy.Action.EXPLOSIVE_ADAPTER_REQUIRED) {
+                return false;
+            }
+            if (action == Rac1WrenchBlockPolicy.Action.INSTANT_CRATE) {
+                return Rac1WrenchCrateHits.destroy(
+                        level, pos, state, player,
+                        () -> super.onDestroyedByPlayer(state, level, pos, player,
+                                willHarvest, fluid));
+            }
+        }
+        return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
     }
 
     @Override
