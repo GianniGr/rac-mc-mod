@@ -99,6 +99,9 @@ public final class WrenchActions {
             session.stack = player.getMainHandItem();
             session.dimension = player.level().dimension().location();
             session.age = 0;
+            session.audit = new WrenchHitAudit();
+            session.actionSerial = session.state.presentation().serial();
+            session.actionType = intent;
             session.previous = initial;
             session.slim = slim;
             session.wasBusy = true;
@@ -107,7 +110,7 @@ public final class WrenchActions {
         }
     }
 
-    private static boolean valid(ServerPlayer player) {
+    static boolean valid(ServerPlayer player) {
         return !player.isSpectator() && !player.isSleeping() && !player.isPassenger()
                 && !player.isUsingItem()
                 && (player.getPose() == net.minecraft.world.entity.Pose.STANDING
@@ -148,17 +151,14 @@ public final class WrenchActions {
                 if (sample == null) {
                     session.state.cancel();
                 } else {
-                    session.state.tick(tick, true, player.onGround(), sample.hand,
-                            sample.socketRotation, sample.frame,
+                    session.state.tickSources(tick, true, sample.sources.stream()
+                            .map(p -> new WrenchActionState.SourceFrame(p.frame(), p.hand(),
+                                    p.rotation(), p.grounded())).toList(),
                             new WrenchActionState.Surface() {
                                 @Override
                                 public ActionVector firstContact(ActionVector from, ActionVector to) {
                                     if (!loaded(player, from) || !loaded(player, to)) return from;
-                                    HitResult hit = player.level().clip(new ClipContext(vec(from),
-                                            vec(to), ClipContext.Block.COLLIDER,
-                                            ClipContext.Fluid.NONE, player));
-                                    return hit.getType() == HitResult.Type.MISS ? null
-                                            : vector(hit.getLocation());
+                                    return WrenchThrowContacts.surface(player, from, to);
                                 }
 
                                 @Override
@@ -183,18 +183,25 @@ public final class WrenchActions {
                                         groundClearance(player)), velocity.z);
                         player.hurtMarked = true;
                     }
-                    // Only calibrated local contact volumes; throw has no damage/block callbacks.
+                    // Distinct calibrated slam and thrown contact paths, never a landing blast.
                     var phase = session.state.presentation().phase();
                     if ((phase == WrenchActionPresentation.Phase.SLAM_WINDUP
-                            || phase == WrenchActionPresentation.Phase.SLAM_DESCENT)
+                            || phase == WrenchActionPresentation.Phase.SLAM_DESCENT
+                            || phase == WrenchActionPresentation.Phase.RECOVERY)
                             && (sample.active || sample.descendingBody)) {
-                        WrenchSlamContacts.deliver(player, session.state, session.previous, sample);
+                        WrenchSlamContacts.deliver(player, session.state, session.previous, sample,
+                                session.audit);
                     }
+                    WrenchThrowContacts.deliver(player, session.state, sample, session.audit);
                     session.previous = sample;
                 }
             }
         }
         if (busy(player) || session.wasBusy || tick % 20 == 0) broadcast(player, session);
+        if (session.wasBusy && !busy(player)) {
+            com.github.giannigr.racmc.RacMcMod.LOGGER.info("Wrench {} #{} for {}: {}",
+                    session.actionType, session.actionSerial, player.getUUID(), session.audit);
+        }
         session.wasBusy = busy(player);
     }
 
@@ -252,12 +259,39 @@ public final class WrenchActions {
     }
 
     static void harvestContact(ServerPlayer player, WrenchSlamBlocks.Candidate candidate) {
+        harvestContact(player, candidate, null);
+    }
+
+    static void harvestContact(ServerPlayer player, WrenchSlamBlocks.Candidate candidate,
+            ThrowReach ranged) {
         Harvest previous = harvest;
-        harvest = new Harvest(player, candidate, player.getMainHandItem());
+        harvest = new Harvest(player, candidate, player.getMainHandItem(), ranged);
         try {
             player.gameMode.destroyBlock(candidate.pos());
         } finally {
             harvest = previous;
+        }
+    }
+
+    static void explosiveContact(ServerPlayer player, WrenchSlamBlocks.Candidate candidate,
+            ThrowReach ranged) {
+        if (!com.github.giannigr.racmc.item.Rac1WrenchCrateHits.hasContactHandler()) return;
+        Harvest previous = harvest;
+        ServerPlayer priorDelivery = delivering;
+        harvest = new Harvest(player, candidate, player.getMainHandItem(), ranged);
+        delivering = player;
+        try {
+            var event = net.neoforged.neoforge.common.CommonHooks.fireBlockBreak(player.serverLevel(),
+                    player.gameMode.getGameModeForPlayer(), player, candidate.pos(), candidate.state());
+            if (!event.isCanceled() && validHarvestLifecycle(player.level(), candidate.pos(), player)) {
+                com.github.giannigr.racmc.item.Rac1WrenchCrateHits.contact(player, candidate.pos(),
+                        candidate.state(), candidate.entity(), ranged == null
+                                ? com.github.giannigr.racmc.item.Rac1WrenchCrateHits.ContactKind.SLAM
+                                : com.github.giannigr.racmc.item.Rac1WrenchCrateHits.ContactKind.THROWN);
+            }
+        } finally {
+            harvest = previous;
+            delivering = priorDelivery;
         }
     }
 
@@ -270,13 +304,26 @@ public final class WrenchActions {
         return context.player == player && player.level() == level && expected.pos().equals(pos)
                 && player.isAlive() && player.getMainHandItem() == context.held
                 && isWrench(context.held) && valid(context.player)
-                && context.player.canInteractWithBlock(pos, 0)
+                && withinBlockReach(context.player, pos, context.ranged)
                 && context.player.serverLevel().mayInteract(context.player, pos)
                 && level.getBlockState(pos) == expected.state()
                 && level.getBlockEntity(pos) == expected.entity();
     }
 
-    private record Harvest(ServerPlayer player, WrenchSlamBlocks.Candidate candidate, ItemStack held) {}
+    static boolean withinBlockReach(ServerPlayer player, net.minecraft.core.BlockPos pos,
+            ThrowReach ranged) {
+        if (ranged == null) return player.canInteractWithBlock(pos, 0);
+        var center = vector(net.minecraft.world.phys.Vec3.atCenterOf(pos));
+        var owner = vector(player.position());
+        var box = new WrenchContact.Box(new ActionVector(pos.getX(), pos.getY(), pos.getZ()),
+                new ActionVector(pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1));
+        return center.subtract(owner).length() <= ranged.maximum + Math.sqrt(3) / 2
+                && Double.isFinite(WrenchContact.sweptSphere(ranged.path, 0.4, box));
+    }
+
+    record ThrowReach(WrenchContact.Segment path, double maximum) {}
+    private record Harvest(ServerPlayer player, WrenchSlamBlocks.Candidate candidate, ItemStack held,
+            ThrowReach ranged) {}
 
     @SubscribeEvent
     public static void logout(PlayerEvent.PlayerLoggedOutEvent event) {
@@ -336,7 +383,7 @@ public final class WrenchActions {
     /** World-space anchors already projected onto the actual rigid Steve skeleton/socket. */
     public record Sample(WrenchActionState.ClipFrame frame, ActionVector hand, ActionVector head,
             ActionVector bodyContact, boolean active, boolean descendingBody,
-            ActionRotation socketRotation) {}
+            ActionRotation socketRotation, java.util.List<WrenchSlamSampling.Pose> sources) {}
 
     private static final class Session {
         private final WrenchActionState state = new WrenchActionState();
@@ -349,6 +396,9 @@ public final class WrenchActions {
         private Sample previous;
         private boolean wasBusy;
         private boolean slim;
+        private WrenchHitAudit audit = new WrenchHitAudit();
+        private long actionSerial;
+        private WrenchActionState.Intent actionType;
 
         private Session(ServerPlayer player) {
             stack = player.getMainHandItem();

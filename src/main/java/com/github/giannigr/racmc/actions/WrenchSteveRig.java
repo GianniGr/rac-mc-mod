@@ -46,6 +46,12 @@ public final class WrenchSteveRig {
 
     public Pose sample(int bodySequence, double bodySeconds, int childSequence, double childSeconds,
             boolean leftHand, boolean slim, double bodyWeight) {
+        return sample(bodySequence, bodySeconds, childSequence, childSeconds, leftHand, slim,
+                bodyWeight, false);
+    }
+
+    public Pose sample(int bodySequence, double bodySeconds, int childSequence, double childSeconds,
+            boolean leftHand, boolean slim, double bodyWeight, boolean crouching) {
         var clip = data.heroSequence(bodySequence).orElseThrow();
         float[] palette = Rac1AnimationEvaluator.evaluateChain(data.hero().skeleton(), clip,
                 (float) bodySeconds);
@@ -57,12 +63,12 @@ public final class WrenchSteveRig {
         Quaternionf torsoRotation = conjugate(torsoDelta);
         Quaternionf weapon = arm(palette, inverseRoot, inverseRestRoot, weaponShoulder, weaponHand);
         Quaternionf other = arm(palette, inverseRoot, inverseRestRoot, otherShoulder, otherHand);
-        Vector3f translation = body.getTranslation(new Vector3f())
-                .sub(bindBody.getTranslation(new Vector3f()));
-        BASIS.transform(translation).mul(16);
+        Quaternionf wristDelta = conjugate(delta(
+                new Matrix4f(inverseRoot).mul(matrix(palette, weaponHand)),
+                new Matrix4f(inverseRestRoot).mul(rest[weaponHand])));
         if (leftHand) {
             torsoRotation = mirror(torsoRotation);
-            translation.x = -translation.x;
+            wristDelta = mirror(wristDelta);
             Quaternionf original = weapon;
             weapon = mirror(other);
             other = mirror(original);
@@ -71,21 +77,31 @@ public final class WrenchSteveRig {
         torsoRotation = new Quaternionf().slerp(torsoRotation, weight);
         weapon = new Quaternionf().slerp(weapon, weight);
         other = new Quaternionf().slerp(other, weight);
-        translation.mul(weight);
-        Part bodyPart = part(translation, torsoRotation);
-        Vector3f rightPivot = torsoRotation.transform(new Vector3f(-5, 2, 0)).add(translation);
-        Vector3f leftPivot = torsoRotation.transform(new Vector3f(5, 2, 0)).add(translation);
-        Part right = part(rightPivot, weapon);
-        Part left = part(leftPivot, other);
+        wristDelta = new Quaternionf().slerp(wristDelta, weight);
+        // Native parts are flat siblings. A shared hip-root rotates the WHOLE native model/layers;
+        // never copy independent Ratchet torso translations onto only three Steve parts.
+        Matrix4f rootMatrix = modelRoot(torsoRotation, crouching);
+        Part bodyPart = new Part(0, crouching ? 3.2F : 0, 0, crouching ? 0.5F : 0, 0, 0);
+        Quaternionf inverseRootRotation = new Quaternionf(torsoRotation).conjugate();
+        Part right = part(new Vector3f(-5, crouching ? 5.2F : 2, 0),
+                new Quaternionf(inverseRootRotation).mul(weapon));
+        Part left = part(new Vector3f(5, crouching ? 5.2F : 2, 0),
+                new Quaternionf(inverseRootRotation).mul(other));
         // Native slim translateToHand correction is in parent space BEFORE arm rotation.
         Matrix4f arm = modelPart(leftHand ? left : right,
                 slim ? (leftHand ? -0.5F : 0.5F) : 0);
-        Matrix4f socket = SteveWrenchPose.socket(arm, leftHand)
+        Matrix4f nativeSocket = new Matrix4f(rootMatrix).mul(SteveWrenchPose.socket(arm, leftHand))
                 .mul(itemDisplay());
-        Matrix4f head = new Matrix4f(socket).mul(new Matrix4f().set(
-                Rac1AttachmentSampler.sample(data.wrench(), "sequence_" + childSequence,
-                        (float) childSeconds, 1).orElseThrow()));
-        return new Pose(bodyPart, right, left, socket, head);
+        // Steve has no wrist bone. Preserve the source wrist delta by rotating the accessory
+        // ABOUT the real native grip, not by moving it to a detached source hand position.
+        Quaternionf restGrip = SteveWrenchPose.socket(new Matrix4f(), leftHand).mul(itemDisplay())
+                .getUnnormalizedRotation(new Quaternionf()).normalize();
+        Matrix4f socket = new Matrix4f().translation(nativeSocket.getTranslation(new Vector3f()))
+                .rotate(wristDelta.mul(restGrip));
+        Matrix4f itemAdjustment = new Matrix4f(nativeSocket).invert().mul(socket);
+        Matrix4f head = new Matrix4f(socket).mul(WrenchActionGeometry.head(
+                data.wrench(), childSequence, childSeconds));
+        return new Pose(bodyPart, right, left, socket, head, rootMatrix, itemAdjustment);
     }
 
     private Quaternionf arm(float[] palette, Matrix4f invRoot, Matrix4f invBind,
@@ -136,6 +152,17 @@ public final class WrenchSteveRig {
         return new Matrix4f().rotateZ((float) (Math.PI / 2));
     }
 
+    public static Matrix4f modelRoot(Quaternionf rotation, boolean crouching) {
+        float y = (crouching ? 12.2F : 12) / 16;
+        float z = (crouching ? 4 : 0) / 16F;
+        return new Matrix4f().translation(0, y, z).rotate(rotation).translate(0, -y, -z);
+    }
+
+    public static Matrix4f blendRoot(Matrix4f root, boolean crouching, double weight) {
+        Quaternionf target = root.getUnnormalizedRotation(new Quaternionf()).normalize();
+        return modelRoot(new Quaternionf().slerp(target, (float) Math.clamp(weight, 0, 1)), crouching);
+    }
+
     /** Matches LivingEntityRenderer's player frame, without camera/viewmodel offsets. */
     public static Matrix4f world(double x, double y, double z, float bodyYaw) {
         return world(x, y, z, bodyYaw, 1, false);
@@ -168,5 +195,6 @@ public final class WrenchSteveRig {
     }
 
     public record Part(float x, float y, float z, float xRot, float yRot, float zRot) {}
-    public record Pose(Part body, Part rightArm, Part leftArm, Matrix4f socket, Matrix4f head) {}
+    public record Pose(Part body, Part rightArm, Part leftArm, Matrix4f socket, Matrix4f head,
+            Matrix4f root, Matrix4f itemAdjustment) {}
 }

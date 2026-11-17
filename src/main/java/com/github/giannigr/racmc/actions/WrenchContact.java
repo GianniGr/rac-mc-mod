@@ -55,6 +55,43 @@ public final class WrenchContact {
         return lo;
     }
 
+    /** Exact Euclidean swept-sphere/AABB contact; inflated-box corners are NOT the final test. */
+    public static double sweptSphere(Segment segment, double radius, Box box) {
+        if (!Double.isFinite(radius) || radius < 0) throw new IllegalArgumentException("Bad radius");
+        double[] a = {segment.from.x(), segment.from.y(), segment.from.z()};
+        ActionVector delta = segment.to.subtract(segment.from);
+        double[] d = {delta.x(), delta.y(), delta.z()};
+        double[] lo = {box.min.x(), box.min.y(), box.min.z()};
+        double[] hi = {box.max.x(), box.max.y(), box.max.z()};
+        java.util.List<Double> cuts = new java.util.ArrayList<>(java.util.List.of(0.0, 1.0));
+        for (int axis = 0; axis < 3; axis++) if (Math.abs(d[axis]) > 1.0e-12) {
+            for (double plane : new double[] {lo[axis], hi[axis]}) {
+                double t = (plane - a[axis]) / d[axis];
+                if (t > 0 && t < 1) cuts.add(t);
+            }
+        }
+        cuts.sort(Double::compare);
+        for (int part = 1; part < cuts.size(); part++) {
+            double start = cuts.get(part - 1), end = cuts.get(part), middle = (start + end) / 2;
+            double aa = 0, bb = 0, cc = -radius * radius;
+            for (int axis = 0; axis < 3; axis++) {
+                double p = a[axis] + d[axis] * middle;
+                if (p >= lo[axis] && p <= hi[axis]) continue;
+                double offset = a[axis] - (p < lo[axis] ? lo[axis] : hi[axis]);
+                aa += d[axis] * d[axis];
+                bb += d[axis] * offset;
+                cc += offset * offset;
+            }
+            if (aa * start * start + 2 * bb * start + cc <= 1.0e-12) return start;
+            double disc = bb * bb - aa * cc;
+            if (aa > 1.0e-18 && disc >= 0) {
+                double t = (-bb - Math.sqrt(disc)) / aa;
+                if (t >= start - 1.0e-12 && t <= end + 1.0e-12) return Math.max(start, t);
+            }
+        }
+        return Double.POSITIVE_INFINITY;
+    }
+
     /** Five original-style interpolated hand-to-head segments, extended by 0.17 units. */
     public static List<Segment> sweep(ActionVector oldHand, ActionVector oldHead,
             ActionVector hand, ActionVector head) {

@@ -14,6 +14,7 @@ import com.github.giannigr.racmc.client.actions.WrenchActionClient;
 import com.github.giannigr.racmc.client.actions.WrenchPlayerPoseHook;
 import com.github.giannigr.racmc.actions.WrenchActionPresentation;
 import net.minecraft.world.entity.HumanoidArm;
+import com.github.giannigr.racmc.actions.WrenchActionGeometry;
 
 /** One accepted action snapshot drives held and detached imported sequence sampling. */
 public final class Rac1WrenchItemRenderer extends BlockEntityWithoutLevelRenderer {
@@ -41,7 +42,9 @@ public final class Rac1WrenchItemRenderer extends BlockEntityWithoutLevelRendere
             if (view.phase() != WrenchActionPresentation.Phase.IDLE) {
                 if (view.heldVisible()) {
                     draw(context, poses, buffers, light, view.wrenchSequence(),
-                            (float) view.wrenchClipSeconds(), true, (float) view.wrenchBlendWeight(), 1);
+                            (float) view.wrenchClipSeconds(), true, (float) view.wrenchBlendWeight(), 1,
+                            com.github.giannigr.racmc.client.actions.WrenchActionRendering
+                                    .itemAdjustment(actor, view));
                 }
                 return;
             }
@@ -71,6 +74,12 @@ public final class Rac1WrenchItemRenderer extends BlockEntityWithoutLevelRendere
     private void draw(ItemDisplayContext context, PoseStack poses, MultiBufferSource buffers,
                        int light, int sequence, float seconds, boolean itemCube,
                        float blend, int fromSequence) {
+        draw(context, poses, buffers, light, sequence, seconds, itemCube, blend, fromSequence, null);
+    }
+
+    private void draw(ItemDisplayContext context, PoseStack poses, MultiBufferSource buffers,
+                       int light, int sequence, float seconds, boolean itemCube,
+                       float blend, int fromSequence, org.joml.Matrix4f adjustment) {
         var content = RacMcClient.assets().content().orElse(null);
         var asset = content == null ? null : content.wrench();
         if (asset == null) {
@@ -80,7 +89,8 @@ public final class Rac1WrenchItemRenderer extends BlockEntityWithoutLevelRendere
             return;
         }
         if (sampledSource != asset || sampledSequence != sequence || sampledSeconds != seconds) {
-            held = Rac1ImportedItemPose.sample(asset, sequence, seconds);
+            var sampled = WrenchActionGeometry.mesh(asset, sequence, seconds);
+            held = new Rac1ImportedItemPose.Sample(sampled.positions(), sampled.normals());
             sampledSource = asset;
             sampledSequence = sequence;
             sampledSeconds = seconds;
@@ -105,7 +115,8 @@ public final class Rac1WrenchItemRenderer extends BlockEntityWithoutLevelRendere
         }
         if (itemCube) {
             Rac1ImportedItemDrawing.draw(poses, source, asset, sample.positions(), sample.normals(),
-                    locations.toArray(ResourceLocation[]::new), context, light, true);
+                    locations.toArray(ResourceLocation[]::new), context, light, true,
+                    frame -> { if (adjustment != null) frame.mulPose(adjustment); });
         } else {
             Rac1MeshRenderer.render(poses, source, asset.mesh(), sample.positions(), sample.normals(),
                     locations.toArray(ResourceLocation[]::new), light);

@@ -20,6 +20,14 @@ public final class Rac1WrenchCrateHits {
     }
 
     private static Handler handler;
+    public enum ContactKind { HELD, SLAM, THROWN }
+    @FunctionalInterface
+    public interface ContactHandler {
+        /** Future P25: arm/shorten this expected explosive lifecycle, NEVER remove/reward here. */
+        boolean hit(ServerPlayer player, BlockPos pos, BlockState expectedState,
+                net.minecraft.world.level.block.entity.BlockEntity expectedLifecycle, ContactKind kind);
+    }
+    private static ContactHandler contactHandler;
 
     private Rac1WrenchCrateHits() { }
 
@@ -29,6 +37,22 @@ public final class Rac1WrenchCrateHits {
             throw new IllegalStateException("The wrench crate handler is already installed.");
         }
         handler = Objects.requireNonNull(value);
+    }
+
+    public static void installContactHandler(ContactHandler value) {
+        if (contactHandler != null) throw new IllegalStateException("Wrench contact adapter installed");
+        contactHandler = Objects.requireNonNull(value);
+    }
+
+    public static boolean hasContactHandler() { return contactHandler != null; }
+
+    public static boolean contact(ServerPlayer player, BlockPos pos, BlockState state,
+            net.minecraft.world.level.block.entity.BlockEntity lifecycle, ContactKind kind) {
+        if (contactHandler == null || player.level().getBlockState(pos) != state
+                || player.level().getBlockEntity(pos) != lifecycle
+                || Rac1WrenchEvents.action(state)
+                        != Rac1WrenchBlockPolicy.Action.EXPLOSIVE_ADAPTER_REQUIRED) return false;
+        return contactHandler.hit(player, pos, state, lifecycle, kind);
     }
 
     public static boolean destroy(Level level, BlockPos pos, BlockState expectedState,

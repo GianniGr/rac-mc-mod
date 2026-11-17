@@ -31,6 +31,11 @@ public final class WrenchActionState {
     private ActionRotation rotation = ActionRotation.IDENTITY;
     private boolean nearCatch;
     private double catchBlend;
+    private int cometIdentity = 1;
+    private final java.util.List<FlightStep> flightSteps = new java.util.ArrayList<>();
+    private long dispatchedFlightTick = Long.MIN_VALUE;
+    private final Set<Object> hitCrates = java.util.Collections.newSetFromMap(
+            new java.util.IdentityHashMap<>());
     private final Set<UUID> hitTargets = new HashSet<>();
     private final Set<Long> hitBlocks = new HashSet<>();
 
@@ -67,6 +72,7 @@ public final class WrenchActionState {
             if (!e.crouching || aim.lengthSquared() < 1.0e-9) return false;
             phase = Phase.THROW_WINDUP;
             direction = aim.normalized();
+            cometIdentity = 3 - cometIdentity;
         } else {
             double clearance = e.descending ? 0.57 : 0.1;
             if (e.crouching || e.airTicks < 4 || e.groundClearance < clearance
@@ -87,6 +93,8 @@ public final class WrenchActionState {
         speed = deceleration = 0;
         hitTargets.clear();
         hitBlocks.clear();
+        hitCrates.clear();
+        flightSteps.clear();
         return true;
     }
 
@@ -101,34 +109,59 @@ public final class WrenchActionState {
 
     public void tick(long tick, boolean validOwner, boolean landed, ActionVector movingHand,
             ActionRotation handRotation, ClipFrame frame, Surface surface) {
+        var sample = new SourceFrame(frame, movingHand, handRotation, landed);
+        tickSources(tick, validOwner, java.util.List.of(sample, sample, sample), surface);
+    }
+
+    public void tickSources(long tick, boolean validOwner, java.util.List<SourceFrame> sources,
+            Surface surface) {
         if (phase == Phase.IDLE || tick <= lastTick) return;
+        if (sources.size() != 3) throw new IllegalArgumentException("Expected three original substeps");
         lastTick = tick;
+        flightSteps.clear();
         if (!validOwner || tick - startTick > 100) {
             cancel();
             return;
         }
-        clipSeconds = frame.seconds;
-        wrenchClipSeconds = frame.wrenchSeconds;
-        bodyBlendWeight = frame.bodyBlendWeight;
-        wrenchBlendWeight = frame.wrenchBlendWeight;
-        if (phase == Phase.THROW_WINDUP && frame.release) {
-            phase = Phase.DETACHED_OUT;
-            position = movingHand;
-            rotation = handRotation;
-            speed = 23;
-        }
-        if (phase == Phase.SLAM_WINDUP && frame.descending) phase = Phase.SLAM_DESCENT;
-        if (phase == Phase.SLAM_DESCENT && landed) phase = Phase.RECOVERY;
-        if (phase == Phase.DETACHED_OUT || phase == Phase.DETACHED_BACK) {
-            for (int step = 0; step < 3; step++) {
-                flightStep(movingHand, surface);
-                if (phase == Phase.CATCH) break;
+        for (int step = 0; step < sources.size(); step++) {
+            SourceFrame source = sources.get(step);
+            ClipFrame frame = source.frame;
+            int oldSequence = (phase == Phase.DETACHED_OUT || phase == Phase.DETACHED_BACK)
+                    && !nearCatch ? 6 : 1;
+            double oldBlend = nearCatch ? catchBlend : wrenchBlendWeight;
+            clipSeconds = frame.seconds;
+            wrenchClipSeconds = frame.wrenchSeconds;
+            bodyBlendWeight = frame.bodyBlendWeight;
+            wrenchBlendWeight = frame.wrenchBlendWeight;
+            if (phase == Phase.THROW_WINDUP && frame.release) {
+                phase = Phase.DETACHED_OUT;
+                position = source.hand;
+                rotation = source.rotation;
+                speed = 23;
+            }
+            if (phase == Phase.SLAM_WINDUP && frame.descending) phase = Phase.SLAM_DESCENT;
+            if (phase == Phase.SLAM_DESCENT && source.grounded) phase = Phase.RECOVERY;
+            if (phase == Phase.DETACHED_OUT || phase == Phase.DETACHED_BACK) {
+                ActionVector old = position;
+                double oldSpin = spin;
+                ActionRotation oldRotation = rotation;
+                flightStep(source.hand, source.rotation, surface);
+                flightSteps.add(new FlightStep(step, old, position, oldSpin, spin, oldRotation, rotation,
+                        oldSequence, oldBlend,
+                        nearCatch || phase == Phase.CATCH ? 1 : 6,
+                        nearCatch ? catchBlend : wrenchBlendWeight, phase == Phase.DETACHED_BACK));
+            }
+            if ((phase == Phase.CATCH || phase == Phase.RECOVERY) && frame.finished) {
+                var finalSteps = java.util.List.copyOf(flightSteps);
+                var alreadyHit = java.util.List.copyOf(hitCrates);
+                cancel();
+                flightSteps.addAll(finalSteps); // Retail catch continues into this update's query.
+                hitCrates.addAll(alreadyHit);
             }
         }
-        if ((phase == Phase.CATCH || phase == Phase.RECOVERY) && frame.finished) cancel();
     }
 
-    private void flightStep(ActionVector hand, Surface surface) {
+    private void flightStep(ActionVector hand, ActionRotation handRotation, Surface surface) {
         double dt = 1.0 / 60;
         spin = (spin + 24.434608 * dt) % (2 * Math.PI);
         double ground = surface.groundHeight(position);
@@ -141,8 +174,8 @@ public final class WrenchActionState {
         if (phase == Phase.DETACHED_OUT) {
             ActionVector next = position.add(direction.multiply(speed * dt));
             ActionVector contact = surface.firstContact(position, next);
+            position = next; // Original surface response does not snap the computed position back.
             if (contact != null) {
-                position = contact;
                 speed *= 0.5;
                 phase = Phase.DETACHED_BACK;
             } else {
@@ -162,6 +195,9 @@ public final class WrenchActionState {
             if (nearCatch) catchBlend = Math.min(1, catchBlend + 0.2);
             if (toHand.length() <= Math.max(travel, 0.025)) {
                 position = hand;
+                rotation = handRotation;
+                spin = 0;
+                catchBlend = 1;
                 phase = Phase.CATCH;
             } else {
                 position = position.add(toHand.normalized().multiply(travel));
@@ -175,17 +211,45 @@ public final class WrenchActionState {
      * the explicit MC safety adaptation, not a claimed original rule.
      */
     public boolean claimTarget(UUID target) {
-        return (phase == Phase.SLAM_WINDUP || phase == Phase.SLAM_DESCENT) && hitTargets.add(target);
+        return claimTarget(target, false);
+    }
+
+    public boolean claimTarget(UUID target, boolean wrenchWindow) {
+        return (phase == Phase.SLAM_WINDUP || phase == Phase.SLAM_DESCENT
+                || phase == Phase.RECOVERY && wrenchWindow) && hitTargets.add(target);
     }
 
     public boolean claimBlock(long position) {
-        return (phase == Phase.SLAM_WINDUP || phase == Phase.SLAM_DESCENT) && hitBlocks.add(position);
+        return claimBlock(position, false);
     }
+
+    public boolean claimBlock(long position, boolean wrenchWindow) {
+        return (phase == Phase.SLAM_WINDUP || phase == Phase.SLAM_DESCENT
+                || phase == Phase.RECOVERY && wrenchWindow) && hitBlocks.add(position);
+    }
+
+    public boolean claimThrownCrate(Object lifecycle) {
+        return !flightSteps.isEmpty() && hitCrates.add(lifecycle);
+    }
+
+    public java.util.List<FlightStep> flightSteps() { return java.util.List.copyOf(flightSteps); }
+    public java.util.List<FlightStep> beginFlightContacts(long tick) {
+        if (tick != lastTick || dispatchedFlightTick == tick) return java.util.List.of();
+        dispatchedFlightTick = tick;
+        return flightSteps();
+    }
+    public void endFlightContacts() {
+        flightSteps.clear();
+        if (phase == Phase.IDLE) hitCrates.clear();
+    }
+    public int cometIdentity() { return cometIdentity; }
 
     public void cancel() {
         phase = Phase.IDLE;
         hitTargets.clear();
         hitBlocks.clear();
+        hitCrates.clear();
+        flightSteps.clear();
         position = ActionVector.ZERO;
     }
 
@@ -217,6 +281,12 @@ public final class WrenchActionState {
             }
         }
     }
+
+    public record SourceFrame(ClipFrame frame, ActionVector hand, ActionRotation rotation,
+            boolean grounded) {}
+    public record FlightStep(int substep, ActionVector from, ActionVector to, double fromSpin,
+            double toSpin, ActionRotation fromRotation, ActionRotation toRotation, int fromSequence,
+            double fromBlend, int sequence, double blend, boolean returning) {}
 
     @FunctionalInterface
     public interface Surface {

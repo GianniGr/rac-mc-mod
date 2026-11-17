@@ -23,6 +23,11 @@ public final class WrenchOriginalClock {
     private boolean released;
     private boolean caught;
     private int launchUpdate = -1;
+    private java.util.List<Result> samples = java.util.List.of();
+    private boolean observationKnown;
+    private boolean previousGrounded;
+    private double previousVelocity;
+    private double previousClearance;
     private Result last;
 
     public WrenchOriginalClock(Rac1WrenchData data, boolean slam) {
@@ -49,7 +54,21 @@ public final class WrenchOriginalClock {
         boolean release = false;
         boolean active = false;
         boolean bodyContact = false;
+        var sampled = new java.util.ArrayList<Result>();
+        int firstStep = lastTick * 3;
+        int stepCount = (tick - lastTick) * 3;
+        if (!observationKnown) {
+            previousGrounded = grounded;
+            previousVelocity = verticalBlocksPerTick;
+            previousClearance = clearance;
+            observationKnown = true;
+        }
         for (int step = lastTick * 3; step < tick * 3; step++) {
+            double fraction = (step - firstStep + 1.0) / stepCount;
+            boolean onGround = grounded && (previousGrounded || fraction == 1);
+            double velocity = previousVelocity + (verticalBlocksPerTick - previousVelocity) * fraction;
+            double height = previousClearance + (clearance - previousClearance) * fraction;
+            boolean sampleActive = false, sampleBody = false, sampleRelease = false;
             updates++;
             double previous = timeline.keyTime(seconds);
             if (!slam && prepareCatch && !caught) {
@@ -60,16 +79,16 @@ public final class WrenchOriginalClock {
             if (updates > blend) {
                 double speed = 1;
                 if (slam) {
-                    if (grounded || phase == Phase.RECOVERY) {
+                    if (onGround || phase == Phase.RECOVERY) {
                         speed = previous < 26 ? 2 : 1;
-                    } else if (updates <= 14 || verticalBlocksPerTick >= 0) {
+                    } else if (updates <= 14 || velocity >= 0) {
                         speed = 0.33;
                     } else if (previous < 25) {
                         // Retiming to the landing estimate, not a second independent child clock.
                         double eta = Math.max(1.0 / 60,
-                                clearance / Math.max(0.1, -verticalBlocksPerTick * 20));
+                                height / Math.max(0.1, -velocity * 20));
                         speed = Math.clamp((timeline.secondsAt(26) - seconds) / eta, 0.5, 3);
-                        if (clearance < 0.7) speed = Math.max(0.75, speed);
+                        if (height < 0.7) speed = Math.max(0.75, speed);
                     }
                 }
                 double delta = speed / 60;
@@ -78,6 +97,7 @@ public final class WrenchOriginalClock {
                 double key = timeline.keyTime(seconds);
                 if (!slam && !released && previous < 33 && key >= 33) {
                     release = true;
+                    sampleRelease = true;
                     released = true;
                     launchUpdate = updates;
                 }
@@ -86,34 +106,51 @@ public final class WrenchOriginalClock {
                             + (seconds - timeline.indexSeconds(21));
                 }
                 if (slam) {
-                    active |= updates > 13 && previous <= 28 && key >= 1;
-                    bodyContact |= key > 23.5 && verticalBlocksPerTick < 0 && !grounded;
+                    sampleActive = updates > 13 && previous <= 28 && key >= 1;
+                    sampleBody = key > 23.5 && velocity < 0 && !onGround;
+                    active |= sampleActive;
+                    bodyContact |= sampleBody;
                 }
             }
+            boolean done = slam ? (onGround || phase == Phase.RECOVERY)
+                    && timeline.keyTime(seconds) >= 30
+                    : caught && seconds >= timeline.lastSeconds() - 1.0e-5;
+            sampled.add(result(sampleRelease, sampleActive, sampleBody, done, onGround));
         }
+        samples = java.util.List.copyOf(sampled);
+        previousGrounded = grounded;
+        previousVelocity = verticalBlocksPerTick;
+        previousClearance = clearance;
         lastTick = tick;
         boolean finished = slam ? (grounded || phase == Phase.RECOVERY)
                 && timeline.keyTime(seconds) >= 30
                 : caught && seconds >= timeline.lastSeconds() - 1.0e-5;
-        last = result(release, active, bodyContact, finished);
+        last = result(release, active, bodyContact, finished, grounded);
         return last;
     }
 
     private Result result(boolean release, boolean active, boolean bodyContact, boolean finished) {
+        return result(release, active, bodyContact, finished, false);
+    }
+
+    private Result result(boolean release, boolean active, boolean bodyContact, boolean finished,
+            boolean grounded) {
         return new Result(new WrenchActionState.ClipFrame(seconds, childSeconds,
                 Math.min(1, updates / (slam ? 11.0 : 10)),
                 slam ? Math.min(1, updates / 13.0) : launchUpdate < 0 ? 1
                         : Math.min(1, (updates - launchUpdate) / 5.0), release,
-                slam && updates > 14, finished), active, bodyContact);
+                slam && updates > 14, finished), active, bodyContact, grounded);
     }
 
     public Result initial() { return last; }
+    public java.util.List<Result> samples() { return samples; }
 
     private static double lastPoseSeconds(Rac1Animation clip) {
         return clip.sourceTiming().sourceSeconds()[clip.sourceTiming().sourceSeconds().length - 1];
     }
 
-    public record Result(WrenchActionState.ClipFrame frame, boolean active, boolean bodyContact) {}
+    public record Result(WrenchActionState.ClipFrame frame, boolean active, boolean bodyContact,
+            boolean grounded) {}
 
     /** Immutable copied metadata; no asset IO in simulation or rendering. */
     public static final class Timeline {

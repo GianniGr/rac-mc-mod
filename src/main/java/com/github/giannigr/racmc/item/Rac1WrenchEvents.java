@@ -61,7 +61,12 @@ public final class Rac1WrenchEvents {
                 || !event.getLevel().hasChunkAt(event.getPos())) {
             return;
         }
-        if (denied(event.getLevel().getBlockState(event.getPos()))) {
+        var state = event.getLevel().getBlockState(event.getPos());
+        boolean approvedContactAdapter = action(state)
+                == Rac1WrenchBlockPolicy.Action.EXPLOSIVE_ADAPTER_REQUIRED
+                && WrenchActions.deliveringContact(event.getEntity())
+                && Rac1WrenchCrateHits.hasContactHandler();
+        if (denied(state) && !approvedContactAdapter) {
             // Actual cancellation also blocks creative and forged STOP packets.
             event.setCanceled(true);
             resync(event.getEntity(), event.getPos());
@@ -70,7 +75,13 @@ public final class Rac1WrenchEvents {
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onBreak(BlockEvent.BreakEvent event) {
-        if (holdingWrench(event.getPlayer()) && denied(event.getState())) {
+        boolean approvedContactAdapter = action(event.getState())
+                == Rac1WrenchBlockPolicy.Action.EXPLOSIVE_ADAPTER_REQUIRED
+                && WrenchActions.deliveringContact(event.getPlayer())
+                && Rac1WrenchCrateHits.hasContactHandler()
+                && event.getLevel() instanceof net.minecraft.world.level.Level level
+                && WrenchActions.validHarvestLifecycle(level, event.getPos(), event.getPlayer());
+        if (holdingWrench(event.getPlayer()) && denied(event.getState()) && !approvedContactAdapter) {
             event.setCanceled(true);
             resync(event.getPlayer(), event.getPos());
         }

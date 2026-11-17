@@ -5,6 +5,7 @@ import com.github.giannigr.racmc.actions.WrenchActionNetwork;
 import com.github.giannigr.racmc.actions.WrenchActionPresentation;
 import com.github.giannigr.racmc.actions.WrenchActionState;
 import com.github.giannigr.racmc.actions.WrenchActions;
+import com.github.giannigr.racmc.actions.WrenchActionInput;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -59,6 +60,15 @@ public final class WrenchActionClient {
         return state != null && state.slim();
     }
 
+    public static float facingYaw(Player player, float partial) {
+        var now = STATES.get(player.getUUID());
+        var before = PREVIOUS.get(player.getUUID());
+        if (now == null) return player.getYRot();
+        if (before == null || before.view().serial() != now.view().serial()) return now.facingYaw();
+        return before.facingYaw() + (float) Math.IEEEremainder(
+                now.facingYaw() - before.facingYaw(), 360) * Math.clamp(partial, 0, 1);
+    }
+
     /** Interpolation only: never advances clip events, flight, damage or inventory. */
     public static WrenchActionPresentation presentation(Player player, float partialTick) {
         var current = presentation(player);
@@ -96,21 +106,26 @@ public final class WrenchActionClient {
         if (snapshot == null || !snapshot.available()) return;
         boolean busy = presentation(mc.player).phase() != WrenchActionPresentation.Phase.IDLE;
         boolean crouching = mc.player.isShiftKeyDown();
-        // Ordinary direct block mining/crate transactions remain P27-owned and immediate.
-        // Crouch+attack still takes priority over block/entity/miss for cosmetic throw.
-        double minimumClearance = mc.player.getDeltaMovement().y < 0 ? 0.57 : 0.1;
-        boolean airborne = !mc.player.onGround() && airTicks >= 4
-                && !(mc.hitResult instanceof net.minecraft.world.phys.BlockHitResult)
-                && WrenchActions.groundClearance(mc.player) >= minimumClearance;
-        if (!busy && !crouching && !airborne) return; // P27 owns ordinary attack/mining.
-        event.setCanceled(true);
-        event.setSwingHand(false);
+        var target = mc.hitResult == null ? WrenchActionInput.Target.MISS
+                : WrenchActionInput.Target.valueOf(mc.hitResult.getType().name());
+        var route = WrenchActionInput.route(snapshot.available(), mc.player.onGround(),
+                crouching, airTicks, mc.player.getDeltaMovement().y < 0,
+                WrenchActions.groundClearance(mc.player), target);
+        if (!consume(event, route, busy)) return;
         if (repeated || busy) return;
-        WrenchActionState.Intent action = crouching
+        WrenchActionState.Intent action = route == WrenchActionInput.Route.THROW
                 ? WrenchActionState.Intent.THROW : WrenchActionState.Intent.SLAM;
         PacketDistributor.sendToServer(new WrenchActionNetwork.Intent(++intentSerial,
                 action.ordinal(), mc.player.getSkin().model()
                         == net.minecraft.client.resources.PlayerSkin.Model.SLIM));
+    }
+
+    public static boolean consume(InputEvent.InteractionKeyMappingTriggered event,
+            WrenchActionInput.Route route, boolean busy) {
+        if (!busy && route == WrenchActionInput.Route.NATIVE) return false;
+        event.setCanceled(true);
+        event.setSwingHand(false);
+        return true;
     }
 
     @SubscribeEvent

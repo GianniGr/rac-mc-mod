@@ -43,6 +43,7 @@ class WrenchActionProtocolTest {
             buffer.writeLong(1);
             buffer.writeBoolean(true);
             buffer.writeBoolean(false);
+            buffer.writeFloat(0);
             buffer.writeLong(1);
             buffer.writeByte(255);
             assertThrows(IllegalArgumentException.class,

@@ -13,8 +13,18 @@ final class WrenchSlamContacts {
     private WrenchSlamContacts() {}
 
     static void deliver(ServerPlayer player, WrenchActionState state,
-            WrenchActions.Sample previous, WrenchActions.Sample current) {
+            WrenchActions.Sample previous, WrenchActions.Sample current, WrenchHitAudit audit) {
         if (previous == null) return;
+        var before = previous.sources().getLast();
+        for (var pose : current.sources()) {
+            if (pose.active() || pose.bodyContact()) deliverFrame(player, state, before, pose, audit);
+            before = pose;
+        }
+    }
+
+    private static void deliverFrame(ServerPlayer player, WrenchActionState state,
+            WrenchSlamSampling.Pose previous, WrenchSlamSampling.Pose current, WrenchHitAudit audit) {
+        audit.samples++;
         var expectedHeld = player.getMainHandItem();
         // Native reach is a hard ceiling, even when a malformed sampler supplies distant anchors.
         double reach = player.entityInteractionRange();
@@ -48,38 +58,44 @@ final class WrenchSlamContacts {
                 blocks.add(wallHit.getBlockPos().immutable());
             }
         }
-        ActionVector tip = current.head().subtract(current.head().subtract(current.hand())
-                .normalized().multiply(0.085));
+        ActionVector tip = WrenchSlamSampling.tip(current);
         if (current.active()) WrenchSlamBlocks.sphere(tip, 0.47, blocks);
-        if (current.descendingBody() && player.getDeltaMovement().y < 0 && !player.onGround()) {
-            WrenchSlamBlocks.sphere(current.bodyContact(), 0.4, blocks);
+        if (current.bodyContact()) {
+            WrenchSlamBlocks.sphere(current.body(), 0.4, blocks);
         }
         for (LivingEntity target : candidates) {
             WrenchContact.Box box = box(target.getBoundingBox());
-            if ((current.active() && WrenchContact.sphereIntersects(tip, 0.47, box))
-                    || (current.descendingBody() && player.getDeltaMovement().y < 0
-                    && !player.onGround()
-                    && WrenchContact.sphereIntersects(current.bodyContact(), 0.4, box))) {
+            if (WrenchSlamSampling.spheres(current, box)) {
                 contacts.add(target);
             }
         }
         var blockContacts = WrenchSlamBlocks.snapshot(player, blocks);
+        audit.candidates += contacts.size();
         for (LivingEntity target : contacts) {
             if (player.getMainHandItem() != expectedHeld || !player.isAlive()) return;
             if (!player.canInteractWithEntity(target, 0) || !player.hasLineOfSight(target)
                     || !player.canAttack(target)
-                    || (target instanceof Player other && !player.canHarmPlayer(other))) continue;
-            if (!state.claimTarget(target.getUUID())) continue;
-            if (!WrenchActions.attackAllowed(player, target)) continue;
+                    || (target instanceof Player other && !player.canHarmPlayer(other))) {
+                audit.eligibility++;
+                continue;
+            }
+            if (!state.claimTarget(target.getUUID(), current.active() || current.bodyContact())) {
+                audit.dedup++;
+                continue;
+            }
+            if (!WrenchActions.attackAllowed(player, target)) { audit.protection++; continue; }
             if (!target.isAlive() || target.level() != player.level()
                     || player.getMainHandItem() != expectedHeld
                     || !player.canInteractWithEntity(target, 0) || !player.hasLineOfSight(target)
                     || !player.canAttack(target)
                     || (target instanceof Player other && !player.canHarmPlayer(other))) continue;
             // Normal native mitigation/invulnerability remains intact; never zero hurt timers.
-            target.hurt(player.damageSources().playerAttack(player), WrenchActionState.SLAM_DAMAGE);
+            if (WrenchDamageDelivery.hurt(player, target, WrenchActionState.SLAM_DAMAGE, 0x47,
+                    player.server.getTickCount() * 3L)) audit.hits++;
+            else audit.rejected++;
         }
-        WrenchSlamBlocks.deliver(player, state, blockContacts, expectedHeld);
+        WrenchSlamBlocks.deliver(player, state, blockContacts, expectedHeld,
+                current.active() || current.bodyContact());
     }
 
     private static WrenchContact.Box box(AABB box) {

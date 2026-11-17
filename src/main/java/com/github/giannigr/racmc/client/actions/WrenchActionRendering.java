@@ -69,20 +69,32 @@ public final class WrenchActionRendering {
         var current = rig();
         return current == null ? null : current.sample(view.bodySequence(), view.clipSeconds(),
                 view.wrenchSequence(), view.wrenchClipSeconds(),
-                player.getMainArm() == HumanoidArm.LEFT, WrenchActionClient.slim(player), weight);
+                player.getMainArm() == HumanoidArm.LEFT, WrenchActionClient.slim(player), weight,
+                player.isCrouching());
     }
 
     private static WrenchPlayerPoseHook.Pose pose(Player player, WrenchActionPresentation view,
             float partialTick) {
         // The setupAnim-tail hook blends from its captured current native pose, not bind/zero.
         var pose = sample(player, view, 1);
-        return pose == null ? null : new WrenchPlayerPoseHook.Pose(part(pose.body()),
-                part(pose.rightArm()), part(pose.leftArm()));
+        if (pose == null) return null;
+        float nativeYaw = net.minecraft.util.Mth.rotLerp(partialTick, player.yBodyRotO, player.yBodyRot);
+        float correction = (float) Math.toRadians(Math.IEEEremainder(
+                WrenchActionClient.facingYaw(player, partialTick) - nativeYaw, 360))
+                * (float) view.bodyBlendWeight();
+        return new WrenchPlayerPoseHook.Pose(new org.joml.Matrix4f().rotateY(correction)
+                .mul(WrenchSteveRig.blendRoot(pose.root(), player.isCrouching(), view.bodyBlendWeight())),
+                part(pose.rightArm()), part(pose.leftArm()), correction);
     }
 
     private static WrenchPlayerPoseHook.Part part(WrenchSteveRig.Part part) {
         return new WrenchPlayerPoseHook.Part(part.x(), part.y(), part.z(),
                 part.xRot(), part.yRot(), part.zRot());
+    }
+
+    public static org.joml.Matrix4f itemAdjustment(Player player, WrenchActionPresentation view) {
+        var pose = sample(player, view, 1);
+        return pose == null ? new org.joml.Matrix4f() : pose.itemAdjustment();
     }
 
     private static boolean hand(RenderHandEvent event, Player actor, WrenchActionPresentation view,
@@ -106,25 +118,37 @@ public final class WrenchActionRendering {
         apply(model.leftArm, pose.leftArm());
         model.rightSleeve.copyFrom(model.rightArm);
         model.leftSleeve.copyFrom(model.leftArm);
+        float yawCorrection = (float) Math.toRadians(Math.IEEEremainder(
+                WrenchActionClient.facingYaw(player, event.getPartialTick()) - player.getYRot(), 360))
+                * (float) view.bodyBlendWeight();
+        var facing = new org.joml.Matrix4f().rotateY(yawCorrection);
         PoseStack poses = event.getPoseStack();
         poses.pushPose();
         try {
             // Viewmodel-only offset: world contact still uses WrenchSteveRig.world, never this.
             poses.translate(0, -0.2, -0.35);
             poses.scale(-0.9375F, -0.9375F, 0.9375F);
-            var skin = event.getMultiBufferSource().getBuffer(
-                    RenderType.entitySolid(player.getSkin().texture()));
-            model.rightArm.render(poses, skin, event.getPackedLight(), OverlayTexture.NO_OVERLAY);
-            model.leftArm.render(poses, skin, event.getPackedLight(), OverlayTexture.NO_OVERLAY);
-            var wear = event.getMultiBufferSource().getBuffer(
-                    RenderType.entityTranslucent(player.getSkin().texture()));
-            if (player.isModelPartShown(PlayerModelPart.RIGHT_SLEEVE)) {
-                model.rightSleeve.render(poses, wear, event.getPackedLight(), OverlayTexture.NO_OVERLAY);
-            }
-            if (player.isModelPartShown(PlayerModelPart.LEFT_SLEEVE)) {
-                model.leftSleeve.render(poses, wear, event.getPackedLight(), OverlayTexture.NO_OVERLAY);
+            poses.pushPose();
+            try {
+                poses.mulPose(facing);
+                poses.mulPose(pose.root());
+                var skin = event.getMultiBufferSource().getBuffer(
+                        RenderType.entitySolid(player.getSkin().texture()));
+                model.rightArm.render(poses, skin, event.getPackedLight(), OverlayTexture.NO_OVERLAY);
+                model.leftArm.render(poses, skin, event.getPackedLight(), OverlayTexture.NO_OVERLAY);
+                var wear = event.getMultiBufferSource().getBuffer(
+                        RenderType.entityTranslucent(player.getSkin().texture()));
+                if (player.isModelPartShown(PlayerModelPart.RIGHT_SLEEVE)) {
+                    model.rightSleeve.render(poses, wear, event.getPackedLight(), OverlayTexture.NO_OVERLAY);
+                }
+                if (player.isModelPartShown(PlayerModelPart.LEFT_SLEEVE)) {
+                    model.leftSleeve.render(poses, wear, event.getPackedLight(), OverlayTexture.NO_OVERLAY);
+                }
+            } finally {
+                poses.popPose();
             }
             if (view.heldVisible()) {
+                poses.mulPose(facing);
                 poses.mulPose(pose.socket());
                 RacMcClientRegistration.wrenchRenderer().renderAction(poses,
                         event.getMultiBufferSource(), event.getPackedLight(), view, false);

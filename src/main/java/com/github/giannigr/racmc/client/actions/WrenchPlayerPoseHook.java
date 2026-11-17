@@ -52,7 +52,8 @@ public final class WrenchPlayerPoseHook {
     public static void before(RenderPlayerEvent.Pre event) {
         if (source == null) return;
         PlayerModel<?> model = event.getRenderer().getModel();
-        SCOPES.push(new Scope(model, event.getEntity(), event.getPartialTick(), save(model)));
+        SCOPES.push(new Scope(model, event.getEntity(), event.getPartialTick(),
+                WrenchModelPoseSnapshot.capture(model)));
     }
 
     /** Called only by the client-only PlayerModel tail Mixin, never by gameplay or packet code. */
@@ -69,16 +70,25 @@ public final class WrenchPlayerPoseHook {
         if (pose == null) return;
         Transition start = TRANSITIONS.get(scope.player.getUUID());
         if (start == null || start.serial != action.serial()) {
-            start = new Transition(action.serial(), new Pose(Part.from(model.body),
-                    Part.from(model.rightArm), Part.from(model.leftArm)));
+            start = new Transition(action.serial(), new Pose(new org.joml.Matrix4f(),
+                    Part.from(model.rightArm), Part.from(model.leftArm), 0));
             TRANSITIONS.put(scope.player.getUUID(), start);
         }
-        Part.blend(start.pose.body, pose.body, action.bodyBlendWeight()).apply(model.body);
         Part.blend(start.pose.rightArm, pose.rightArm, action.bodyBlendWeight()).apply(model.rightArm);
         Part.blend(start.pose.leftArm, pose.leftArm, action.bodyBlendWeight()).apply(model.leftArm);
-        model.jacket.copyFrom(model.body);
         model.rightSleeve.copyFrom(model.rightArm);
         model.leftSleeve.copyFrom(model.leftArm);
+        model.head.yRot -= pose.headYawCorrection;
+        model.hat.copyFrom(model.head);
+        scope.root = new org.joml.Matrix4f(pose.root);
+    }
+
+    /** Inside the native pushed model frame, before body AND all layers. */
+    public static void applyModelRoot(LivingEntity entity, com.mojang.blaze3d.vertex.PoseStack poses) {
+        Scope scope = SCOPES.peek();
+        if (scope == null || scope.player != entity || scope.root == null || scope.rootApplied) return;
+        poses.mulPose(scope.root);
+        scope.rootApplied = true;
     }
 
     @SubscribeEvent
@@ -116,12 +126,6 @@ public final class WrenchPlayerPoseHook {
         while (!SCOPES.isEmpty()) SCOPES.pop().restore();
     }
 
-    private static SavedPart[] save(PlayerModel<?> model) {
-        return new SavedPart[] {new SavedPart(model.body), new SavedPart(model.rightArm),
-                new SavedPart(model.leftArm), new SavedPart(model.jacket),
-                new SavedPart(model.rightSleeve), new SavedPart(model.leftSleeve)};
-    }
-
     /** Absolute native model values: pixels for pivots, radians for rotations; no limb scaling. */
     public record Part(float x, float y, float z, float xRot, float yRot, float zRot) {
         public Part {
@@ -150,7 +154,7 @@ public final class WrenchPlayerPoseHook {
         }
     }
 
-    public record Pose(Part body, Part rightArm, Part leftArm) {}
+    public record Pose(org.joml.Matrix4f root, Part rightArm, Part leftArm, float headYawCorrection) {}
 
     @FunctionalInterface
     public interface PoseSource {
@@ -163,35 +167,25 @@ public final class WrenchPlayerPoseHook {
                 PoseSource poses);
     }
 
-    private record Scope(PlayerModel<?> model, Player player, float partialTick, SavedPart[] saved) {
+    private static final class Scope {
+        final PlayerModel<?> model;
+        final Player player;
+        final float partialTick;
+        final WrenchModelPoseSnapshot saved;
+        org.joml.Matrix4f root;
+        boolean rootApplied;
+
+        Scope(PlayerModel<?> model, Player player, float partialTick, WrenchModelPoseSnapshot saved) {
+            this.model = model;
+            this.player = player;
+            this.partialTick = partialTick;
+            this.saved = saved;
+        }
         void restore() {
-            for (SavedPart part : saved) part.restore();
+            saved.restore();
         }
     }
 
     private record Transition(long serial, Pose pose) {}
 
-    private static final class SavedPart {
-        private final ModelPart target;
-        private final Part pose;
-        private final float xScale;
-        private final float yScale;
-        private final float zScale;
-
-        SavedPart(ModelPart target) {
-            this.target = target;
-            pose = new Part(target.x, target.y, target.z,
-                    target.xRot, target.yRot, target.zRot);
-            xScale = target.xScale;
-            yScale = target.yScale;
-            zScale = target.zScale;
-        }
-
-        void restore() {
-            pose.apply(target);
-            target.xScale = xScale;
-            target.yScale = yScale;
-            target.zScale = zScale;
-        }
-    }
 }

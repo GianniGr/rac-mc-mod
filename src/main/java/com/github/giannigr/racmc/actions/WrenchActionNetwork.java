@@ -27,7 +27,7 @@ public final class WrenchActionNetwork {
 
     @SubscribeEvent
     public static void register(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("wrench-actions-2");
+        var registrar = event.registrar("wrench-actions-3");
         registrar.playToServer(Intent.TYPE, Intent.CODEC, (packet, context) -> {
             if (context.player() instanceof ServerPlayer player && packet.serial >= 0
                     && packet.action >= 0 && packet.action < WrenchActionState.Intent.values().length) {
@@ -42,7 +42,8 @@ public final class WrenchActionNetwork {
     static void broadcast(ServerPlayer player, boolean available, boolean slim,
             WrenchActionPresentation view) {
         PacketDistributor.sendToPlayersTrackingEntityAndSelf(player,
-                new Snapshot(player.getUUID(), player.serverLevel().getGameTime(), available, slim, view));
+                new Snapshot(player.getUUID(), player.serverLevel().getGameTime(), available, slim,
+                        player.getYRot(), view));
     }
 
     public record Intent(long serial, int action, boolean slim) implements CustomPacketPayload {
@@ -60,8 +61,10 @@ public final class WrenchActionNetwork {
         public Type<Intent> type() { return TYPE; }
     }
 
-    public record Snapshot(UUID player, long serverTick, boolean available, boolean slim,
+    public record Snapshot(UUID player, long serverTick, boolean available, boolean slim, float facingYaw,
             WrenchActionPresentation view) implements CustomPacketPayload {
+        public Snapshot(UUID player, long tick, boolean available, boolean slim,
+                WrenchActionPresentation view) { this(player, tick, available, slim, 0, view); }
         public static final Type<Snapshot> TYPE = new Type<>(id("wrench_state"));
         public static final StreamCodec<RegistryFriendlyByteBuf, Snapshot> CODEC = StreamCodec.of(
                 (buffer, packet) -> {
@@ -69,6 +72,7 @@ public final class WrenchActionNetwork {
                     buffer.writeLong(packet.serverTick);
                     buffer.writeBoolean(packet.available);
                     buffer.writeBoolean(packet.slim);
+                    buffer.writeFloat(packet.facingYaw);
                     WrenchActionPresentation view = packet.view;
                     buffer.writeLong(view.serial());
                     buffer.writeByte(view.phase().ordinal());
@@ -92,12 +96,14 @@ public final class WrenchActionNetwork {
                     long tick = buffer.readLong();
                     boolean available = buffer.readBoolean();
                     boolean slim = buffer.readBoolean();
+                    float facing = buffer.readFloat();
+                    if (!Float.isFinite(facing)) throw new IllegalArgumentException("Invalid facing");
                     long serial = buffer.readLong();
                     int phase = buffer.readUnsignedByte();
                     if (phase >= WrenchActionPresentation.Phase.values().length) {
                         throw new IllegalArgumentException("Unknown wrench phase");
                     }
-                    return new Snapshot(player, tick, available, slim, new WrenchActionPresentation(
+                    return new Snapshot(player, tick, available, slim, facing, new WrenchActionPresentation(
                             serial, WrenchActionPresentation.Phase.values()[phase],
                             buffer.readInt(), buffer.readInt(), buffer.readDouble(),
                             buffer.readDouble(), buffer.readDouble(), buffer.readDouble(),
