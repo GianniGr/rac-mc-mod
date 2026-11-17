@@ -1,5 +1,10 @@
 # Approved gameplay integration candidate — P29
 
+**Bounded follow-up:** standard imported-material mining/destroy debris replaces
+the white model-placeholder path; see [block-debris.md](block-debris.md). T15's base
+`86ca1f7` verification is retained; affected independent verification and owner
+confirmation of the new commit are still pending.
+
 Local branch `integration/crates-vendor-bolts`, crate base `26d9ff5`.
 Only the following owner-approved tips are merged, preserving their histories:
 

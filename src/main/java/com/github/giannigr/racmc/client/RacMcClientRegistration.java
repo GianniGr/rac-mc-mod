@@ -193,6 +193,8 @@ public final class RacMcClientRegistration {
     public static void onReloadListeners(RegisterClientReloadListenersEvent event) {
         event.registerReloadListener((ResourceManagerReloadListener) manager ->
                 Rac1VendorDrawing.clear());
+        event.registerReloadListener((ResourceManagerReloadListener) manager ->
+                com.github.giannigr.racmc.client.render.Rac1BlockDebris.clear());
     }
 
     /**
