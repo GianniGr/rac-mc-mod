@@ -2,6 +2,7 @@ package com.github.giannigr.racmc.loot;
 
 import com.github.giannigr.racmc.item.RacMcEntities;
 import java.util.*;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
@@ -12,6 +13,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
+import com.github.giannigr.racmc.loot.Rac1BoltMotion.State;
+import com.github.giannigr.racmc.loot.Rac1BoltMotion.V;
 
 /** Canonical world accounts and unclaimed value. Entities are disposable views of this ledger.
  * Normal save/restart consistency, NOT fsync/crash atomicity. No expiry or death balance loss. */
@@ -22,7 +25,7 @@ public final class Rac1BoltLedger extends SavedData {
     private final Set<UUID> rewarded = new HashSet<>();
 
     public record Pickup(UUID id, ResourceKey<Level> dimension, double x, double y, double z,
-                         int value) {}
+                         int value, State motion) {}
 
     public static Rac1BoltLedger get(ServerLevel level) {
         return level.getServer().overworld().getDataStorage().computeIfAbsent(
@@ -37,8 +40,11 @@ public final class Rac1BoltLedger extends SavedData {
         if (!rewarded.add(incarnation)) return;
         for (int value : Rac1BoltPayout.split(total)) {
             UUID id = UUID.randomUUID();
-            pickups.put(id, new Pickup(id, level.dimension(), pos.getX() + .5,
-                    pos.getY() + .5, pos.getZ() + .5, value));
+            // Source is crate bottom-center, not block center plus another half-block.
+            State motion = Rac1BoltMotion.launch(new V(pos.getX() + .5, pos.getY(), pos.getZ() + .5),
+                    new Random(level.random.nextLong()));
+            V p = motion.position();
+            pickups.put(id, new Pickup(id, level.dimension(), p.x(), p.y(), p.z(), value, motion));
         }
         setDirty();
     }
@@ -71,21 +77,40 @@ public final class Rac1BoltLedger extends SavedData {
     public void move(UUID id, double x, double y, double z) {
         Pickup old = pickups.get(id);
         if (old == null) return;
-        pickups.put(id, new Pickup(id, old.dimension(), x, y, z, old.value()));
+        State motion = old.motion() == null ? null : Rac1BoltMotion.relocated(old.motion(), new V(x, y, z));
+        pickups.put(id, new Pickup(id, old.dimension(), x, y, z, old.value(), motion));
+        setDirty();
+    }
+
+    public void move(UUID id, State motion) {
+        Pickup old = pickups.get(id);
+        if (old == null) return;
+        V p = motion.position();
+        pickups.put(id, new Pickup(id, old.dimension(), p.x(), p.y(), p.z(), old.value(), motion));
         setDirty();
     }
 
     public void emit(ServerLevel level) {
-        for (Pickup pickup : List.copyOf(pickups.values())) {
-            if (pickup.dimension() != level.dimension()
-                    || !level.hasChunkAt(BlockPos.containing(pickup.x(), pickup.y(), pickup.z()))
-                    || level.getEntity(pickup.id()) != null) continue;
+        emitPending(level.dimension(),
+                p -> level.hasChunkAt(BlockPos.containing(p.x(), p.y(), p.z())),
+                id -> level.getEntity(id) != null, pickup -> {
             Rac1BoltEntity entity = new Rac1BoltEntity(RacMcEntities.BOLT.get(), level);
             entity.setUUID(pickup.id());
             entity.setValue(pickup.value());
-            entity.setPos(pickup.x(), pickup.y(), pickup.z());
-            // Failure leaves the same exact record for the next tick. No reroll/direct credit.
-            level.addFreshEntity(entity);
+            entity.restoreMotion(pickup.motion() == null
+                    ? Rac1BoltMotion.legacy(new V(pickup.x(), pickup.y(), pickup.z())) : pickup.motion());
+            return level.addFreshEntity(entity);
+        });
+    }
+
+    /** Admission boundary, also exercised without a running world. Views never consume value. */
+    void emitPending(ResourceKey<Level> dimension, Predicate<Pickup> chunkLoaded,
+                     Predicate<UUID> entityPresent, Predicate<Pickup> admission) {
+        for (Pickup pickup : List.copyOf(pickups.values())) {
+            if (pickup.dimension() != dimension || !chunkLoaded.test(pickup)
+                    || entityPresent.test(pickup.id())) continue;
+            // Both success and failure retain the exact record. Only collect consumes currency.
+            admission.test(pickup);
         }
     }
 
@@ -103,7 +128,9 @@ public final class Rac1BoltLedger extends SavedData {
             CompoundTag value = new CompoundTag();
             value.putUUID("id", p.id()); value.putString("dimension", p.dimension().location().toString());
             value.putDouble("x", p.x()); value.putDouble("y", p.y()); value.putDouble("z", p.z());
-            value.putInt("value", p.value()); pending.add(value);
+            value.putInt("value", p.value());
+            if (p.motion() != null) value.put("motion", Rac1BoltMotionTag.save(p.motion()));
+            pending.add(value);
         });
         tag.put("pickups", pending);
         ListTag consumed = new ListTag();
@@ -128,8 +155,10 @@ public final class Rac1BoltLedger extends SavedData {
                 throw new IllegalArgumentException("Invalid saved bolt denomination");
             ResourceKey<Level> dimension = ResourceKey.create(Registries.DIMENSION,
                     ResourceLocation.parse(value.getString("dimension")));
-            ledger.pickups.put(id, new Pickup(id, dimension, value.getDouble("x"),
-                    value.getDouble("y"), value.getDouble("z"), amount));
+            V position = new V(value.getDouble("x"), value.getDouble("y"), value.getDouble("z"));
+            State motion = value.contains("motion", Tag.TAG_COMPOUND)
+                    ? Rac1BoltMotionTag.load(value.getCompound("motion"), position) : null;
+            ledger.pickups.put(id, new Pickup(id, dimension, position.x(), position.y(), position.z(), amount, motion));
         }
         for (Tag entry : tag.getList("rewarded", Tag.TAG_COMPOUND))
             ledger.rewarded.add(((CompoundTag) entry).getUUID("id"));
