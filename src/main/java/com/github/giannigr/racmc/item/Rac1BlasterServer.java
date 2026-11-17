@@ -258,6 +258,7 @@ public final class Rac1BlasterServer {
             return false;
         }
         state.recordShot(now);
+        com.github.giannigr.racmc.effect.Rac1EffectTriggers.shot(arrow);
         return true;
     }
 
@@ -459,6 +460,7 @@ public final class Rac1BlasterServer {
             return;
         }
         if (Rac1ArrowLifetime.expired(data.getLong(BIRTH), entity.level().getGameTime())) {
+            if (arrow instanceof Rac1BlasterArrow blaster) blaster.visualEnd();
             arrow.discard();
         }
     }

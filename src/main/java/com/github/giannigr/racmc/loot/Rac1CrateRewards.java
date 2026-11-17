@@ -29,6 +29,9 @@ public final class Rac1CrateRewards {
         award(level, pos, id, base);
         sound(level, net.minecraft.world.phys.Vec3.atCenterOf(pos),
                 ((Rac1CrateBlock) expectedState.getBlock()).definition().classNumber());
+        com.github.giannigr.racmc.effect.Rac1EffectTriggers.crateBreak(level, id,
+                new net.minecraft.world.phys.Vec3(pos.getX() + .5, pos.getY(), pos.getZ() + .5),
+                ((Rac1CrateBlock) expectedState.getBlock()).definition().classNumber());
     }
 
     /** Same placement incarnation and ledger as grounded destruction; never pays on transfer. */
@@ -50,6 +53,8 @@ public final class Rac1CrateRewards {
         falling.discard();
         award(level, falling.blockPosition(), id, base);
         sound(level, falling.position(), block.definition().classNumber());
+        com.github.giannigr.racmc.effect.Rac1EffectTriggers.crateBreak(level, id, falling.position(),
+                block.definition().classNumber());
     }
 
     private static void award(ServerLevel level, BlockPos pos, java.util.UUID id, int base) {

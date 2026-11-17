@@ -154,6 +154,7 @@ public final class Rac1CrateBlast {
         // velocity replacement. A vanilla explosion packet would also replay sound/FX.
         playerPushes.forEach((player, push) ->
                 PacketDistributor.sendToPlayer(player, new Rac1CrateKnockbackPayload(push)));
+        com.github.giannigr.racmc.effect.Rac1EffectTriggers.blast(level, center);
     }
 
     /** Shared reward ownership, after the event/identity allowlist has authorized destruction. */

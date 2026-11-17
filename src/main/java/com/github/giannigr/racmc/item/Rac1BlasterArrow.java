@@ -23,6 +23,37 @@ import net.minecraft.world.level.Level;
  * concept.
  */
 public class Rac1BlasterArrow extends Arrow {
+    private boolean terminalVisual;
+
+    /** Read-only render state; never changes arrow collision or flight. */
+    public boolean visualFlying() { return !inGround && !isRemoved(); }
+    public void visualEnd() {
+        if (!terminalVisual && !level().isClientSide()) {
+            terminalVisual = true;
+            com.github.giannigr.racmc.effect.Rac1EffectTriggers.end(this);
+        }
+    }
+    @Override protected void onHitBlock(net.minecraft.world.phys.BlockHitResult hit) {
+        var tangent = getDeltaMovement();
+        super.onHitBlock(hit);
+        if (!terminalVisual && !level().isClientSide()) {
+            terminalVisual = true;
+            var face = hit.getDirection();
+            com.github.giannigr.racmc.effect.Rac1EffectTriggers.impact(this, hit.getLocation(), tangent,
+                    new net.minecraft.world.phys.Vec3(face.getStepX(), face.getStepY(), face.getStepZ()));
+        }
+    }
+    @Override protected void onHitEntity(net.minecraft.world.phys.EntityHitResult hit) {
+        var tangent = getDeltaMovement();
+        super.onHitEntity(hit);
+        // A rejected vanilla damage hit can bounce and keep flying: don't invent an end.
+        if (isRemoved() && !terminalVisual && !level().isClientSide()) {
+            terminalVisual = true;
+            com.github.giannigr.racmc.effect.Rac1EffectTriggers.impact(this, hit.getLocation(), tangent,
+                    tangent.lengthSqr() > 1.0e-8 ? tangent.normalize().scale(-1)
+                            : new net.minecraft.world.phys.Vec3(0, 1, 0));
+        }
+    }
 
     /**
      * Creates an arrow of the Blaster that is in the world.
