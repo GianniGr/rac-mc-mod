@@ -128,6 +128,7 @@ public final class Rac1FallingExplosive extends FallingBlockEntity {
             if (Rac1CrateBlast.touching(level(), getBoundingBox())) {
                 arm(false);
             }
+            int before = fuse.remaining();
             if (fuse.tick(level().getGameTime())) {
                 storeFuse();
                 Rac1CrateBlast.detonate((ServerLevel) level(),
@@ -135,6 +136,10 @@ public final class Rac1FallingExplosive extends FallingBlockEntity {
                 if (isRemoved()) {
                     return; // No ghost landing after airborne consumption.
                 }
+            }
+            if (com.github.giannigr.racmc.sound.Rac1AudioSignal.beep(before, fuse.remaining())) {
+                com.github.giannigr.racmc.sound.Rac1AudioSignal.emit((ServerLevel) level(), position(),
+                        com.github.giannigr.racmc.sound.Rac1AudioEvent.TNT_BEEP);
             }
             storeFuse();
         }

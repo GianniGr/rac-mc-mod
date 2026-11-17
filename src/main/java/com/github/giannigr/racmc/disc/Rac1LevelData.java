@@ -29,6 +29,8 @@ public final class Rac1LevelData {
     private static final int CORE_DATA_OFFSET = 0x50;
 
     private final long base;
+    private final int soundBankOffset;
+    private final int soundBankSize;
     private final int coreIndexOffset;
     private final int coreIndexSize;
     private final int gsRamOffset;
@@ -36,9 +38,11 @@ public final class Rac1LevelData {
     private final int coreDataOffset;
     private final int coreDataSize;
 
-    private Rac1LevelData(long base, int coreIndexOffset, int coreIndexSize, int gsRamOffset,
+    private Rac1LevelData(long base, int soundBankOffset, int soundBankSize, int coreIndexOffset, int coreIndexSize, int gsRamOffset,
                           int gsRamSize, int coreDataOffset, int coreDataSize) {
         this.base = base;
+        this.soundBankOffset = soundBankOffset;
+        this.soundBankSize = soundBankSize;
         this.coreIndexOffset = coreIndexOffset;
         this.coreIndexSize = coreIndexSize;
         this.gsRamOffset = gsRamOffset;
@@ -86,7 +90,8 @@ public final class Rac1LevelData {
             throw new DiscFormatException("The header of the level data does not name its core "
                     + "index or its core data.");
         }
-        return new Rac1LevelData(base, coreIndexOffset, coreIndexSize, gsRamOffset, gsRamSize,
+        return new Rac1LevelData(base, DiscBytes.i32(bytes, 8), DiscBytes.i32(bytes, 12),
+                coreIndexOffset, coreIndexSize, gsRamOffset, gsRamSize,
                 coreDataOffset, coreDataSize);
     }
 
@@ -97,6 +102,14 @@ public final class Rac1LevelData {
      */
     public long base() {
         return base;
+    }
+
+    /** Read a bounded bank through the common disc interface; audio import runs off-thread. */
+    public byte[] soundBank(Rac1DiscImage image) throws IOException, DiscFormatException {
+        if (soundBankOffset < HEADER_SIZE || soundBankSize < 64 || soundBankSize > 32 * 1024 * 1024) {
+            throw new DiscFormatException("Invalid level sound bank range");
+        }
+        return image.readBytes(base + soundBankOffset, soundBankSize);
     }
 
     /**

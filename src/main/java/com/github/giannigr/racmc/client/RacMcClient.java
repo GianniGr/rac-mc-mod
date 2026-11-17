@@ -444,6 +444,9 @@ public final class RacMcClient {
         assetsPath = path;
         RacMcMod.LOGGER.info("The cache of the assets is started for the disc image.");
         ASSETS.start(image.get(), key.get());
+        if (CACHE_LOCATION.usable()) {
+            com.github.giannigr.racmc.client.sound.Rac1ClientAudio.start(image.get(), CACHE_LOCATION.directory());
+        }
     }
 
     /**

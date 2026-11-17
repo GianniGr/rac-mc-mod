@@ -77,6 +77,12 @@ public class Rac1CrateBlockEntity extends BlockEntity {
                     net.minecraft.world.phys.Vec3.atCenterOf(pos), crate, null);
         }
         if (!crate.isRemoved() && before != crate.fuse.remaining()) {
+            if (com.github.giannigr.racmc.sound.Rac1AudioSignal.beep(before, crate.fuse.remaining())) {
+                com.github.giannigr.racmc.sound.Rac1AudioSignal.emit(
+                        (net.minecraft.server.level.ServerLevel) level,
+                        net.minecraft.world.phys.Vec3.atCenterOf(pos),
+                        com.github.giannigr.racmc.sound.Rac1AudioEvent.TNT_BEEP);
+            }
             crate.sync();
         }
     }

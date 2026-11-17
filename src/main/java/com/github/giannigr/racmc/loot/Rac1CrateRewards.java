@@ -27,6 +27,8 @@ public final class Rac1CrateRewards {
         }
         // Spawn admission/retries and collection are owned by a single saved ledger.
         award(level, pos, id, base);
+        sound(level, net.minecraft.world.phys.Vec3.atCenterOf(pos),
+                ((Rac1CrateBlock) expectedState.getBlock()).definition().classNumber());
     }
 
     /** Same placement incarnation and ledger as grounded destruction; never pays on transfer. */
@@ -47,10 +49,17 @@ public final class Rac1CrateRewards {
         int base = Math.max(0, data.getInt("BoltRewardBase"));
         falling.discard();
         award(level, falling.blockPosition(), id, base);
+        sound(level, falling.position(), block.definition().classNumber());
     }
 
     private static void award(ServerLevel level, BlockPos pos, java.util.UUID id, int base) {
         Rac1BoltLedger.get(level).reward(id, level, pos,
                 Rac1BoltPayout.roll(base, new java.util.Random(level.random.nextLong())));
+    }
+
+    private static void sound(ServerLevel level, net.minecraft.world.phys.Vec3 position, int classId) {
+        // Only proven associations. Other crate classes are not silently bound to class500.
+        var event = com.github.giannigr.racmc.sound.Rac1AudioEvent.crateBreak(classId);
+        if (event != null) com.github.giannigr.racmc.sound.Rac1AudioSignal.emit(level, position, event);
     }
 }
