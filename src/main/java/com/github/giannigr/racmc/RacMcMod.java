@@ -52,5 +52,6 @@ public class RacMcMod {
         RacMcEntities.register(modEventBus);
         // The tab of the creative mode of the mod is registered with the same bus.
         RacMcCreativeTabs.register(modEventBus);
+        com.github.giannigr.racmc.sound.Rac1Sounds.register(modEventBus);
     }
 }

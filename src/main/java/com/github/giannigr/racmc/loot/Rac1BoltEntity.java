@@ -82,6 +82,10 @@ public final class Rac1BoltEntity extends Entity {
                     new V(player.getX(), player.getY(), player.getZ()),
                     new V(player.getX(), player.getY() + player.getBbHeight() * .5, player.getZ()));
             var step = Rac1BoltMotion.step(motion, value(), collision, hero, random::nextDouble);
+            if (motion.target() == null && step.state().target() != null) {
+                com.github.giannigr.racmc.sound.Rac1AudioSignal.emit(level, position(),
+                        com.github.giannigr.racmc.sound.Rac1AudioEvent.attraction(value()));
+            }
             restoreMotion(step.state());
             if (step.collect() && player != null && ledger.collect(getUUID(), player)) {
                 discard();
