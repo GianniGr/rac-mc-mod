@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.github.giannigr.racmc.client.actions.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "WrenchPlayerModelMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
