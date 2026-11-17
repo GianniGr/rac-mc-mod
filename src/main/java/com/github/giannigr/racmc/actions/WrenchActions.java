@@ -18,6 +18,7 @@ import net.neoforged.neoforge.event.entity.player.AttackEntityEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 /**
@@ -31,6 +32,7 @@ public final class WrenchActions {
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static Sampler sampler;
     private static ServerPlayer delivering;
+    private static Harvest harvest;
 
     private WrenchActions() {}
 
@@ -48,6 +50,7 @@ public final class WrenchActions {
     }
 
     public static boolean busy(Player player) {
+        if (player.level().isClientSide) return false;
         Session session = SESSIONS.get(player.getUUID());
         return session != null && session.state.presentation().phase()
                 != WrenchActionPresentation.Phase.IDLE;
@@ -68,18 +71,23 @@ public final class WrenchActions {
                 .state.normalAttackAccepted(player.serverLevel().getGameTime());
     }
 
-    static void intent(ServerPlayer player, long serial, WrenchActionState.Intent intent) {
+    static void intent(ServerPlayer player, long serial, WrenchActionState.Intent intent, boolean slim) {
         Session session = SESSIONS.computeIfAbsent(player.getUUID(), id -> new Session(player));
         long tick = player.serverLevel().getGameTime();
         // Bound packet work before any raycast/sampling; no client coordinates or targets accepted.
         if (session.intentTick == tick) return;
         session.intentTick = tick;
+        if (!session.state.freshIntent(serial) || !session.state.canStartAt(tick)
+                || !isWrench(player.getMainHandItem()) || !player.isAlive() || !valid(player)
+                || (intent == WrenchActionState.Intent.THROW) != player.isShiftKeyDown()) return;
         if (sampler == null || !sampler.ready(player)
                 || player.getAttackStrengthScale(0) < 0.999F
                 || player.getCooldowns().isOnCooldown(player.getMainHandItem().getItem())) return;
-        Sample initial = sampler.sample(player, session.state.presentation(), 0);
-        if (initial == null) return;
         double clearance = groundClearance(player);
+        if (intent == WrenchActionState.Intent.SLAM && (session.airTicks < 4
+                || clearance < (player.getDeltaMovement().y < 0 ? 0.57 : 0.1))) return;
+        Sample initial = sampler.sample(player, WrenchActionPresentation.idle(), 0, slim);
+        if (initial == null) return;
         boolean valid = valid(player);
         boolean accepted = session.state.start(serial, intent, tick,
                 new WrenchActionState.Eligibility(isWrench(player.getMainHandItem()),
@@ -92,6 +100,7 @@ public final class WrenchActions {
             session.dimension = player.level().dimension().location();
             session.age = 0;
             session.previous = initial;
+            session.slim = slim;
             session.wasBusy = true;
             player.resetAttackStrengthTicker();
             broadcast(player, session);
@@ -100,6 +109,10 @@ public final class WrenchActions {
 
     private static boolean valid(ServerPlayer player) {
         return !player.isSpectator() && !player.isSleeping() && !player.isPassenger()
+                && !player.isUsingItem()
+                && (player.getPose() == net.minecraft.world.entity.Pose.STANDING
+                        || player.getPose() == net.minecraft.world.entity.Pose.CROUCHING)
+                && !player.onClimbable()
                 && !player.isFallFlying() && !player.getAbilities().flying
                 && !player.isInWater() && !player.isInLava()
                 && !player.gameMode.getGameModeForPlayer().isBlockPlacingRestricted();
@@ -130,23 +143,44 @@ public final class WrenchActions {
             if (!validOwner) {
                 session.state.cancel();
             } else {
-                Sample sample = sampler.sample(player, session.state.presentation(), ++session.age);
+                Sample sample = sampler.sample(player, session.state.presentation(), ++session.age,
+                        session.slim);
                 if (sample == null) {
                     session.state.cancel();
                 } else {
-                    session.state.tick(tick, true, player.onGround(), sample.hand, sample.frame,
-                            (from, to) -> {
-                                HitResult hit = player.level().clip(new ClipContext(vec(from),
-                                        vec(to), ClipContext.Block.COLLIDER,
-                                        ClipContext.Fluid.NONE, player));
-                                return hit.getType() == HitResult.Type.MISS ? null
-                                        : vector(hit.getLocation());
+                    session.state.tick(tick, true, player.onGround(), sample.hand,
+                            sample.socketRotation, sample.frame,
+                            new WrenchActionState.Surface() {
+                                @Override
+                                public ActionVector firstContact(ActionVector from, ActionVector to) {
+                                    if (!loaded(player, from) || !loaded(player, to)) return from;
+                                    HitResult hit = player.level().clip(new ClipContext(vec(from),
+                                            vec(to), ClipContext.Block.COLLIDER,
+                                            ClipContext.Fluid.NONE, player));
+                                    return hit.getType() == HitResult.Type.MISS ? null
+                                            : vector(hit.getLocation());
+                                }
+
+                                @Override
+                                public double groundHeight(ActionVector pos) {
+                                    if (!loaded(player, pos)) return Double.NaN;
+                                    HitResult hit = player.level().clip(new ClipContext(
+                                            vec(pos).add(0, 0.5, 0),
+                                            new Vec3(pos.x(), player.level().getMinBuildHeight()
+                                                    + 0.01, pos.z()), ClipContext.Block.COLLIDER,
+                                            ClipContext.Fluid.NONE, player));
+                                    return hit.getType() == HitResult.Type.MISS ? Double.NaN
+                                            : hit.getLocation().y;
+                                }
                             });
-                    if (!player.onGround() && session.state.presentation().phase()
-                            == WrenchActionPresentation.Phase.SLAM_DESCENT) {
+                    var movementPhase = session.state.presentation().phase();
+                    if (!player.onGround() && (movementPhase
+                            == WrenchActionPresentation.Phase.SLAM_DESCENT
+                            || movementPhase == WrenchActionPresentation.Phase.SLAM_WINDUP)) {
                         Vec3 velocity = player.getDeltaMovement();
                         player.setDeltaMovement(velocity.x,
-                                WrenchSlamMotion.descend(velocity.y), velocity.z);
+                                WrenchSlamMotion.velocity(velocity.y, session.age,
+                                        groundClearance(player)), velocity.z);
                         player.hurtMarked = true;
                     }
                     // Only calibrated local contact volumes; throw has no damage/block callbacks.
@@ -166,7 +200,12 @@ public final class WrenchActions {
 
     private static void broadcast(ServerPlayer player, Session session) {
         WrenchActionNetwork.broadcast(player, sampler != null && sampler.ready(player),
-                session.state.presentation());
+                session.slim, session.state.presentation());
+    }
+
+    private static boolean loaded(ServerPlayer player, ActionVector point) {
+        return player.level().hasChunkAt(net.minecraft.core.BlockPos.containing(
+                point.x(), point.y(), point.z()));
     }
 
     @SubscribeEvent
@@ -177,7 +216,7 @@ public final class WrenchActions {
 
     @SubscribeEvent
     public static void mine(PlayerInteractEvent.LeftClickBlock event) {
-        if (busy(event.getEntity())) {
+        if (busy(event.getEntity()) && delivering != event.getEntity()) {
             event.setCanceled(true);
             if (event.getEntity() instanceof ServerPlayer player
                     && player.level().hasChunkAt(event.getPos())) {
@@ -197,9 +236,57 @@ public final class WrenchActions {
         }
     }
 
+    static boolean blockContactAllowed(ServerPlayer player, net.minecraft.core.BlockPos pos,
+            net.minecraft.core.Direction face) {
+        ServerPlayer previous = delivering;
+        delivering = player;
+        try {
+            var event = net.neoforged.neoforge.common.CommonHooks.onLeftClickBlock(player, pos, face,
+                    net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK);
+            return !event.isCanceled()
+                    && event.getUseBlock() != net.neoforged.neoforge.common.util.TriState.FALSE
+                    && event.getUseItem() != net.neoforged.neoforge.common.util.TriState.FALSE;
+        } finally {
+            delivering = previous;
+        }
+    }
+
+    static void harvestContact(ServerPlayer player, WrenchSlamBlocks.Candidate candidate) {
+        Harvest previous = harvest;
+        harvest = new Harvest(player, candidate, player.getMainHandItem());
+        try {
+            player.gameMode.destroyBlock(candidate.pos());
+        } finally {
+            harvest = previous;
+        }
+    }
+
+    /** Rechecked by P27's removal seam AFTER native BreakEvent, including with no reward handler. */
+    public static boolean validHarvestLifecycle(net.minecraft.world.level.Level level,
+            net.minecraft.core.BlockPos pos, Player player) {
+        Harvest context = harvest;
+        if (context == null) return true; // Ordinary native mining is still P27-owned.
+        var expected = context.candidate;
+        return context.player == player && player.level() == level && expected.pos().equals(pos)
+                && player.isAlive() && player.getMainHandItem() == context.held
+                && isWrench(context.held) && valid(context.player)
+                && context.player.canInteractWithBlock(pos, 0)
+                && context.player.serverLevel().mayInteract(context.player, pos)
+                && level.getBlockState(pos) == expected.state()
+                && level.getBlockEntity(pos) == expected.entity();
+    }
+
+    private record Harvest(ServerPlayer player, WrenchSlamBlocks.Candidate candidate, ItemStack held) {}
+
     @SubscribeEvent
     public static void logout(PlayerEvent.PlayerLoggedOutEvent event) {
         SESSIONS.remove(event.getEntity().getUUID());
+        if (sampler != null) sampler.forget(event.getEntity().getUUID());
+    }
+
+    @SubscribeEvent
+    public static void started(ServerStartedEvent event) {
+        installSampler(new WrenchOriginalSampler());
     }
 
     @SubscribeEvent
@@ -207,6 +294,7 @@ public final class WrenchActions {
         SESSIONS.clear();
         sampler = null;
         delivering = null;
+        harvest = null;
     }
 
     @SubscribeEvent
@@ -220,9 +308,11 @@ public final class WrenchActions {
     }
 
     private static void cancel(Player player) {
+        if (!(player instanceof ServerPlayer)) return;
         Session session = SESSIONS.get(player.getUUID());
         if (session != null) {
             session.state.cancel();
+            if (sampler != null) sampler.forget(player.getUUID());
             if (player instanceof ServerPlayer server) broadcast(server, session);
         }
     }
@@ -238,12 +328,15 @@ public final class WrenchActions {
     public interface Sampler {
         boolean ready(ServerPlayer player);
         /** Shared accepted action clock; never sample from a client's transmitted pose arrays. */
-        Sample sample(ServerPlayer player, WrenchActionPresentation action, int elapsedTicks);
+        Sample sample(ServerPlayer player, WrenchActionPresentation action, int elapsedTicks,
+                boolean slim);
+        default void forget(UUID player) {}
     }
 
     /** World-space anchors already projected onto the actual rigid Steve skeleton/socket. */
     public record Sample(WrenchActionState.ClipFrame frame, ActionVector hand, ActionVector head,
-            ActionVector bodyContact, boolean active, boolean descendingBody) {}
+            ActionVector bodyContact, boolean active, boolean descendingBody,
+            ActionRotation socketRotation) {}
 
     private static final class Session {
         private final WrenchActionState state = new WrenchActionState();
@@ -255,6 +348,7 @@ public final class WrenchActions {
         private ResourceLocation dimension;
         private Sample previous;
         private boolean wasBusy;
+        private boolean slim;
 
         private Session(ServerPlayer player) {
             stack = player.getMainHandItem();

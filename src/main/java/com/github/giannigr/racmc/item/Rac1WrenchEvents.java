@@ -17,6 +17,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.CriticalHitEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
+import net.neoforged.neoforge.event.entity.player.AttackEntityEvent;
+import com.github.giannigr.racmc.actions.WrenchActions;
 
 /** Protection only: never destroy a block from the pre-validation left-click event. */
 @EventBusSubscriber(modid = RacMcConstants.MOD_ID)
@@ -25,6 +27,18 @@ public final class Rac1WrenchEvents {
             ResourceLocation.fromNamespaceAndPath("racmc", "wrench_protected"));
 
     private Rac1WrenchEvents() { }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void normalStart(AttackEntityEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || !holdingWrench(player)
+                || WrenchActions.deliveringContact(player)) return;
+        if (!WrenchActions.normalAttackAllowed(player)
+                || player.getAttackStrengthScale(0) < 0.999F) {
+            event.setCanceled(true);
+        } else {
+            WrenchActions.normalAttackAccepted(player);
+        }
+    }
 
     public static boolean holdingWrench(Player player) {
         return player.getMainHandItem().getItem() instanceof Rac1WrenchItem;

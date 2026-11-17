@@ -15,12 +15,14 @@ final class WrenchSlamContacts {
     static void deliver(ServerPlayer player, WrenchActionState state,
             WrenchActions.Sample previous, WrenchActions.Sample current) {
         if (previous == null) return;
+        var expectedHeld = player.getMainHandItem();
         // Native reach is a hard ceiling, even when a malformed sampler supplies distant anchors.
         double reach = player.entityInteractionRange();
         AABB search = player.getBoundingBox().inflate(reach);
         List<LivingEntity> candidates = player.level().getEntitiesOfClass(LivingEntity.class,
                 search, target -> target != player && target.isAlive() && !target.isSpectator());
         Set<LivingEntity> contacts = new LinkedHashSet<>();
+        Set<net.minecraft.core.BlockPos> blocks = new LinkedHashSet<>();
         // Five sampled segments stop at their nearest entity or terrain obstruction.
         for (WrenchContact.Segment segment : current.active()
                 ? WrenchContact.sweep(previous.hand(), previous.head(), current.hand(), current.head())
@@ -42,9 +44,16 @@ final class WrenchSlamContacts {
                 }
             }
             if (first != null) contacts.add(first);
+            else if (wallHit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+                blocks.add(wallHit.getBlockPos().immutable());
+            }
         }
         ActionVector tip = current.head().subtract(current.head().subtract(current.hand())
                 .normalized().multiply(0.085));
+        if (current.active()) WrenchSlamBlocks.sphere(tip, 0.47, blocks);
+        if (current.descendingBody() && player.getDeltaMovement().y < 0 && !player.onGround()) {
+            WrenchSlamBlocks.sphere(current.bodyContact(), 0.4, blocks);
+        }
         for (LivingEntity target : candidates) {
             WrenchContact.Box box = box(target.getBoundingBox());
             if ((current.active() && WrenchContact.sphereIntersects(tip, 0.47, box))
@@ -54,15 +63,23 @@ final class WrenchSlamContacts {
                 contacts.add(target);
             }
         }
+        var blockContacts = WrenchSlamBlocks.snapshot(player, blocks);
         for (LivingEntity target : contacts) {
+            if (player.getMainHandItem() != expectedHeld || !player.isAlive()) return;
             if (!player.canInteractWithEntity(target, 0) || !player.hasLineOfSight(target)
                     || !player.canAttack(target)
                     || (target instanceof Player other && !player.canHarmPlayer(other))) continue;
             if (!state.claimTarget(target.getUUID())) continue;
             if (!WrenchActions.attackAllowed(player, target)) continue;
+            if (!target.isAlive() || target.level() != player.level()
+                    || player.getMainHandItem() != expectedHeld
+                    || !player.canInteractWithEntity(target, 0) || !player.hasLineOfSight(target)
+                    || !player.canAttack(target)
+                    || (target instanceof Player other && !player.canHarmPlayer(other))) continue;
             // Normal native mitigation/invulnerability remains intact; never zero hurt timers.
             target.hurt(player.damageSources().playerAttack(player), WrenchActionState.SLAM_DAMAGE);
         }
+        WrenchSlamBlocks.deliver(player, state, blockContacts, expectedHeld);
     }
 
     private static WrenchContact.Box box(AABB box) {

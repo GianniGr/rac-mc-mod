@@ -14,4 +14,11 @@ class WrenchSlamMotionTest {
         assertThrows(IllegalArgumentException.class,
                 () -> WrenchSlamMotion.descend(Double.NaN));
     }
+
+    @Test void initialAscentIsBoundedAndReducedAtOriginalHeightThresholds() {
+        assertEquals(0.375, WrenchSlamMotion.velocity(0, 1, 1), 1.0e-9);
+        assertEquals(7.7 * 0.5 / 20, WrenchSlamMotion.velocity(0, 1, 3), 1.0e-9);
+        assertEquals(-130.0 / 60 / 20, WrenchSlamMotion.velocity(0, 5, 1), 1.0e-9);
+        assertThrows(IllegalArgumentException.class, () -> WrenchSlamMotion.velocity(0, 0, 1));
+    }
 }

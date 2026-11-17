@@ -22,6 +22,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 @EventBusSubscriber(modid = RacMcConstants.MOD_ID, value = Dist.CLIENT)
 public final class WrenchActionClient {
     private static final Map<UUID, WrenchActionNetwork.Snapshot> STATES = new HashMap<>();
+    private static final Map<UUID, WrenchActionNetwork.Snapshot> PREVIOUS = new HashMap<>();
     private static long intentSerial;
     private static boolean pressed;
     private static int airTicks;
@@ -36,6 +37,9 @@ public final class WrenchActionClient {
     private static void receive(WrenchActionNetwork.Snapshot snapshot) {
         WrenchActionNetwork.Snapshot previous = STATES.get(snapshot.player());
         if (previous == null || snapshot.serverTick() >= previous.serverTick()) {
+            if (previous != null && snapshot.serverTick() > previous.serverTick()) {
+                PREVIOUS.put(snapshot.player(), previous);
+            }
             STATES.put(snapshot.player(), snapshot);
         }
     }
@@ -48,6 +52,37 @@ public final class WrenchActionClient {
             return WrenchActionPresentation.idle();
         }
         return snapshot.view();
+    }
+
+    public static boolean slim(Player player) {
+        var state = STATES.get(player.getUUID());
+        return state != null && state.slim();
+    }
+
+    /** Interpolation only: never advances clip events, flight, damage or inventory. */
+    public static WrenchActionPresentation presentation(Player player, float partialTick) {
+        var current = presentation(player);
+        var old = PREVIOUS.get(player.getUUID());
+        if (old == null) return current;
+        var previous = old.view();
+        if (previous.serial() != current.serial() || previous.phase() != current.phase()
+                || previous.bodySequence() != current.bodySequence()
+                || previous.wrenchSequence() != current.wrenchSequence()
+                || current.clipSeconds() < previous.clipSeconds()) return current;
+        double alpha = Math.clamp(partialTick, 0, 1);
+        double spinDelta = Math.IEEEremainder(
+                current.localSpinRadians() - previous.localSpinRadians(), 2 * Math.PI);
+        return new WrenchActionPresentation(current.serial(), current.phase(), current.bodySequence(),
+                current.wrenchSequence(), lerp(previous.clipSeconds(), current.clipSeconds(), alpha),
+                lerp(previous.wrenchClipSeconds(), current.wrenchClipSeconds(), alpha),
+                lerp(previous.bodyBlendWeight(), current.bodyBlendWeight(), alpha),
+                lerp(previous.wrenchBlendWeight(), current.wrenchBlendWeight(), alpha),
+                current.heldVisible(), previous.detachedPosition().lerp(current.detachedPosition(), alpha),
+                previous.localSpinRadians() + spinDelta * alpha, current.detachedRotation());
+    }
+
+    private static double lerp(double a, double b, double fraction) {
+        return a + (b - a) * fraction;
     }
 
     @SubscribeEvent
@@ -74,7 +109,8 @@ public final class WrenchActionClient {
         WrenchActionState.Intent action = crouching
                 ? WrenchActionState.Intent.THROW : WrenchActionState.Intent.SLAM;
         PacketDistributor.sendToServer(new WrenchActionNetwork.Intent(++intentSerial,
-                action.ordinal()));
+                action.ordinal(), mc.player.getSkin().model()
+                        == net.minecraft.client.resources.PlayerSkin.Model.SLIM));
     }
 
     @SubscribeEvent
@@ -82,6 +118,7 @@ public final class WrenchActionClient {
         Minecraft mc = Minecraft.getInstance();
         if (world != mc.level) {
             STATES.clear();
+            PREVIOUS.clear();
             world = mc.level;
             airTicks = 0;
             pressed = false;
@@ -97,6 +134,7 @@ public final class WrenchActionClient {
     @SubscribeEvent
     public static void logout(ClientPlayerNetworkEvent.LoggingOut event) {
         STATES.clear();
+        PREVIOUS.clear();
         intentSerial = 0;
         pressed = false;
         airTicks = 0;

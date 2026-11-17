@@ -28,12 +28,20 @@ public final class WrenchActionState {
     private double speed;
     private double deceleration;
     private double spin;
+    private ActionRotation rotation = ActionRotation.IDENTITY;
+    private boolean nearCatch;
+    private double catchBlend;
     private final Set<UUID> hitTargets = new HashSet<>();
+    private final Set<Long> hitBlocks = new HashSet<>();
 
     public enum Intent { SLAM, THROW }
 
     public boolean canStartAt(long tick) {
         return phase == Phase.IDLE && tick >= nextStartTick;
+    }
+
+    public boolean freshIntent(long serial) {
+        return serial >= 0 && serial > lastIntent;
     }
 
     /** Consolidation seam: P27 calls only after its normal attack start is accepted. */
@@ -52,7 +60,7 @@ public final class WrenchActionState {
      */
     public boolean start(long intentSerial, Intent intent, long tick, Eligibility e,
             ActionVector hand, ActionVector aim) {
-        if (intentSerial < 0 || intentSerial <= lastIntent) return false;
+        if (!freshIntent(intentSerial)) return false;
         lastIntent = intentSerial;
         if (!e.wrench || !e.alive || !e.allowedMode || !canStartAt(tick)) return false;
         if (intent == Intent.THROW) {
@@ -74,8 +82,11 @@ public final class WrenchActionState {
         bodyBlendWeight = wrenchBlendWeight = 0;
         position = hand;
         spin = 0;
+        nearCatch = false;
+        catchBlend = 0;
         speed = deceleration = 0;
         hitTargets.clear();
+        hitBlocks.clear();
         return true;
     }
 
@@ -85,6 +96,11 @@ public final class WrenchActionState {
      */
     public void tick(long tick, boolean validOwner, boolean landed, ActionVector movingHand,
             ClipFrame frame, Surface surface) {
+        tick(tick, validOwner, landed, movingHand, ActionRotation.IDENTITY, frame, surface);
+    }
+
+    public void tick(long tick, boolean validOwner, boolean landed, ActionVector movingHand,
+            ActionRotation handRotation, ClipFrame frame, Surface surface) {
         if (phase == Phase.IDLE || tick <= lastTick) return;
         lastTick = tick;
         if (!validOwner || tick - startTick > 100) {
@@ -98,6 +114,7 @@ public final class WrenchActionState {
         if (phase == Phase.THROW_WINDUP && frame.release) {
             phase = Phase.DETACHED_OUT;
             position = movingHand;
+            rotation = handRotation;
             speed = 23;
         }
         if (phase == Phase.SLAM_WINDUP && frame.descending) phase = Phase.SLAM_DESCENT;
@@ -114,6 +131,13 @@ public final class WrenchActionState {
     private void flightStep(ActionVector hand, Surface surface) {
         double dt = 1.0 / 60;
         spin = (spin + 24.434608 * dt) % (2 * Math.PI);
+        double ground = surface.groundHeight(position);
+        if (Double.isFinite(ground) && position.y() - ground < 0.8) {
+            double target = ground + 0.55;
+            double limit = (position.y() < target ? 4 : 1) * dt;
+            double dy = Math.clamp(target - position.y(), -limit, limit);
+            position = position.add(new ActionVector(0, dy, 0));
+        }
         if (phase == Phase.DETACHED_OUT) {
             ActionVector next = position.add(direction.multiply(speed * dt));
             ActionVector contact = surface.firstContact(position, next);
@@ -134,6 +158,8 @@ public final class WrenchActionState {
             deceleration += 0.9 * dt;
             speed += deceleration;
             double travel = speed * dt;
+            if (toHand.length() < travel * 5) nearCatch = true;
+            if (nearCatch) catchBlend = Math.min(1, catchBlend + 0.2);
             if (toHand.length() <= Math.max(travel, 0.025)) {
                 position = hand;
                 phase = Phase.CATCH;
@@ -152,9 +178,14 @@ public final class WrenchActionState {
         return (phase == Phase.SLAM_WINDUP || phase == Phase.SLAM_DESCENT) && hitTargets.add(target);
     }
 
+    public boolean claimBlock(long position) {
+        return (phase == Phase.SLAM_WINDUP || phase == Phase.SLAM_DESCENT) && hitBlocks.add(position);
+    }
+
     public void cancel() {
         phase = Phase.IDLE;
         hitTargets.clear();
+        hitBlocks.clear();
         position = ActionVector.ZERO;
     }
 
@@ -164,8 +195,9 @@ public final class WrenchActionState {
         boolean detached = phase == Phase.DETACHED_OUT || phase == Phase.DETACHED_BACK;
         return phase == Phase.IDLE ? WrenchActionPresentation.idle()
                 : new WrenchActionPresentation(serial, phase, slam ? 43 : 26,
-                        slam ? 10 : detached ? 6 : 1, clipSeconds, wrenchClipSeconds,
-                        bodyBlendWeight, wrenchBlendWeight, !detached, position, spin);
+                        slam ? 10 : detached && !nearCatch ? 6 : 1, clipSeconds, wrenchClipSeconds,
+                        bodyBlendWeight, nearCatch ? catchBlend : wrenchBlendWeight,
+                        !detached, position, spin, rotation);
     }
 
     public record ClipFrame(double seconds, double wrenchSeconds, double bodyBlendWeight,
@@ -190,5 +222,6 @@ public final class WrenchActionState {
     public interface Surface {
         /** Null for no surface; supplied server-side. Never gameplay damage or crate interaction. */
         ActionVector firstContact(ActionVector from, ActionVector to);
+        default double groundHeight(ActionVector position) { return Double.NaN; }
     }
 }

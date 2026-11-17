@@ -8,9 +8,9 @@ package com.github.giannigr.racmc.actions;
 public record WrenchActionPresentation(long serial, Phase phase, int bodySequence,
         int wrenchSequence, double clipSeconds, double wrenchClipSeconds,
         double bodyBlendWeight, double wrenchBlendWeight, boolean heldVisible,
-        ActionVector detachedPosition, double localSpinRadians) {
+        ActionVector detachedPosition, double localSpinRadians, ActionRotation detachedRotation) {
     public WrenchActionPresentation {
-        if (serial < 0 || phase == null || detachedPosition == null
+        if (serial < 0 || phase == null || detachedPosition == null || detachedRotation == null
                 || !Double.isFinite(clipSeconds) || clipSeconds < 0
                 || !Double.isFinite(wrenchClipSeconds) || wrenchClipSeconds < 0
                 || !Double.isFinite(bodyBlendWeight) || bodyBlendWeight < 0 || bodyBlendWeight > 1
@@ -28,6 +28,6 @@ public record WrenchActionPresentation(long serial, Phase phase, int bodySequenc
 
     public static WrenchActionPresentation idle() {
         return new WrenchActionPresentation(0, Phase.IDLE, -1, 1, 0, 0, 1, 1, true,
-                ActionVector.ZERO, 0);
+                ActionVector.ZERO, 0, ActionRotation.IDENTITY);
     }
 }

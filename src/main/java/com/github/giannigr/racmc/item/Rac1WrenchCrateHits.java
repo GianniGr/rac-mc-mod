@@ -37,6 +37,9 @@ public final class Rac1WrenchCrateHits {
         if (level.isClientSide) {
             return vanilla.getAsBoolean(); // native prediction only, never reward
         }
+        if (!com.github.giannigr.racmc.actions.WrenchActions.validHarvestLifecycle(level, pos, player)) {
+            return false;
+        }
         if (handler == null) {
             return vanilla.getAsBoolean(); // standalone crate base: no rewards
         }

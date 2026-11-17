@@ -91,6 +91,28 @@ class WrenchActionStateTest {
         assertFalse(state.claimTarget(UUID.randomUUID()));
     }
 
+    @Test void lowFlightApproachesOriginalFloorClearanceEvenBelowWorldZero() {
+        var state = new WrenchActionState();
+        assertTrue(state.start(1, Intent.THROW, 0, THROW,
+                new ActionVector(0, -62.9, 0), AIM));
+        state.tick(1, true, false, new ActionVector(0, -62.9, 0),
+                new ClipFrame(0.1, true, false, false), new WrenchActionState.Surface() {
+                    public ActionVector firstContact(ActionVector from, ActionVector to) { return null; }
+                    public double groundHeight(ActionVector position) { return -63; }
+                });
+        assertTrue(state.presentation().detachedPosition().y() > -62.9);
+        assertTrue(state.presentation().detachedPosition().y() <= -62.45);
+    }
+
+    @Test void detachedRotationIsCapturedAtReleaseNotChangedByMovingOwner() {
+        var state = throwing();
+        var q = new ActionRotation(0, 1, 0, 0);
+        state.tick(1, true, false, HAND, q, new ClipFrame(0.1, true, false, false), CLEAR);
+        state.tick(2, true, false, HAND, ActionRotation.IDENTITY,
+                new ClipFrame(0.2, false, false, false), CLEAR);
+        assertEquals(q, state.presentation().detachedRotation());
+    }
+
     @Test void cancellationAlwaysRestoresHeldVisibilityAndDoesNotReturnAnItem() {
         var state = throwing();
         state.tick(1, true, false, HAND, new ClipFrame(0.1, true, false, false), CLEAR);

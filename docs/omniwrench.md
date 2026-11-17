@@ -1,5 +1,8 @@
 # OmniWrench core (standalone candidate)
 
+> Historical P27 standalone-core notes below. The consolidated actions branch now includes
+> P28 integration; see [wrench-actions.md](wrench-actions.md) for current controls and verification limits.
+
 This branch is based on crate slice `26d9ff5`. It does **not** contain vendor,
 bolt/reward, explosive gameplay, or P28 action branches.
 

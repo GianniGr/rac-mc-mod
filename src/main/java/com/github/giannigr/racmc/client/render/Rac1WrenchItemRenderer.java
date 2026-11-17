@@ -10,8 +10,12 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import com.github.giannigr.racmc.client.actions.WrenchActionClient;
+import com.github.giannigr.racmc.client.actions.WrenchPlayerPoseHook;
+import com.github.giannigr.racmc.actions.WrenchActionPresentation;
+import net.minecraft.world.entity.HumanoidArm;
 
-/** Held sequence 1 only. P28 presentation is intentionally not coupled before consolidation. */
+/** One accepted action snapshot drives held and detached imported sequence sampling. */
 public final class Rac1WrenchItemRenderer extends BlockEntityWithoutLevelRenderer {
     private final Rac1ItemTextureLease<ResourceLocation> textures =
             Rac1ImportedItemDrawing.textures("omniwrench_item");
@@ -27,23 +31,46 @@ public final class Rac1WrenchItemRenderer extends BlockEntityWithoutLevelRendere
     @Override
     public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack poses,
                              MultiBufferSource buffers, int light, int overlay) {
+        var actor = WrenchPlayerPoseHook.actor();
+        boolean third = context == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND
+                || context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
+        boolean primary = actor != null && (context == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND)
+                == (actor.getMainArm() == HumanoidArm.RIGHT);
+        if (third && primary) {
+            var view = WrenchActionClient.presentation(actor, WrenchPlayerPoseHook.actorPartialTick());
+            if (view.phase() != WrenchActionPresentation.Phase.IDLE) {
+                if (view.heldVisible()) {
+                    draw(context, poses, buffers, light, view.wrenchSequence(),
+                            (float) view.wrenchClipSeconds(), true, (float) view.wrenchBlendWeight(), 1);
+                }
+                return;
+            }
+        }
         renderSequence(context, poses, buffers, light, 1, 0);
     }
 
     /** Read-only item drawing seam for the one P28 presentation clock after consolidation. */
     public void renderSequence(ItemDisplayContext context, PoseStack poses,
                                MultiBufferSource buffers, int light, int sequence, float seconds) {
-        draw(context, poses, buffers, light, sequence, seconds, true);
+        draw(context, poses, buffers, light, sequence, seconds, true, 1, 1);
     }
 
     /** Draw at an already composed world/socket transform, without vanilla item-cube correction. */
     public void renderDetached(PoseStack poses, MultiBufferSource buffers, int light,
                                int sequence, float seconds) {
-        draw(ItemDisplayContext.NONE, poses, buffers, light, sequence, seconds, false);
+        draw(ItemDisplayContext.NONE, poses, buffers, light, sequence, seconds, false, 1, 1);
+    }
+
+    public void renderAction(PoseStack poses, MultiBufferSource buffers, int light,
+            WrenchActionPresentation view, boolean detached) {
+        draw(ItemDisplayContext.NONE, poses, buffers, light, view.wrenchSequence(),
+                (float) view.wrenchClipSeconds(), false, (float) view.wrenchBlendWeight(),
+                detached && view.wrenchSequence() == 1 ? 6 : 1);
     }
 
     private void draw(ItemDisplayContext context, PoseStack poses, MultiBufferSource buffers,
-                      int light, int sequence, float seconds, boolean itemCube) {
+                       int light, int sequence, float seconds, boolean itemCube,
+                       float blend, int fromSequence) {
         var content = RacMcClient.assets().content().orElse(null);
         var asset = content == null ? null : content.wrench();
         if (asset == null) {
@@ -63,11 +90,24 @@ public final class Rac1WrenchItemRenderer extends BlockEntityWithoutLevelRendere
             return;
         }
         var locations = textures.get(content, Rac1ImportedItemDrawing.epoch(), asset.textures());
+        var sample = held;
+        if (blend < 1 && fromSequence != sequence) {
+            var from = Rac1ImportedItemPose.sample(asset, fromSequence, 0);
+            if (from.positions().length == held.positions().length) {
+                float[] positions = held.positions().clone();
+                float[] normals = held.normals().clone();
+                for (int i = 0; i < positions.length; i++) {
+                    positions[i] = from.positions()[i] * (1 - blend) + positions[i] * blend;
+                    normals[i] = from.normals()[i] * (1 - blend) + normals[i] * blend;
+                }
+                sample = new Rac1ImportedItemPose.Sample(positions, normals);
+            }
+        }
         if (itemCube) {
-            Rac1ImportedItemDrawing.draw(poses, source, asset, held.positions(), held.normals(),
+            Rac1ImportedItemDrawing.draw(poses, source, asset, sample.positions(), sample.normals(),
                     locations.toArray(ResourceLocation[]::new), context, light, true);
         } else {
-            Rac1MeshRenderer.render(poses, source, asset.mesh(), held.positions(), held.normals(),
+            Rac1MeshRenderer.render(poses, source, asset.mesh(), sample.positions(), sample.normals(),
                     locations.toArray(ResourceLocation[]::new), light);
         }
     }

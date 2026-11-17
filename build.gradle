@@ -142,9 +142,13 @@ tasks.named('test', Test).configure {
     // Paths used by the tests to locate the project files without relying on the working directory.
     systemProperty 'racmc.projectDir', projectDir.absolutePath
     systemProperty 'racmc.buildDir', layout.buildDirectory.get().asFile.absolutePath
+    // A JDK-only action probe uses the ordinary math library, not NeoForge's virtual classloader.
+    systemProperty 'racmc.jomlJar', configurations.testRuntimeClasspath
+            .filter { it.name.startsWith('joml-') && it.name.endsWith('.jar') }.asPath
     // The check of a real disc image is opt-in: it only runs when the path of an image is given,
     // for example -Dracmc.isoImage=C:/path/to/the/disc.iso. The image is only read, never copied.
-    ['racmc.isoImage', 'racmc.isoExpectedRevision', 'racmc.wrenchDataTestDirectory'].each { propertyName ->
+    ['racmc.isoImage', 'racmc.isoExpectedRevision', 'racmc.wrenchDataTestDirectory',
+     'racmc.wrenchActionCacheDirectory'].each { propertyName ->
         if (System.getProperty(propertyName) != null) {
             systemProperty propertyName, System.getProperty(propertyName)
         }
