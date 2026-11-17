@@ -196,7 +196,7 @@ public final class Rac1AssetCacheManager implements Closeable {
         }
         try {
             Optional<Rac1CacheContent> cached = store.load(key);
-            if (cached.isPresent()) {
+            if (cached.isPresent() && cached.get().wrench() != null) {
                 content = cached.get();
                 progress = 100;
                 step = "The assets are ready.";
@@ -248,6 +248,8 @@ public final class Rac1AssetCacheManager implements Closeable {
             progress = 80;
             Rac1AnimatedAsset blaster = Rac1AssetExtractor.readGadgetAsset(assets,
                     Rac1AssetExtractor.BLASTER_CLASS);
+            Rac1AnimatedAsset wrench = Rac1AssetExtractor.readGadgetAsset(assets,
+                    Rac1AssetExtractor.WRENCH_CLASS);
             step = "The crates are converted.";
             progress = 90;
             Map<String, Rac1CrateAsset> crates = new LinkedHashMap<>();
@@ -259,7 +261,7 @@ public final class Rac1AssetCacheManager implements Closeable {
             step = "The cache is written.";
             progress = 95;
             return new Rac1CacheContent(key, staticAsset, animatedAsset, blaster, handJoint,
-                    crates);
+                    crates, wrench);
         }
     }
 

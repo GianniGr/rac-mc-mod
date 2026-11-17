@@ -41,6 +41,9 @@ public final class Rac1AssetExtractor {
      */
     public static final int BLASTER_CLASS = 168;
 
+    /** Standalone hand-item 8, stored in the gadget WAD rather than the moby core blob. */
+    public static final int WRENCH_CLASS = 71;
+
     /**
      * The number of the units of the game in a block of the game of blocks.
      *

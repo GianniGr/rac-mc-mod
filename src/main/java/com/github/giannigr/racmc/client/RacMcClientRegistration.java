@@ -3,6 +3,7 @@ package com.github.giannigr.racmc.client;
 import com.github.giannigr.racmc.RacMcConstants;
 import com.github.giannigr.racmc.block.RacMcBlockEntities;
 import com.github.giannigr.racmc.client.render.BlasterItemRenderer;
+import com.github.giannigr.racmc.client.render.Rac1WrenchItemRenderer;
 import com.github.giannigr.racmc.client.render.Rac1BlasterArrowRenderer;
 import com.github.giannigr.racmc.client.render.Rac1CrateItemRenderer;
 import com.github.giannigr.racmc.client.render.Rac1CrateRenderer;
@@ -48,6 +49,7 @@ public final class RacMcClientRegistration {
 
     /** The renderer of the Blaster, when it was built. */
     private static BlasterItemRenderer renderer;
+    private static Rac1WrenchItemRenderer wrenchRenderer;
 
     /** The renderers of the crates of the game, by the key of the crate. */
     private static final Map<String, Rac1CrateItemRenderer> crateRenderers =
@@ -89,6 +91,17 @@ public final class RacMcClientRegistration {
      */
     @SubscribeEvent
     public static void onRegisterClientExtensions(RegisterClientExtensionsEvent event) {
+        event.registerItem(new IClientItemExtensions() {
+            @Override
+            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
+                if (wrenchRenderer == null) {
+                    Minecraft minecraft = Minecraft.getInstance();
+                    wrenchRenderer = new Rac1WrenchItemRenderer(
+                            minecraft.getBlockEntityRenderDispatcher(), minecraft.getEntityModels());
+                }
+                return wrenchRenderer;
+            }
+        }, RacMcItems.OMNIWRENCH.get());
         event.registerItem(new IClientItemExtensions() {
 
             @Override
