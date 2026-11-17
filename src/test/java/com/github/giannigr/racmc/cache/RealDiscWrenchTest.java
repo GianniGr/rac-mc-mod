@@ -3,6 +3,7 @@ package com.github.giannigr.racmc.cache;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.github.giannigr.racmc.asset.Rac1AssetExtractor;
+import com.github.giannigr.racmc.asset.Rac1AttachmentSampler;
 import com.github.giannigr.racmc.client.Rac1ImportedItemPose;
 import com.github.giannigr.racmc.client.render.Rac1ImportedItemDrawing;
 import com.github.giannigr.racmc.disc.Rac1LevelAssets;
@@ -34,6 +35,22 @@ class RealDiscWrenchTest {
             assertEquals(1, wrench.textures().length);
             assertEquals(128, wrench.textures()[0].width());
             assertEquals(128, wrench.textures()[0].height());
+            assertTrue(wrench.attachmentChain(1).length > 0);
+            for (var clip : wrench.animations()) {
+                assertTrue(clip.sourceTiming().available());
+                assertEquals(clip.keyCount(), clip.sourceTiming().sampledSourceKeys().length);
+            }
+            var hero = Rac1AssetExtractor.readAnimatedAsset(assets, Rac1AssetExtractor.ANIMATED_CLASS);
+            int[] hand = hero.attachmentChain(0);
+            assertEquals(56, hand[hand.length - 1]);
+            for (String clipName : new String[] { "ratchet_sequence_26", "ratchet_sequence_43" }) {
+                var handMatrix = Rac1AttachmentSampler.sample(hero, clipName, 0.2f, 0)
+                        .orElseThrow();
+                for (float value : handMatrix) {
+                    assertTrue(Float.isFinite(value));
+                }
+            }
+            assertTrue(Rac1AttachmentSampler.sample(wrench, "sequence_10", 0.2f, 1).isPresent());
             for (int sequence : new int[] { 1, 3, 4, 5, 6, 10 }) {
                 for (float time : new float[] { 0, 0.2f, 0.5f, 1 }) {
                     var pose = Rac1ImportedItemPose.sample(wrench, sequence, time);
@@ -78,6 +95,11 @@ class RealDiscWrenchTest {
                     Rac1CacheStore.SCHEMA_VERSION), input.discKey(), Rac1CacheStore.SCHEMA_VERSION);
             assertArrayEquals(wrench.mesh().positions(), output.wrench().mesh().positions());
             assertArrayEquals(wrench.textures()[0].pixels(), output.wrench().textures()[0].pixels());
+            assertArrayEquals(wrench.attachmentChain(1), output.wrench().attachmentChain(1));
+            for (int i = 0; i < wrench.animations().length; i++) {
+                assertEquals(wrench.animations()[i].sourceTiming(),
+                        output.wrench().animations()[i].sourceTiming());
+            }
             assertArrayEquals(Rac1ImportedItemPose.sample(wrench, 10, 0.3f).positions(),
                     Rac1ImportedItemPose.sample(output.wrench(), 10, 0.3f).positions());
         }

@@ -3,10 +3,36 @@ package com.github.giannigr.racmc.cache;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.github.giannigr.racmc.asset.Rac1AnimatedAsset;
+import com.github.giannigr.racmc.asset.Rac1Animation;
+import com.github.giannigr.racmc.asset.Rac1SourceTiming;
 import java.io.IOException;
 import org.junit.jupiter.api.Test;
 
 class Rac1WrenchCacheTest {
+    @Test
+    void sourceTimingBitsAndAttachmentListsRoundTripWithoutInventingMetadata() throws Exception {
+        var base = SyntheticAssets.content("timing");
+        var original = base.wrench();
+        var clip = original.animations()[0];
+        var timing = new Rac1SourceTiming(0, new int[] { 112, 528 },
+                new int[] { Float.floatToRawIntBits(0.5f), 0x7fa12345 },
+                new float[] { 0, 0.5f }, new int[] { 0, 1 });
+        var timed = new Rac1Animation(clip.name(), clip.times(), clip.loop(), clip.rotations(),
+                clip.translationKeys(), clip.translationJoints(), clip.translationValues(),
+                clip.scaleKeys(), clip.scaleJoints(), clip.scaleValues(), clip.scaleInherited(),
+                timing);
+        var wrench = new Rac1AnimatedAsset(71, original.name(), original.mesh(),
+                original.skeleton(), new Rac1Animation[] { timed }, original.textures(),
+                new int[][] { { 0 }, { 0, 1, 2 } });
+        var input = new Rac1CacheContent(base.discKey(), base.staticAsset(), base.animatedAsset(),
+                base.blaster(), base.handJoint(), base.crates(), wrench);
+        var output = Rac1CacheCodec.read(Rac1CacheCodec.write(input,
+                Rac1CacheStore.SCHEMA_VERSION), input.discKey(), Rac1CacheStore.SCHEMA_VERSION);
+        assertEquals(timing, output.wrench().animations()[0].sourceTiming());
+        assertArrayEquals(new int[] { 0, 1, 2 }, output.wrench().attachmentChain(1));
+        assertFalse(output.blaster().animations()[0].sourceTiming().available());
+    }
+
     @Test
     void standaloneWrenchRoundTripsWithoutChangingOtherAssets() throws Exception {
         var input = SyntheticAssets.content("test");

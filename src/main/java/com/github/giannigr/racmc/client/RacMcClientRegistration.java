@@ -94,12 +94,7 @@ public final class RacMcClientRegistration {
         event.registerItem(new IClientItemExtensions() {
             @Override
             public BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (wrenchRenderer == null) {
-                    Minecraft minecraft = Minecraft.getInstance();
-                    wrenchRenderer = new Rac1WrenchItemRenderer(
-                            minecraft.getBlockEntityRenderDispatcher(), minecraft.getEntityModels());
-                }
-                return wrenchRenderer;
+                return wrenchRenderer();
             }
         }, RacMcItems.OMNIWRENCH.get());
         event.registerItem(new IClientItemExtensions() {
@@ -185,5 +180,15 @@ public final class RacMcClientRegistration {
             renderer = new BlasterItemRenderer(dispatcher, models);
         }
         return renderer;
+    }
+
+    /** Reuse this client singleton for item and cosmetic detached rendering after consolidation. */
+    public static Rac1WrenchItemRenderer wrenchRenderer() {
+        if (wrenchRenderer == null) {
+            Minecraft minecraft = Minecraft.getInstance();
+            wrenchRenderer = new Rac1WrenchItemRenderer(
+                    minecraft.getBlockEntityRenderDispatcher(), minecraft.getEntityModels());
+        }
+        return wrenchRenderer;
     }
 }

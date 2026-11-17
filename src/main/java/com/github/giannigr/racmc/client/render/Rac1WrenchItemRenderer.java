@@ -17,6 +17,8 @@ public final class Rac1WrenchItemRenderer extends BlockEntityWithoutLevelRendere
             Rac1ImportedItemDrawing.textures("omniwrench_item");
     private Object sampledSource;
     private Rac1ImportedItemPose.Sample held;
+    private int sampledSequence = -1;
+    private float sampledSeconds = -1;
 
     public Rac1WrenchItemRenderer(BlockEntityRenderDispatcher dispatcher, EntityModelSet models) {
         super(dispatcher, models);
@@ -25,6 +27,23 @@ public final class Rac1WrenchItemRenderer extends BlockEntityWithoutLevelRendere
     @Override
     public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack poses,
                              MultiBufferSource buffers, int light, int overlay) {
+        renderSequence(context, poses, buffers, light, 1, 0);
+    }
+
+    /** Read-only item drawing seam for the one P28 presentation clock after consolidation. */
+    public void renderSequence(ItemDisplayContext context, PoseStack poses,
+                               MultiBufferSource buffers, int light, int sequence, float seconds) {
+        draw(context, poses, buffers, light, sequence, seconds, true);
+    }
+
+    /** Draw at an already composed world/socket transform, without vanilla item-cube correction. */
+    public void renderDetached(PoseStack poses, MultiBufferSource buffers, int light,
+                               int sequence, float seconds) {
+        draw(ItemDisplayContext.NONE, poses, buffers, light, sequence, seconds, false);
+    }
+
+    private void draw(ItemDisplayContext context, PoseStack poses, MultiBufferSource buffers,
+                      int light, int sequence, float seconds, boolean itemCube) {
         var content = RacMcClient.assets().content().orElse(null);
         var asset = content == null ? null : content.wrench();
         if (asset == null) {
@@ -33,16 +52,23 @@ public final class Rac1WrenchItemRenderer extends BlockEntityWithoutLevelRendere
             held = null;
             return;
         }
-        if (sampledSource != asset) {
-            held = Rac1ImportedItemPose.sample(asset, 1, 0);
+        if (sampledSource != asset || sampledSequence != sequence || sampledSeconds != seconds) {
+            held = Rac1ImportedItemPose.sample(asset, sequence, seconds);
             sampledSource = asset;
+            sampledSequence = sequence;
+            sampledSeconds = seconds;
         }
         if (held.positions().length == 0
                 || !(buffers instanceof MultiBufferSource.BufferSource source)) {
             return;
         }
         var locations = textures.get(content, Rac1ImportedItemDrawing.epoch(), asset.textures());
-        Rac1ImportedItemDrawing.draw(poses, source, asset, held.positions(), held.normals(),
-                locations.toArray(ResourceLocation[]::new), context, light, true);
+        if (itemCube) {
+            Rac1ImportedItemDrawing.draw(poses, source, asset, held.positions(), held.normals(),
+                    locations.toArray(ResourceLocation[]::new), context, light, true);
+        } else {
+            Rac1MeshRenderer.render(poses, source, asset.mesh(), held.positions(), held.normals(),
+                    locations.toArray(ResourceLocation[]::new), light);
+        }
     }
 }

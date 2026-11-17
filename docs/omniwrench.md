@@ -103,12 +103,13 @@ texture/skeleton/sequences use the existing independent Java converters. No GPL
 implementation was copied/transliterated and no dependency was added.
 
 `Rac1CacheContent.wrench()` holds the result. This standalone branch uses schema
-**5**, converter **4**, section kind **71**. Missing/wrong/duplicate wrench
+**6**, converter **5**, section kind **71**. Missing/wrong/duplicate wrench
 sections and version mismatch fail closed; deliberately incomplete synthetic
 content can hold null, but the production manager rebuilds it rather than
 reporting READY. Old cache files are rebuilt, not reused as complete.
-**These version numbers are branch-local**, coincidentally also used by the
-separate vendor slice. Consolidation must reconcile all sections and select a
+**These version numbers are branch-local**. The first core commit used 5/4,
+coincidentally also used by the separate vendor slice; 6/5 adds timing and
+attachment metadata. Consolidation must reconcile all sections and select a
 new combined schema/converter; never overwrite a combined cache with this slice.
 
 `Rac1ImportedItemDrawing` shares texture lifecycle, item-cube origin correction,
@@ -133,6 +134,79 @@ gameplay or fires action events. This is a mesh sampler, not a promise to
 represent source gameplay key-time or blend state. Consult P28's one generic
 action-presentation interface **only after consolidation**; do not introduce a
 parallel presentation store in this renderer.
+
+`Rac1WrenchItemRenderer.renderSequence(context, poses, buffers, light, sequence,
+seconds)` draws an item sample with native cube correction. `renderDetached(
+poses, buffers, light, sequence, seconds)` draws at an already composed world
+socket with **no** cube correction. Both share the same mesh/texture path and
+neither creates an item or advances action state. P28's presentation owns
+visibility, world position, local spin, body/wrench clocks and transitions;
+these entry points do not install its client hooks before consolidation.
+Reuse `RacMcClientRegistration.wrenchRenderer()` rather than constructing a
+second renderer with competing texture registrations.
+
+### Source metadata / action-sampler dependency
+
+`Rac1Animation.sourceTiming()` returns `Rac1SourceTiming`: raw
+`sequenceRateBits`, original `headerTimes16` and `keyRateBits`, rate-derived
+`sourceSeconds` for **every original key**, and `sampledSourceKeys` mapping
+converted pose keys back to original indices. `-1` marks a converter-generated
+loop endpoint. Original timing is retained even for zero-duration pose keys
+removed by the existing converter. Raw rate bit patterns are kept as integers,
+including terminal sentinel/NaN payloads; synthetic animations explicitly say
+timing unavailable. Header time /16 is not seconds*60 or a key index.
+This preserves data; it does not implement P28's action-event crossing clock,
+loop6..21, catch-at-index26, dynamic speed, blend or landing retiming.
+
+`Rac1AnimatedAsset.attachmentChain(listIndex)` retains the actual imported
+root-to-joint lists. `Rac1AttachmentSampler.sample(asset, sequenceName, seconds,
+listIndex)` returns an optional 16-float column-major **converted model-space
+joint pose**, not a skin matrix or Steve world socket. It uses the existing
+chain evaluator, excluding local-only post-scales. Ratchet list0 is the known
+hand chain; wrench list1 is the head chain, not necessarily joint1. Body clips
+are named `ratchet_sequence_26` / `ratchet_sequence_43`, child clips
+`sequence_1` / `sequence_6` / `sequence_10`. No invented left-arm IDs, source
+trajectory arrays or calibrated poses are embedded in the jar.
+The imported matrices are already in the converter's Minecraft basis and
+scaled units: do not apply the source `(x,z,-y)` basis/class scale a second
+time. Full palettes are also available through the existing pure
+`Rac1AnimationEvaluator.evaluatePose/evaluateChain(skeleton, animation, seconds)`.
+Source-rest calibration, torso-relative projection and column normalization
+for the target socket remain explicit P28/integration math, not source assets
+or a calibrated Steve pose supplied by this method.
+
+**Full actions remain blocked, not complete.** P28 `535b5a3` has an explicitly
+unavailable server `Sampler`, so original metadata and rendering seams alone
+do not make its actions usable. Decoder math, sequence/event IDs and verified
+behavioral constants cannot reconstruct copyrighted original joint trajectories
+on an asset-free server. This core supplies neither assets over the network
+nor a disguised baked trajectory table.
+
+The integration worker must resolve one of these explicit contracts:
+
+1. A lawful server-local source-data deployment, separately authorized and
+   reviewed: headless sampler reads its own local clip/skeleton/attachment data,
+   not a client singleton/cache and not runtime ISO IO. No such deployment
+   pipeline is implemented or implicitly approved here.
+2. Owner-approved, independently authored **Minecraft server contact/phase
+   model**, with original imported clips used only for client presentation.
+   Label anatomical/timing/collision approximations honestly and validate the
+   visual/contact mismatch. Never trust client poses or target lists as damage
+   authority. No such approximation is silently installed.
+
+Then P28/integration must install `WrenchActions.Sampler`, map source/rest
+channels into its `SteveWrenchPose` math, supply the actual resulting Steve
+hand/head/body-contact anchors and event clock, snapshot transition poses, wire
+one normal/action cooldown, install complete skin-arm/item first-person drawing
+and detached proxy drawing, and verify live hooks. P27 owns the imported mesh,
+metadata and renderer APIs above; P28 owns action state/network/contact math and
+pose hooks. Do not begin T14 full-action acceptance with the capability still off.
+Specifically, native normal attacks need the P28
+`normalAttackAllowed(ServerPlayer)` / `normalAttackAccepted(ServerPlayer)` gate;
+when `deliveringContact(Player)` is true, do not run that normal pipeline again
+or cancel P28's native protection-hook dispatch. A managed action also blocks
+ordinary vanilla attacks through P28's `busy(Player)` guard. The standalone core
+has no custom normal-start listener and does not pretend these calls are wired.
 
 Held meshes preserve the imported root/socket and class scale, with the native
 item-cube correction applied exactly once. Model display rotations are

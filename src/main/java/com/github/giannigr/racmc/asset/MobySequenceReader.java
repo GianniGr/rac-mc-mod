@@ -58,10 +58,11 @@ public final class MobySequenceReader {
 
         /** Whether the scale of a stored scale reaches the children of its joint. */
         private final boolean[] scaleInherited;
+        private final Rac1SourceTiming sourceTiming;
 
         Keys(float[] times, boolean loop, float[] rotations, int[] translationKeys,
              int[] translationJoints, float[] translationValues, int[] scaleKeys, int[] scaleJoints,
-             float[] scaleValues, boolean[] scaleInherited) {
+             float[] scaleValues, boolean[] scaleInherited, Rac1SourceTiming sourceTiming) {
             this.times = times;
             this.loop = loop;
             this.rotations = rotations;
@@ -72,6 +73,11 @@ public final class MobySequenceReader {
             this.scaleJoints = scaleJoints;
             this.scaleValues = scaleValues;
             this.scaleInherited = scaleInherited;
+            this.sourceTiming = sourceTiming;
+        }
+
+        public Rac1SourceTiming sourceTiming() {
+            return sourceTiming;
         }
 
         /**
@@ -193,6 +199,10 @@ public final class MobySequenceReader {
         }
 
         List<Float> times = new ArrayList<>();
+        List<Integer> sampledSourceKeys = new ArrayList<>();
+        int[] headerTimes16 = new int[frameCount];
+        int[] keyRateBits = new int[frameCount];
+        float[] sourceSeconds = new float[frameCount];
         List<float[]> rotations = new ArrayList<>();
         List<Integer> translationKeys = new ArrayList<>();
         List<Integer> translationJoints = new ArrayList<>();
@@ -216,6 +226,9 @@ public final class MobySequenceReader {
                         + "the special format, which the game of the disc does not have.");
             }
             float rate = readFloat(base, frame);
+            headerTimes16[key] = readUnsignedShort(base, frame + 4);
+            keyRateBits[key] = readInt(base, frame);
+            sourceSeconds[key] = tick / TICKS_PER_SECOND;
             int quadwords = readUnsignedShort(base, frame + 6);
             int quaternionBytes = readUnsignedShort(base, frame + 8);
             int scales = readUnsignedShort(base, frame + 0x0A);
@@ -274,6 +287,7 @@ public final class MobySequenceReader {
                 // dropped as well and the numbers of the keys of the records that follow are
                 // made smaller by one.
                 times.remove(times.size() - 1);
+                sampledSourceKeys.remove(sampledSourceKeys.size() - 1);
                 rotations.remove(rotations.size() - 1);
                 dropLast(translationKeys, translations);
                 dropLast(translationJoints, translations);
@@ -287,6 +301,7 @@ public final class MobySequenceReader {
             }
             rotationArray[key] = rotation;
             times.add(tick);
+            sampledSourceKeys.add(key);
             rotations.add(rotation);
 
             float step = rateOverride != 0.0f ? rateOverride : rate;
@@ -300,6 +315,7 @@ public final class MobySequenceReader {
                     // is whole and the sequence does not jump at the end of its cycle.
                     int endpoint = times.size();
                     times.add(tick + 1.0f / step);
+                    sampledSourceKeys.add(-1);
                     rotations.add(rotationArray[0]);
                     copyTranslations(translationKeys, translationJoints, translationValues, 0,
                             endpoint);
@@ -349,7 +365,9 @@ public final class MobySequenceReader {
 
         return new Keys(allTimes, loop, allRotations, allTranslationKeys, allTranslationJoints,
                 allTranslationValues, allScaleKeys, allScaleJoints, allScaleValues,
-                allScaleInherited);
+                allScaleInherited, new Rac1SourceTiming(readInt(base, offset + 0x18),
+                        headerTimes16, keyRateBits, sourceSeconds,
+                        sampledSourceKeys.stream().mapToInt(Integer::intValue).toArray()));
     }
 
     /**

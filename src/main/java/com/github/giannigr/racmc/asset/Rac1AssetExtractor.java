@@ -148,7 +148,7 @@ public final class Rac1AssetExtractor {
         Rac1SkinnedMesh skinned = new Rac1SkinnedMesh(positions, normals, uvs, mesh.indices(),
                 mesh.materials(), mesh.joints(), mesh.weights());
         return new Rac1AnimatedAsset(classNumber, "moby_" + classNumber, skinned, converted,
-                animations.toArray(new Rac1Animation[0]), textures);
+                animations.toArray(new Rac1Animation[0]), textures, attachmentChains(reader));
     }
 
     /**
@@ -221,7 +221,7 @@ public final class Rac1AssetExtractor {
         Rac1SkinnedMesh skinned = new Rac1SkinnedMesh(positions, normals, uvs, mesh.indices(),
                 mesh.materials(), mesh.joints(), mesh.weights());
         return new Rac1AnimatedAsset(classNumber, "gadget_" + classNumber, skinned, converted,
-                animations.toArray(new Rac1Animation[0]), textures);
+                animations.toArray(new Rac1Animation[0]), textures, attachmentChains(reader));
     }
 
     /**
@@ -387,7 +387,24 @@ public final class Rac1AssetExtractor {
         }
         return new Rac1Animation(name, keys.times(), keys.loop(), rotations,
                 keys.translationKeys(), keys.translationJoints(), translations, keys.scaleKeys(),
-                keys.scaleJoints(), keys.scaleValues(), keys.scaleInherited());
+                keys.scaleJoints(), keys.scaleValues(), keys.scaleInherited(), keys.sourceTiming());
+    }
+
+    private static int[][] attachmentChains(MobyClassReader reader) throws AssetFormatException {
+        List<MobyClassReader.JointList> lists = reader.readJointLists();
+        int[][] chains = new int[lists.size()][];
+        for (int i = 0; i < lists.size(); i++) {
+            byte[] bytes = lists.get(i).chain();
+            chains[i] = new int[bytes.length];
+            for (int j = 0; j < bytes.length; j++) {
+                int joint = bytes[j] & 0xFF;
+                if (joint >= reader.jointCount()) {
+                    throw new AssetFormatException("Attachment chain has an invalid joint.");
+                }
+                chains[i][j] = joint;
+            }
+        }
+        return chains;
     }
 
     /**

@@ -25,6 +25,7 @@ public final class Rac1AnimatedAsset {
 
     /** The textures of the asset, one per material. */
     private final Rac1Texture[] textures;
+    private final int[][] attachmentChains;
 
     /**
      * Creates an asset.
@@ -39,12 +40,37 @@ public final class Rac1AnimatedAsset {
     public Rac1AnimatedAsset(int classNumber, String name, Rac1SkinnedMesh mesh,
                               Rac1Skeleton skeleton, Rac1Animation[] animations,
                               Rac1Texture[] textures) {
+        this(classNumber, name, mesh, skeleton, animations, textures, new int[0][]);
+    }
+
+    public Rac1AnimatedAsset(int classNumber, String name, Rac1SkinnedMesh mesh,
+                              Rac1Skeleton skeleton, Rac1Animation[] animations,
+                              Rac1Texture[] textures, int[][] attachmentChains) {
         this.classNumber = classNumber;
         this.name = name;
         this.mesh = mesh;
         this.skeleton = skeleton;
         this.animations = animations;
         this.textures = textures;
+        this.attachmentChains = new int[attachmentChains.length][];
+        for (int i = 0; i < attachmentChains.length; i++) {
+            this.attachmentChains[i] = attachmentChains[i].clone();
+            for (int joint : attachmentChains[i]) {
+                if (joint < 0 || joint >= skeleton.jointCount()) {
+                    throw new IllegalArgumentException("Attachment joint outside skeleton.");
+                }
+            }
+        }
+    }
+
+    public int attachmentChainCount() {
+        return attachmentChains.length;
+    }
+
+    /** Original list index, not a joint number. Empty means unavailable, never a guessed joint. */
+    public int[] attachmentChain(int list) {
+        return list < 0 || list >= attachmentChains.length
+                ? new int[0] : attachmentChains[list].clone();
     }
 
     /**

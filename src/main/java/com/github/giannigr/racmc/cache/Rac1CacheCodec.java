@@ -6,6 +6,7 @@ import com.github.giannigr.racmc.asset.Rac1CrateAsset;
 import com.github.giannigr.racmc.asset.Rac1Mesh;
 import com.github.giannigr.racmc.asset.Rac1SkinnedMesh;
 import com.github.giannigr.racmc.asset.Rac1Skeleton;
+import com.github.giannigr.racmc.asset.Rac1SourceTiming;
 import com.github.giannigr.racmc.asset.Rac1StaticAsset;
 import com.github.giannigr.racmc.asset.Rac1Texture;
 import java.io.IOException;
@@ -82,7 +83,7 @@ public final class Rac1CacheCodec {
     public static final int FORMAT_VERSION = 2;
 
     /** The version of the converter that writes cache files. */
-    public static final int CONVERTER_VERSION = 4;
+    public static final int CONVERTER_VERSION = 5;
 
     /** The offset of the version of the converter in the header. */
     private static final int CONVERTER_OFFSET = 12;
@@ -481,6 +482,12 @@ public final class Rac1CacheCodec {
         putFloats(out, skeleton.inverseBind());
         putFloats(out, skeleton.restTranslations());
         putInts(out, skeleton.parents());
+        out.putInt(asset.attachmentChainCount());
+        for (int list = 0; list < asset.attachmentChainCount(); list++) {
+            int[] chain = asset.attachmentChain(list);
+            out.putInt(chain.length);
+            putInts(out, chain);
+        }
         for (Rac1Animation animation : asset.animations()) {
             byte[] sequenceName = animation.name().getBytes(StandardCharsets.UTF_8);
             out.putInt(sequenceName.length);
@@ -508,6 +515,14 @@ public final class Rac1CacheCodec {
                         animation.scaleValues()[index * 3 + 2] });
                 out.putBoolean(animation.scaleInherited()[index]);
             }
+            Rac1SourceTiming timing = animation.sourceTiming();
+            out.putInt(timing.sequenceRateBits());
+            out.putInt(timing.headerTimes16().length);
+            putInts(out, timing.headerTimes16());
+            putInts(out, timing.keyRateBits());
+            putFloats(out, timing.sourceSeconds());
+            out.putInt(timing.sampledSourceKeys().length);
+            putInts(out, timing.sampledSourceKeys());
         }
         putTextures(out, asset.textures());
         return out.toByteArray();
@@ -555,6 +570,23 @@ public final class Rac1CacheCodec {
         float[] inverseBind = getFloats(in, jointCount * 16);
         float[] restTranslations = getFloats(in, jointCount * 3);
         int[] parents = getInts(in, jointCount);
+        int chainCount = in.getInt();
+        if (chainCount < 0 || chainCount > 1024) {
+            throw new IOException("Invalid attachment list count.");
+        }
+        int[][] chains = new int[chainCount][];
+        for (int list = 0; list < chainCount; list++) {
+            int count = in.getInt();
+            if (count < 0 || count > 256) {
+                throw new IOException("Invalid attachment chain length.");
+            }
+            chains[list] = getInts(in, count);
+            for (int joint : chains[list]) {
+                if (joint < 0 || joint >= jointCount) {
+                    throw new IOException("Invalid attachment joint.");
+                }
+            }
+        }
         Rac1Animation[] animations = new Rac1Animation[sequenceCount];
         for (int index = 0; index < sequenceCount; index++) {
             int nameLength = in.getInt();
@@ -608,16 +640,38 @@ public final class Rac1CacheCodec {
                 scaleValues[record * 3 + 2] = in.getFloat();
                 scaleInherited[record] = in.getBoolean();
             }
+            int sequenceRateBits = in.getInt();
+            int sourceCount = in.getInt();
+            if (sourceCount < 0 || sourceCount > 255) {
+                throw new IOException("Invalid original key count.");
+            }
+            int[] headerTimes16 = getInts(in, sourceCount);
+            int[] keyRateBits = getInts(in, sourceCount);
+            float[] sourceSeconds = getFloats(in, sourceCount);
+            int mappingCount = in.getInt();
+            if (mappingCount < 0 || mappingCount > 256
+                    || (sourceCount > 0 && mappingCount != keyCount)
+                    || (sourceCount == 0 && mappingCount != 0)) {
+                throw new IOException("Invalid original/sampled key mapping count.");
+            }
+            int[] sampledSourceKeys = getInts(in, mappingCount);
+            Rac1SourceTiming sourceTiming;
+            try {
+                sourceTiming = new Rac1SourceTiming(sequenceRateBits, headerTimes16,
+                        keyRateBits, sourceSeconds, sampledSourceKeys);
+            } catch (IllegalArgumentException invalid) {
+                throw new IOException("Invalid original timing metadata.", invalid);
+            }
             animations[index] = new Rac1Animation(new String(name, StandardCharsets.UTF_8), times,
                     loop, rotations, translationKeys, translationJoints, translationValues,
-                    scaleKeys, scaleJoints, scaleValues, scaleInherited);
+                    scaleKeys, scaleJoints, scaleValues, scaleInherited, sourceTiming);
         }
         Rac1Texture[] textures = getTextures(in, textureCount);
         Rac1SkinnedMesh mesh = new Rac1SkinnedMesh(positions, normals, uvs, indices, materials,
                 joints, weights);
         Rac1Skeleton skeleton = new Rac1Skeleton(inverseBind, parents, restTranslations);
         return new Rac1AnimatedAsset(classNumber, new String(assetName, StandardCharsets.UTF_8), mesh,
-                skeleton, animations, textures);
+                skeleton, animations, textures, chains);
     }
 
     private static void putTextures(Rac1Bytes.Writer out, Rac1Texture[] textures) {

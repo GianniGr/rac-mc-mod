@@ -45,6 +45,7 @@ public final class Rac1Animation {
 
     /** Whether the scale of a stored scale reaches the children of its joint. */
     private final boolean[] scaleInherited;
+    private final Rac1SourceTiming sourceTiming;
 
     /**
      * Creates a sequence.
@@ -63,8 +64,19 @@ public final class Rac1Animation {
      */
     public Rac1Animation(String name, float[] times, boolean loop, float[] rotations,
                           int[] translationKeys, int[] translationJoints, float[] translationValues,
+                           int[] scaleKeys, int[] scaleJoints, float[] scaleValues,
+                           boolean[] scaleInherited) {
+        this(name, times, loop, rotations, translationKeys, translationJoints, translationValues,
+                scaleKeys, scaleJoints, scaleValues, scaleInherited, Rac1SourceTiming.unavailable());
+    }
+
+    public Rac1Animation(String name, float[] times, boolean loop, float[] rotations,
+                          int[] translationKeys, int[] translationJoints, float[] translationValues,
                           int[] scaleKeys, int[] scaleJoints, float[] scaleValues,
-                          boolean[] scaleInherited) {
+                          boolean[] scaleInherited, Rac1SourceTiming sourceTiming) {
+        if (sourceTiming.available() && sourceTiming.sampledSourceKeys().length != times.length) {
+            throw new IllegalArgumentException("Timing/converted pose key counts differ.");
+        }
         this.name = name;
         this.times = times;
         this.loop = loop;
@@ -76,6 +88,11 @@ public final class Rac1Animation {
         this.scaleJoints = scaleJoints;
         this.scaleValues = scaleValues;
         this.scaleInherited = scaleInherited;
+        this.sourceTiming = sourceTiming;
+    }
+
+    public Rac1SourceTiming sourceTiming() {
+        return sourceTiming;
     }
 
     /**
@@ -200,7 +217,8 @@ public final class Rac1Animation {
                 && Arrays.equals(scaleKeys, animation.scaleKeys)
                 && Arrays.equals(scaleJoints, animation.scaleJoints)
                 && Arrays.equals(scaleValues, animation.scaleValues)
-                && Arrays.equals(scaleInherited, animation.scaleInherited);
+                && Arrays.equals(scaleInherited, animation.scaleInherited)
+                && sourceTiming.equals(animation.sourceTiming);
     }
 
     @Override
@@ -210,6 +228,7 @@ public final class Rac1Animation {
         result = 31 * result + Arrays.hashCode(rotations);
         result = 31 * result + Arrays.hashCode(translationValues);
         result = 31 * result + Arrays.hashCode(scaleValues);
+        result = 31 * result + sourceTiming.hashCode();
         return result;
     }
 }
