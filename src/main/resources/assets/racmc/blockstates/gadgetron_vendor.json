@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "racmc:block/gadgetron_vendor" }
+  }
+}

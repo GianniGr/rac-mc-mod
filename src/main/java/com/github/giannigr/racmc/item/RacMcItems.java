@@ -45,6 +45,9 @@ public final class RacMcItems {
     public static final DeferredItem<Item> TAB_ICON =
             ITEMS.registerItem("tab_icon", Item::new, new Item.Properties().stacksTo(1));
 
+    public static final DeferredItem<BlockItem> VENDOR =
+            ITEMS.registerSimpleBlockItem("gadgetron_vendor", RacMcBlocks.VENDOR);
+
     /** The items of the crates of the game, by the key of the crate. */
     private static final Map<String, DeferredItem<BlockItem>> CRATES = new LinkedHashMap<>();
 

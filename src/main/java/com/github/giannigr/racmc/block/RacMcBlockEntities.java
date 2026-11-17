@@ -33,6 +33,10 @@ public final class RacMcBlockEntities {
         throw new UnsupportedOperationException("Utility class");
     }
 
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<Rac1VendorBlockEntity>>
+            VENDOR = BLOCK_ENTITIES.register("gadgetron_vendor", () -> BlockEntityType.Builder
+                    .of(Rac1VendorBlockEntity::new, RacMcBlocks.VENDOR.get()).build(null));
+
     /**
      * Registers the kinds of block entity of the mod.
      *
