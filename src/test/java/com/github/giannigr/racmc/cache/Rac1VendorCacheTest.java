@@ -47,8 +47,8 @@ class Rac1VendorCacheTest {
         buffer(oldConverter).putInt(44, Rac1CacheCodec.checksum(oldConverter, 0, 44));
         assertTrue(assertThrows(IOException.class, () -> read(oldConverter))
                 .getMessage().contains("converter"));
-        assertEquals(5, Rac1CacheStore.SCHEMA_VERSION);
-        assertEquals(4, Rac1CacheCodec.CONVERTER_VERSION);
+        assertEquals(6, Rac1CacheStore.SCHEMA_VERSION);
+        assertEquals(6, Rac1CacheCodec.CONVERTER_VERSION);
     }
 
     @Test
@@ -75,7 +75,7 @@ class Rac1VendorCacheTest {
         int length = (int) buffer(bytes).getLong(entry + 16);
         buffer(bytes).putInt(offset + 1, Integer.MAX_VALUE);
         buffer(bytes).putInt(entry + 24, Rac1CacheCodec.checksum(bytes, offset, length));
-        int payload = Rac1CacheCodec.HEADER_SIZE + 5 * Rac1CacheCodec.SECTION_ENTRY_SIZE;
+        int payload = Rac1CacheCodec.HEADER_SIZE + buffer(bytes).getInt(28);
         buffer(bytes).putInt(40, Rac1CacheCodec.checksum(bytes, payload, bytes.length - payload));
         buffer(bytes).putInt(44, Rac1CacheCodec.checksum(bytes, 0, 44));
         assertTrue(assertThrows(IOException.class, () -> read(bytes))
@@ -87,6 +87,6 @@ class Rac1VendorCacheTest {
         byte[] bytes = Rac1CacheCodec.write(SyntheticAssets.content("synthetic-vendor"),
                 Rac1CacheStore.SCHEMA_VERSION);
         assertNull(read(bytes).vendor());
-        assertEquals(5, buffer(bytes).getInt(20));
+        assertEquals(6, buffer(bytes).getInt(20));
     }
 }

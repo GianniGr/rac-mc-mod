@@ -1,0 +1,31 @@
+// Opt-in headless integrated candidate only; synthetic resources/runtime stay outside Git.
+allprojects {
+    afterEvaluate {
+        if (!project.hasProperty('integrationDirectory')) {
+            throw new GradleException('Supply -PintegrationDirectory=<absolute private directory outside Git>')
+        }
+        def directory = file(project.property('integrationDirectory'))
+        def fixture = new File(directory, 'resources/data/racmc_integration/structure/empty.nbt')
+        sourceSets.main.resources.srcDir(new File(directory, 'resources'))
+        tasks.register('generateIntegrationFixture') {
+            outputs.file(fixture)
+            doLast {
+                fixture.parentFile.mkdirs()
+                new DataOutputStream(new java.util.zip.GZIPOutputStream(new FileOutputStream(fixture))).withCloseable { out ->
+                    out.writeByte(10); out.writeUTF('')
+                    out.writeByte(3); out.writeUTF('DataVersion'); out.writeInt(3955)
+                    out.writeByte(9); out.writeUTF('size'); out.writeByte(3); out.writeInt(3)
+                    out.writeInt(12); out.writeInt(10); out.writeInt(12)
+                    out.writeByte(9); out.writeUTF('palette'); out.writeByte(10); out.writeInt(1)
+                    out.writeByte(8); out.writeUTF('Name'); out.writeUTF('minecraft:air'); out.writeByte(0)
+                    out.writeByte(9); out.writeUTF('blocks'); out.writeByte(10); out.writeInt(0)
+                    out.writeByte(9); out.writeUTF('entities'); out.writeByte(10); out.writeInt(0)
+                    out.writeByte(0)
+                }
+            }
+        }
+        tasks.named('processResources') { dependsOn('generateIntegrationFixture') }
+        neoForge.runs.gameTestServer.gameDirectory = new File(directory, 'runtime')
+        neoForge.runs.gameTestServer.systemProperty('neoforge.enabledGameTestNamespaces', 'racmc_integration')
+    }
+}

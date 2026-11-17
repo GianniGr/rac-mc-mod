@@ -1,7 +1,9 @@
 # Bolt currency candidate — issue #10
 
-Standalone on crate base `26d9ff5`, with no vendor/explosive activation dependency.
-**Not independently verified or owner-accepted.**
+Originally standalone on crate base `26d9ff5`. The owner-approved bolt/HUD and motion
+branches are now combined with vendor/explosives on the local integration branch.
+See [integration status](integration.md) for the current candidate and pending independent gates.
+Standalone verification notes below are historical, not the combined result.
 
 ## Currency versus items
 
@@ -51,9 +53,9 @@ no invented Minecraft equivalents.
 
 Attraction uses strict horizontal radius 3 and vertical reach 1.75 every server
 tick. Homing speed approaches 48*dt in increments of 16*dt², dt=.05.
-Views currently start in idle proximity mode: original ballistic launch,
-collision/settling phases, launch drag, ground-specific motion, glints and audio
-are **not implemented**. This is not a complete original drop-motion port.
+Original ballistic launch, collision/settling phases, launch drag and ground-specific
+motion now come from the approved P26 branch; see [motion contract](bolt-motion.md).
+Glints and audio remain unimplemented.
 Original denomination scales .65/.70/.75/.60 preserve class geometry; no crate
 cube normalization is applied.
 
@@ -91,9 +93,9 @@ menus, and clears transient state for a new player/disconnect. Original graphics
 are not substituted while the cache is incomplete.
 
 The four bolt meshes still use the keyed static-moby map; reusable 2D HUD assets
-use a new bounded section. Schema5/converter5 invalidate older caches.
-Missing assets prevent readiness. Vendor cache changes are **not integrated**;
-later consolidation must reconcile invalidation and required asset sets.
+use a bounded section. Schema6/converter6 invalidate older standalone caches.
+Vendor/HUD have separate sections; all four crates, all four bolt meshes, vendor
+and HUD are required for readiness.
 
 ## Verification status
 

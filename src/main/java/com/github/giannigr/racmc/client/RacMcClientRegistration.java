@@ -90,6 +90,8 @@ public final class RacMcClientRegistration {
         // that draws the crate of the game and hands every other block to the game of blocks.
         event.registerEntityRenderer(EntityType.FALLING_BLOCK,
                 Rac1FallingBlockRenderer::new);
+        event.registerEntityRenderer(RacMcEntities.FALLING_EXPLOSIVE.get(),
+                Rac1FallingBlockRenderer::new);
     }
 
     /**

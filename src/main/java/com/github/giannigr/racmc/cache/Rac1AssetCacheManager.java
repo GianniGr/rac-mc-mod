@@ -198,14 +198,7 @@ public final class Rac1AssetCacheManager implements Closeable {
         try {
             Optional<Rac1CacheContent> cached = store.load(key);
             if (cached.isPresent()) {
-                if (!com.github.giannigr.racmc.asset.hud.Rac1BoltHudDefinition.complete(cached.get().hud()))
-                    throw new IOException("The cache is missing the original bolt HUD.");
-                for (var bolt : com.github.giannigr.racmc.asset.Rac1Bolts.definitions()) {
-                    var asset = cached.get().crate(bolt.key());
-                    if (asset == null || asset.classNumber() != bolt.classNumber()
-                            || asset.mesh().triangleCount() == 0)
-                        throw new IOException("The cache is missing original bolt assets.");
-                }
+                requireAssets(cached.get());
                 content = cached.get();
                 progress = 100;
                 step = "The assets are ready.";
@@ -220,6 +213,7 @@ public final class Rac1AssetCacheManager implements Closeable {
         content = null;
         try {
             Rac1CacheContent built = build(key, image);
+            requireAssets(built);
             store.store(key, built);
             content = built;
             progress = 100;
@@ -230,6 +224,21 @@ public final class Rac1AssetCacheManager implements Closeable {
             error = describe(exception);
             content = null;
             state = Rac1CacheState.FAILED;
+        }
+    }
+
+    /** Readiness is the union of every approved feature, not merely a valid container. */
+    static void requireAssets(Rac1CacheContent assets) throws IOException {
+        if (assets.vendor() == null) throw new IOException("The cache is missing the Gadgetron vendor.");
+        if (!com.github.giannigr.racmc.asset.hud.Rac1BoltHudDefinition.complete(assets.hud()))
+            throw new IOException("The cache is missing the original bolt HUD.");
+        var required = new java.util.ArrayList<>(Rac1Crates.definitions());
+        required.addAll(com.github.giannigr.racmc.asset.Rac1Bolts.definitions());
+        for (var definition : required) {
+            var asset = assets.crate(definition.key());
+            if (asset == null || asset.classNumber() != definition.classNumber()
+                    || asset.mesh().triangleCount() == 0 || asset.textures().length == 0)
+                throw new IOException("The cache is missing original asset " + definition.key() + ".");
         }
     }
 

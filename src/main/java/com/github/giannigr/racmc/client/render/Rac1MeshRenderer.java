@@ -170,6 +170,12 @@ public final class Rac1MeshRenderer {
                 mesh.materials(), textures, light, closeRuns);
     }
 
+    public static void render(PoseStack pose, MultiBufferSource buffers, Rac1Mesh mesh,
+            ResourceLocation[] textures, int light, boolean closeRuns, boolean red) {
+        render(pose, buffers, mesh.positions(), mesh.normals(), mesh.uvs(), mesh.indices(),
+                mesh.materials(), textures, light, closeRuns, red);
+    }
+
     /**
      * Draws a mesh that follows the joints of a skeleton.
      *
@@ -220,12 +226,20 @@ public final class Rac1MeshRenderer {
     }
 
     private static void render(PoseStack pose, MultiBufferSource buffers, float[] positions,
-                               float[] normals, float[] uvs, int[] indices, int[] materials,
-                               ResourceLocation[] textures, int light, boolean closeRuns) {
+                                float[] normals, float[] uvs, int[] indices, int[] materials,
+                                ResourceLocation[] textures, int light, boolean closeRuns) {
+        render(pose, buffers, positions, normals, uvs, indices, materials, textures,
+                light, closeRuns, false);
+    }
+
+    private static void render(PoseStack pose, MultiBufferSource buffers, float[] positions,
+            float[] normals, float[] uvs, int[] indices, int[] materials,
+            ResourceLocation[] textures, int light, boolean closeRuns, boolean red) {
         int vertices = positions.length / 3;
         for (MaterialRun run : materialRuns(indices, materials, textures.length)) {
             ResourceLocation texture = run.slot() < 0 ? null : textures[run.slot()];
-            RenderType type = typeOf(texture);
+            RenderType type = red ? Rac1CrateAmbientRenderType.of(texture == null
+                    ? ResourceLocation.withDefaultNamespace("missing") : texture) : typeOf(texture);
             // The buffer of the kind of the triangle is asked for again for every run, because the
             // renderer of the game of blocks closes a buffer as soon as another kind of triangle
             // is written to it.
@@ -283,8 +297,8 @@ public final class Rac1MeshRenderer {
      * @param light the light the triangle is drawn with
      */
     static void writeTriangle(VertexConsumer consumer, PoseStack pose, float[] positions,
-                               float[] normals, float[] uvs, int[] indices, int triangle,
-                               int light) {
+                                float[] normals, float[] uvs, int[] indices, int triangle,
+                                int light) {
         for (int corner = 0; corner < 4; corner++) {
             int source = corner % 3;
             int vertex = indices[triangle * 3 + source];

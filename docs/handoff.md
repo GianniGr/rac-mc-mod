@@ -1,3 +1,9 @@
+# P29 combined candidate
+
+See [integration.md](integration.md) for the approved-tip union, reward/cache/falling
+decisions, measured focused checks and pending exact-tree independent T/client gates.
+The earlier standalone handoff below is retained as historical context.
+
 # Development handoff — vendor candidate 2026-11-16
 
 ## State

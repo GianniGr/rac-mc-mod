@@ -22,9 +22,10 @@ details, the rules of the weapon and the way the weapon is measured are describe
 The crates of the game are blocks of the game as well: the wooden bolt crate, the crate of the
 nanotech, the crate of the ammunition of Gadgetron and the red explosive crate can be placed in
 the world and are in the tab of the creative mode of the mod. They keep the size and the
-proportions they have in the game and fit into one block. They are a picture of the game for now:
-wooden and explosive crates now emit bolt currency when broken, but do not detonate or give
-health/ammunition. See [`docs/bolt-currency.md`](docs/bolt-currency.md) for the candidate's
+proportions they have in the game and fit into one block. Wooden and explosive crates emit
+bolt currency when destroyed; explosive crates detonate and chain-arm nearby explosives.
+Health/ammunition rewards are not implemented. See [`docs/integration.md`](docs/integration.md)
+for this combined candidate's verification limits and [`docs/bolt-currency.md`](docs/bolt-currency.md) for
 original payout rules, cosmetic items, persistence policy and pending verification.
 The [original bolt HUD](docs/hud-assets.md) is imported from the disc into the local cache too.
 

@@ -46,6 +46,14 @@ public final class RacMcEntities {
         throw new UnsupportedOperationException("Utility class");
     }
 
+    public static final DeferredHolder<EntityType<?>,
+            EntityType<com.github.giannigr.racmc.block.Rac1FallingExplosive>> FALLING_EXPLOSIVE =
+            ENTITIES.register("falling_explosive_crate", () -> EntityType.Builder
+                    .<com.github.giannigr.racmc.block.Rac1FallingExplosive>of(
+                            com.github.giannigr.racmc.block.Rac1FallingExplosive::new, MobCategory.MISC)
+                    .sized(0.98F, 0.98F).clientTrackingRange(10).updateInterval(1)
+                    .build("falling_explosive_crate"));
+
     /**
      * Registers the kinds of entity of the mod.
      *
