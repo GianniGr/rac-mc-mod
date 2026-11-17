@@ -175,24 +175,19 @@ Source-rest calibration, torso-relative projection and column normalization
 for the target socket remain explicit P28/integration math, not source assets
 or a calibrated Steve pose supplied by this method.
 
-**Full actions remain blocked, not complete.** P28 `535b5a3` has an explicitly
-unavailable server `Sampler`, so original metadata and rendering seams alone
-do not make its actions usable. Decoder math, sequence/event IDs and verified
-behavioral constants cannot reconstruct copyrighted original joint trajectories
-on an asset-free server. This core supplies neither assets over the network
-nor a disguised baked trajectory table.
+**The server-data choice is now resolved:** the owner approved option1, local
+ISO validation/import on the server, implemented by the optional headless provider
+in [wrench-server-data.md](wrench-server-data.md). It supplies original data, not
+an asset-free approximation, client upload or disguised baked trajectory table.
+The existing client entry gate is unchanged; missing/invalid server data disables
+only managed actions, not unrelated content. Integrated singleplayer can reuse
+the legitimate common configured ISO/cache through pure headless services.
 
-The integration worker must resolve one of these explicit contracts:
-
-1. A lawful server-local source-data deployment, separately authorized and
-   reviewed: headless sampler reads its own local clip/skeleton/attachment data,
-   not a client singleton/cache and not runtime ISO IO. No such deployment
-   pipeline is implemented or implicitly approved here.
-2. Owner-approved, independently authored **Minecraft server contact/phase
-   model**, with original imported clips used only for client presentation.
-   Label anatomical/timing/collision approximations honestly and validate the
-   visual/contact mismatch. Never trust client poses or target lists as damage
-   authority. No such approximation is silently installed.
+**Full actions are still not complete.** P28 `535b5a3` had an explicitly
+unavailable `Sampler`; its integration must now consume the real provider.
+Original metadata, available data and drawing entry points do not by themselves
+install action state/pose hooks. Do not re-ask the owner to choose a server-data
+alternative or silently substitute an authored MC contact approximation.
 
 Then P28/integration must install `WrenchActions.Sampler`, map source/rest
 channels into its `SteveWrenchPose` math, supply the actual resulting Steve
@@ -224,7 +219,9 @@ crate transform regressions. Opt-in `RealDiscWrenchTest` reads the permitted
 disc in place, checks gadget metadata, samples slots 1/3/4/5/6/10 and round-trips
 the original wrench in **memory only**.
 
-No runtime client/server or full suite is claimed here. T14 must independently
+No Minecraft client/server game launch or full suite is claimed here. The separate
+headless provider's real-disc import/cache checks are described in
+[wrench-server-data.md](wrench-server-data.md). T14 must independently
 verify the consolidated tree, native cancellation/spawn/adventure/PvP protection,
 creative vendor and forged packets, repeated/reentrant crate operations, actual
 combat charge/armor/hurt-time behavior, and P24/P25 interactions. Both-hand
