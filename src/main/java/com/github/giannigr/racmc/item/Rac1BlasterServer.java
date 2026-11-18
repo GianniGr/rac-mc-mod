@@ -323,7 +323,8 @@ public final class Rac1BlasterServer {
         // weapon and out of the place of the player, and it is the same place the weapon is
         // drawn at in the third person.
         Rac1BlasterGrip.Point muzzle = Rac1BlasterGrip.muzzle(
-                com.github.giannigr.racmc.item.weapon.RangedPlayerPose.of(player, 1, false));
+                com.github.giannigr.racmc.item.weapon.RangedPlayerPose.of(player, 1,
+                        com.github.giannigr.racmc.item.weapon.RangedSkin.server(player)));
         Vec3 spawn = new Vec3(muzzle.x(), muzzle.y(), muzzle.z());
         Vec3 eyes = player.getEyePosition();
         if (Rac1BlasterObstruction.blocked(worldOf(level, player), new double[] { eyes.x, eyes.y,

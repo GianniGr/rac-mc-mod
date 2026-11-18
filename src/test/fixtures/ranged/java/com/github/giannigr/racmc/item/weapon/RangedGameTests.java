@@ -214,10 +214,85 @@ public final class RangedGameTests {
 
         var blocked = player(level, pos);
         blocked.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.ARROW));
-        var muzzle = Rac1BlasterGrip.muzzle(RangedPlayerPose.of(blocked, 1, false));
+        var muzzle = Rac1BlasterGrip.muzzle(RangedPlayerPose.of(blocked, 1, RangedSkin.server(blocked)));
         level.setBlock(BlockPos.containing(muzzle.x(), muzzle.y(), muzzle.z()), Blocks.STONE.defaultBlockState(), 3);
         h.assertTrue(!Rac1BlasterServer.fireFirstShot(level, blocked), "Obstruction allowed shot relocation");
         h.assertTrue(blocked.getOffhandItem().getCount() == 1, "Obstruction consumed ammo");
+        h.succeed();
+    }
+    @GameTest(template = "empty", batch = "ranged_pose")
+    public static void actualPlayerPassengerFlightSwimAttackAndSkinInputsReachAuthority(GameTestHelper h) {
+        var level = h.getLevel(); var pos = h.absolutePos(new BlockPos(4, 4, 4));
+        var player = player(level, pos);
+        var horse = EntityType.HORSE.create(level);
+        horse.setPos(player.position()); horse.yBodyRot = horse.yBodyRotO = 170;
+        level.addFreshEntity(horse);
+        player.yHeadRot = player.yHeadRotO = 45;
+        player.yBodyRot = player.yBodyRotO = 0;
+        h.assertTrue(player.startRiding(horse, true) && horse.shouldRiderSit(), "Genuine seated passenger fixture required");
+        var look = RangedPlayerPose.look(player, 1);
+        // Literal LivingEntityRenderer clamp:45-170=-125 -> -85; body=45+85-17=113.
+        h.assertTrue(Math.abs(look.bodyYaw() - 113) < .001 && Math.abs(look.headYaw() + 68) < .001,
+                "Actual vehicle/head clamp omitted");
+        var passenger = RangedPlayerPose.of(player, 1, RangedSkin.server(player));
+        h.assertTrue(passenger.root().steps().equals(java.util.List.of(HandRoot.Step.y(67))),
+                "Passenger resolved body did not reach the actual authoritative root");
+        // Genuine accepted authority, compared to a literal independent vanilla render chain.
+        // This is still a local headless account, not a negotiated client or visual measurement.
+        player.setGameMode(GameType.CREATIVE);
+        boolean slim = RangedSkin.defaultSlim(player.getUUID());
+        double armX = -(float) (Math.PI / 2) + net.minecraft.util.Mth.sin(.067f) * .05f;
+        double armY = -68 * ((float) Math.PI / 180);
+        double armZ = net.minecraft.util.Mth.cos(.09f) * .05f + .05f;
+        var expectedMuzzle = new org.joml.Matrix4d().translate(player.getX(), player.getY(), player.getZ())
+                .scale(player.getScale()).rotateY(Math.toRadians(67))
+                .scale(-1, -1, 1).scale(.9375).translate(0, -1.501, 0)
+                .translate((slim ? -4.5 : -5) / 16, 2.0 / 16, 0)
+                .rotateZYX(armZ, armY, armX).rotateX(-Math.PI / 2).rotateY(Math.PI)
+                .translate(1.0 / 16, .125, -.625).rotateXYZ(Math.PI, 0, -Math.PI / 2)
+                .translate(-.5, -.5, -.5).translate(.5, .5, .5)
+                .transformPosition(new org.joml.Vector3d(.2305, -.03, .6335));
+        h.assertTrue(Rac1BlasterServer.fireFirstShot(level, player), "Riding authority fixture must accept one real shot");
+        var spawned = level.getEntitiesOfClass(Rac1BlasterArrow.class, player.getBoundingBox().inflate(4)).stream()
+                .filter(arrow -> arrow.getOwner() == player).findFirst().orElseThrow();
+        h.assertTrue(spawned.position().distanceTo(new Vec3(expectedMuzzle.x, expectedMuzzle.y, expectedMuzzle.z)) < 1e-5,
+                "Actual authoritative projectile did not use the independently resolved vanilla passenger hand chain");
+        spawned.discard();
+        player.stopRiding();
+        player.yBodyRot = player.yBodyRotO = 37;
+        player.yHeadRot = player.yHeadRotO = 45;
+        player.setXRot(-20); player.xRotO = -20;
+        player.setDeltaMovement(1, 0, 1);
+        player.startFallFlying();
+        var flight = RangedPlayerPose.of(player, 1, RangedSkin.server(player));
+        h.assertTrue(flight.root().steps().size() == 3, "Actual fall-flight root lacks pitch and velocity yaw");
+        h.assertTrue(Math.abs(flight.root().steps().get(1).degrees() + .7) < .001
+                && Math.abs(flight.root().steps().get(2).degrees() - 90) < .01,
+                "Fall-flight source ramp/order/velocity yaw differs");
+        player.stopFallFlying();
+
+        player.setPose(net.minecraft.world.entity.Pose.SWIMMING);
+        player.doTick(); // actual LivingEntity updates its private swim transition amount
+        player.setPose(net.minecraft.world.entity.Pose.SWIMMING);
+        h.assertTrue(player.getSwimAmount(1) > 0, "Actual vanilla swim transition must be nonzero");
+        var swim = RangedPlayerPose.of(player, 1, RangedSkin.server(player));
+        h.assertTrue(swim.root().steps().stream().anyMatch(step ->
+                step.kind() == HandRoot.Kind.TRANSLATE && step.translation().equals(
+                        new WeaponDefinition.Vector(0, -1, .3))), "Actual swim root translation omitted");
+        player.setPose(net.minecraft.world.entity.Pose.CROUCHING);
+        player.tickCount = 17; player.attackAnim = player.oAttackAnim = .35f;
+        for (var hand : net.minecraft.world.entity.HumanoidArm.values()) {
+            player.setMainArm(hand);
+            player.swingingArm = InteractionHand.MAIN_HAND;
+            var pose = RangedPlayerPose.of(player, 1, RangedSkin.server(player));
+            boolean left = hand == net.minecraft.world.entity.HumanoidArm.LEFT;
+            double body = Math.sin(Math.sqrt(.35) * Math.PI * 2) * .2 * (left ? -1 : 1);
+            double expectedX = (left ? 1 : -1) * Math.cos(body) * 5
+                    + (RangedSkin.defaultSlim(player.getUUID()) ? (left ? -.5 : .5) : 0);
+            h.assertTrue(Math.abs(pose.pivot().x() - expectedX) < .001 && Math.abs(pose.pivot().y() - 5.2) < .001,
+                    "Actual attack/crouch/skin state failed to reach final authoritative hand pivot");
+        }
+        horse.discard();
         h.succeed();
     }
 }

@@ -406,8 +406,10 @@ ammo identity. It is a test fixture, not a registered second gun.
 Physical points use imported mesh blocks. Item rotation is XYZ (point application Z,Y,X);
 ModelPart is ZYX (point application X,Y,Z). Item centering -.5 and imported socket
 restoration +.5 cancel exactly once. The player chain includes PlayerRenderer's .9375,
-entity scale, physical left/right hand, resolved pivot/arm scale/rotation, and body yaw.
-The ordinary player adapter includes crouch pivot/pitch/render offset and vanilla arm bob;
+entity scale, physical left/right hand, resolved pivot/arm scale/rotation, and an ordered
+`HandRoot` (yaw/pitch/roll/translation, not merely standing body yaw).
+Corrective pass1 adds the actual passenger body/head clamp, swimming/fall-flight roots,
+attack final arm rotations/pivots, crouch render offset and vanilla arm bob;
 client position/head/body/pitch are interpolated, and camera subtraction stays double
 precision until relative coordinates are narrowed.
 
@@ -425,14 +427,51 @@ not corrected, and server firing does not require ISO/animation data. Projection
 matches both screen axes, without the former deliberate vertical clamp. Natural fitting,
 crosshair clearance and jitter still require owner visual acceptance.
 
-**Limits, not acceptance claims:** this is not a complete vanilla player renderer.
-The server adapter uses canonical wide arms because client skin geometry is unavailable
-there (slim hand offset is .5/16 × .9375 ≈.0293 blocks at scale1). Swimming, riding,
-elytra, attack/body-root animation and arbitrary renderer modifications are not yet
-reconciled. Explicit final arm snapshots are supported by the shared arithmetic, but
-that does not prove all live pose paths. Fixed-camera first/third-person, FOV70/77/110,
-sprint/bob, far-world, two-client and late-observer checks remain independent T20/owner
-gates. Passing matrix tests or a source-ring measurement is not GPU/live equivalence.
+**Corrective pass1 source contract:** MC1.21.1/NeoForge21.1.265 source pin
+`6d1662ddc50a486115cfd9a98bd4b097d8bd1f6086dc62f13b208876c1652cd1`.
+The custom Blaster aim uses the existing authoritative look inputs, rather than the
+reused vanilla model's render-history-dependent swimming head pitch. The custom arm
+compensates only vanilla attack's head-pitch term; the player head/other arm are not
+rewritten. Source attack/crouch/bob then run normally. Vanilla swimming arm strokes
+are guarded off while an item is being used; the swimming root still applies.
+The client bridge takes the actual entity-render event's partial tick.
+
+`RangedSkin` derives the official hand model from existing vanilla GameProfile metadata
+using Authlib6.0.54's local unpack operation, or the exact UUID fallback (18 models,
+first9 slim). No skin download/profile fetch, new client-report trust, ISO or client
+class dependency on the server. The client reads its actual rendered skin model.
+During asynchronous UUID-skin fallback, only the known half-model-unit hand offset is
+reconciled to the profile-derived authoritative pivot; it does not move the player arm,
+rescale the gun or accept client coordinates. That offset is
+.5/16 × .9375 ≈.0293 blocks at entity scale1. Profile changes invalidate the bounded
+metadata cache key. Headless servers without an authentication service use UUID fallback.
+
+**Limits, not acceptance claims:** these are source-pinned vanilla firing adapters, not
+arbitrary modded player renderers. Exact new-tree T20/live pose, skin-loading, movement,
+sprint, lifecycle and calibrated muzzle checks remain required; no unsupported-pose
+acceptance waiver is inferred. Prior T20 captures at FOV70/77/110 and its24-shot two-client
+subset on77eb592 are baseline evidence, not approval of this correction or of natural
+grip/jitter. Passing matrix tests or source-ring measurements is not live equivalence.
+
+**B3 remains held:** both-disc joint16 attachment sampling with the bind-local ring offset
+tracks the actual animated ring within1.82e-7 blocks over90 key/half-key/blend samples,
+without translating the gun body. This is a measured alternative, not an installed
+grip-preserving authority strategy. A no-media server still lacks that animated socket
+data; phase alone cannot supply it. No extracted animation curve or client-provided
+muzzle coordinates are shipped. Current whole-body anchoring can translate .18844
+blocks and remains unapproved pending the owner’s presentation/data-policy decision.
+
+The legacy bolt headless fixture now uses a local ServerPlayer account and explicit
+packet sink rather than triggering unnegotiated mock login. Its oracle isolates the
+new pickup UUID and counts genuine balance payloads, not teleport packets. Production
+ledger/network/login validation is unchanged. This ledger-only fixture is not a real
+network client; the prior failure is not called a proven M2 production regression.
+
+For local client consumers, `RacMcClient.assetCacheDirectory()` returns
+`Optional<Path>` containing only the usable startup-resolved cache directory, or empty
+for an unusable configuration. It does not revalidate disk state, change configuration,
+start media work or imply media/cache readiness. The client-only entrypoint remains
+isolated from dedicated-server loading; no cache path enters a network message.
 
 Accepted Creative/Survival/Adventure/main-hand/spectator rules, two-tick held cadence,
 ordinary-arrow offhand-first payment, damage/drag/no-gravity/speed2/lifetime12/no-pickup

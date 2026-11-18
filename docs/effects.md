@@ -144,6 +144,14 @@ available-media captures, missing media/reload/capacity and first/stuck/body pat
 still need T20/live checks. Blaster-only hit delivery no longer adds embedded shafts;
 ordinary bow rendering/counts and accepted debris remain intact.
 
+Independent T20 subsequently captured nonzero imported glow/trail drawing at entity
+age1 on77eb592, including a real observer. That establishes available-media drawing
+for its bounded baseline scene, not calibrated tick0 or the complete live matrix.
+Corrective pass1 changes physical player root/arm/skin adapters, not the imported
+effect programs. Affected exact-tree captures must be repeated. Whole-body muzzle
+anchoring remains unapproved; measured grip-preserving source attachment sampling is
+described in [development.md](development.md), not silently installed as a new policy.
+
 - Actual in-world appearance, camera/depth/FOV/material interleaving and two-client
   networking need separate T and owner playtest. Earlier actual-texture GPU
   material/resource fixtures passed; they are not live-world approval.

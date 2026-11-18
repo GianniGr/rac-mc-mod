@@ -49,13 +49,30 @@ public final class HandTransform {
         p[0] *= -pose.playerScale();
         p[1] *= -pose.playerScale();
         p[2] *= pose.playerScale();
-        rotate(p, 1, 180 - pose.bodyYaw());
-        return new Vector(pose.position().x() + p[0] * pose.entityScale(),
-                pose.position().y() + p[1] * pose.entityScale(),
-                pose.position().z() + p[2] * pose.entityScale());
+        var rooted = pose.root().apply(new Vector(p[0], p[1], p[2]));
+        return new Vector(pose.position().x() + rooted.x() * pose.entityScale(),
+                pose.position().y() + rooted.y() * pose.entityScale(),
+                pose.position().z() + rooted.z() * pose.entityScale());
     }
 
-    private static void rotate(double[] p, int axis, double degrees) {
+    /** Convert a known model-space pivot displacement back into this item's local frame.
+     * Used only for vanilla's asynchronous skin-model fallback: no world/camera fitting.
+     */
+    public static Vector localForModelDisplacement(WeaponDefinition weapon, HandPoseSnapshot pose, Vector delta) {
+        var origin = modelPoint(weapon, pose, new Vector(0, 0, 0));
+        var x = modelPoint(weapon, pose, new Vector(1, 0, 0));
+        var y = modelPoint(weapon, pose, new Vector(0, 1, 0));
+        var z = modelPoint(weapon, pose, new Vector(0, 0, 1));
+        var basis = new org.joml.Matrix3d()
+                .setColumn(0, new org.joml.Vector3d(x.x() - origin.x(), x.y() - origin.y(), x.z() - origin.z()))
+                .setColumn(1, new org.joml.Vector3d(y.x() - origin.x(), y.y() - origin.y(), y.z() - origin.z()))
+                .setColumn(2, new org.joml.Vector3d(z.x() - origin.x(), z.y() - origin.y(), z.z() - origin.z()));
+        if (Math.abs(basis.determinant()) < 1e-12) throw new IllegalArgumentException("Singular item hand frame");
+        var local = basis.invert().transform(new org.joml.Vector3d(delta.x(), delta.y(), delta.z()));
+        return new Vector(local.x, local.y, local.z);
+    }
+
+    static void rotate(double[] p, int axis, double degrees) {
         double angle = Math.toRadians(degrees), c = Math.cos(angle), s = Math.sin(angle);
         int a = (axis + 1) % 3, b = (axis + 2) % 3;
         double x = p[a], y = p[b];

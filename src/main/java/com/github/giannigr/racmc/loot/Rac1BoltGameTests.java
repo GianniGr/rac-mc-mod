@@ -79,13 +79,26 @@ public final class Rac1BoltGameTests {
         var restored = Rac1BoltLedger.load(first, level.registryAccess());
         helper.assertTrue(first.equals(restored.save(new CompoundTag(), level.registryAccess())),
                 "Ledger did not roundtrip");
-        var player = helper.makeMockServerPlayerInLevel();
+        // Ledger-only account with an explicit packet sink. The generic GameTest login helper
+        // has no negotiated mod channel and throws during login before this test's assertions.
+        // This is NOT a negotiated client/network test, and does not disable production validation.
+        var packets = new java.util.ArrayList<net.minecraft.network.protocol.Packet<?>>();
+        var player = ledgerAccount(level, packets);
         player.teleportTo(pos.getX() + .5, pos.getY(), pos.getZ() + .5);
+        var previousIds = new java.util.HashSet<UUID>();
+        for (var tag : ledger.save(new CompoundTag(), level.registryAccess())
+                .getList("pickups", net.minecraft.nbt.Tag.TAG_COMPOUND))
+            previousIds.add(((CompoundTag) tag).getUUID("id"));
         UUID pickup = UUID.randomUUID();
         ledger.reward(pickup, level, pos, 1);
+        var added = ledger.save(new CompoundTag(), level.registryAccess())
+                .getList("pickups", net.minecraft.nbt.Tag.TAG_COMPOUND).stream()
+                .map(tag -> ((CompoundTag) tag).getUUID("id"))
+                .filter(id -> !previousIds.contains(id)).toList();
+        helper.assertTrue(added.size() == 1, "The isolated one-bolt reward must add exactly one pickup");
         ledger.emit(level);
-        var entity = level.getEntitiesOfClass(Rac1BoltEntity.class,
-                new net.minecraft.world.phys.AABB(pos).inflate(1)).getFirst();
+        var entity = (Rac1BoltEntity) level.getEntity(added.getFirst());
+        helper.assertTrue(entity != null, "The tested reward's pickup view was not emitted");
         long balance = ledger.balance(player.getUUID());
         int value = entity.value();
         helper.assertTrue(ledger.collect(entity.getUUID(), player), "First collection rejected");
@@ -94,8 +107,29 @@ public final class Rac1BoltGameTests {
         helper.assertTrue(player.totalExperience == 0, "Collection granted XP");
         helper.assertTrue(!ledger.tryDebit(player, -1), "Negative debit accepted");
         helper.assertTrue(!ledger.tryDebit(player, Long.MAX_VALUE), "Overspend accepted");
-        level.getServer().getPlayerList().remove(player);
+        var balances = new java.util.ArrayList<Rac1BoltNetwork.Balance>();
+        for (var sent : packets)
+            if (sent instanceof net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket packet
+                    && packet.payload() instanceof Rac1BoltNetwork.Balance message) balances.add(message);
+        helper.assertTrue(balances.size() == 1
+                && balances.getFirst().total() == balance + value && balances.getFirst().pickup(),
+                "Collection must still dispatch exactly one genuine balance payload to the fixture sink");
         helper.succeed();
+    }
+
+    private static net.minecraft.server.level.ServerPlayer ledgerAccount(
+            net.minecraft.server.level.ServerLevel level,
+            java.util.List<net.minecraft.network.protocol.Packet<?>> packets) {
+        var profile = new com.mojang.authlib.GameProfile(UUID.randomUUID(), "bolt-ledger-account");
+        var player = new net.minecraft.server.level.ServerPlayer(level.getServer(), level, profile,
+                net.minecraft.server.level.ClientInformation.createDefault());
+        player.connection = new net.minecraft.server.network.ServerGamePacketListenerImpl(level.getServer(),
+                new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND),
+                player, net.minecraft.server.network.CommonListenerCookie.createInitial(profile, false)) {
+            @Override public void send(net.minecraft.network.protocol.Packet<?> packet) { packets.add(packet); }
+        };
+        player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+        return player;
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)

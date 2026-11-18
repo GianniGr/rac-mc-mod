@@ -118,6 +118,12 @@ public final class BlasterItemRenderer extends BlockEntityWithoutLevelRenderer {
                         if (context.firstPerson()) {
                             alignWithWorldMuzzle(adjusted, context);
                         }
+                        if ((context == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND
+                                || context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND)
+                                && entity instanceof net.minecraft.world.entity.player.Player player) {
+                            var skin = Rac1BlasterClient.skinCorrection(player);
+                            adjusted.translate(skin.x(), skin.y(), skin.z());
+                        }
                         if (context.firstPerson() || context == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND
                                 || context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND) {
                             var move = this.pose.muzzleCorrection();

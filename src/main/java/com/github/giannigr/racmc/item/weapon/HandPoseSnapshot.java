@@ -10,12 +10,20 @@ import static com.github.giannigr.racmc.item.weapon.WeaponDefinition.Vector;
  */
 public record HandPoseSnapshot(Vector position, double bodyYaw, double entityScale,
                               boolean left, Vector pivot, Vector armRotation, Vector armScale,
-                              double playerScale, double modelHeight) {
+                              double playerScale, double modelHeight, HandRoot root) {
+    /** Compatibility constructor for an ordinary yaw-only root; resolved poses supply root explicitly. */
+    public HandPoseSnapshot(Vector position, double bodyYaw, double entityScale, boolean left,
+                            Vector pivot, Vector armRotation, Vector armScale, double playerScale,
+                            double modelHeight) {
+        this(position, bodyYaw, entityScale, left, pivot, armRotation, armScale, playerScale,
+                modelHeight, HandRoot.yaw(bodyYaw));
+    }
     public HandPoseSnapshot {
         Objects.requireNonNull(position);
         Objects.requireNonNull(pivot);
         Objects.requireNonNull(armRotation);
         Objects.requireNonNull(armScale);
+        Objects.requireNonNull(root);
         if (!Double.isFinite(bodyYaw) || !Double.isFinite(modelHeight)
                 || !Double.isFinite(entityScale) || entityScale <= 0
                 || !Double.isFinite(playerScale) || playerScale <= 0

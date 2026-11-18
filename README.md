@@ -19,6 +19,7 @@ animations of the weapon, and it fires server-owned arrow-based projectiles with
 Blaster effects while the trigger is held. Ordinary arrows remain its temporary Survival/
 Adventure ammunition, not a universal original-ammo contract. The shared-ranged candidate
 still needs independent live transform/audio/network acceptance. The
+corrective pose/skin candidate does not waive original-grip or owner visual approval. The
 details, the rules of the weapon and the way the weapon is measured are described in
 [`docs/development.md`](docs/development.md).
 

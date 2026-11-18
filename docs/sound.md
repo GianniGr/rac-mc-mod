@@ -131,3 +131,9 @@ tuning, audible fidelity, runtime lifecycle or network acceptance.
 Independent exact-tree T verification and owner-authorized auditory/network
 acceptance are still required. Do not auto-launch a client or play sounds on
 the owner's computer to run these automated checks.
+
+T20's bounded real two-client subset on77eb592 observed one tracked firing loop and
+zero after release/depletion/reload, with one again after postreload firing. It did
+not establish hardware sample identity, subjective hearing or every stop condition.
+Corrective pass1 does not change audio binding/playback; this baseline evidence is
+not a substitute for its remaining exact-tree/live acceptance.
