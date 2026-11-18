@@ -90,10 +90,8 @@ public final class Rac1BlasterServer {
      * @return {@code false} when the mouth of the weapon is blocked and no shot was made
      */
     public static boolean fireFirstShot(Level level, Player player) {
-        if (player.isSpectator()) {
-            player.stopUsingItem();
-            if (player instanceof ServerPlayer server)
-                com.github.giannigr.racmc.item.weapon.RangedFireSessions.reject(server);
+        if (!validOwner(level, player)) {
+            stopInvalidOwner(player);
             return false;
         }
         if (!blasterInMainHand(player)) {
@@ -144,6 +142,10 @@ public final class Rac1BlasterServer {
      * @param player the player that holds the trigger
      */
     public static void fireWhileHeld(Level level, Player player) {
+        if (!validOwner(level, player)) {
+            stopInvalidOwner(player);
+            return;
+        }
         if (!isFiring(player)) {
             // The Blaster is not used with the main hand: the burst does not fire.
             return;
@@ -188,8 +190,22 @@ public final class Rac1BlasterServer {
      * @return {@code true} when the player fires the Blaster with the main hand
      */
     public static boolean isFiring(Player player) {
-        return player.isUsingItem() && player.getUsedItemHand() == InteractionHand.MAIN_HAND
+        return player.isAlive() && !player.isRemoved() && !player.isSpectator()
+                && player.isUsingItem() && player.getUsedItemHand() == InteractionHand.MAIN_HAND
                 && blasterInMainHand(player);
+    }
+
+    /** Admission belongs to a live server-side owner in this exact world, not a stale callback. */
+    private static boolean validOwner(Level level, Player player) {
+        return !level.isClientSide() && player instanceof ServerPlayer && player.level() == level
+                && player.isAlive() && !player.isRemoved() && !player.isSpectator();
+    }
+
+    private static void stopInvalidOwner(Player player) {
+        player.stopUsingItem();
+        resetBurst(player);
+        if (player instanceof ServerPlayer server)
+            com.github.giannigr.racmc.item.weapon.RangedFireSessions.reject(server);
     }
 
     /**
@@ -249,11 +265,23 @@ public final class Rac1BlasterServer {
      */
     private static boolean fire(Level level, Player player, Rac1BurstState state, long now,
                                 boolean withAmmo) {
+        if (!validOwner(level, player)) {
+            state.reset();
+            stopInvalidOwner(player);
+            return false;
+        }
         boolean fired = com.github.giannigr.racmc.item.weapon.FireService.fire(
-                () -> reserveArrow(player, withAmmo),
+                () -> validOwner(level, player) ? reserveArrow(player, withAmmo) : null,
                 new com.github.giannigr.racmc.item.weapon.FireService.ProjectileFactory<Rac1BlasterArrow>() {
-                    public Rac1BlasterArrow prepare() { return spawnArrow(level, player); }
-                    public boolean admit(Rac1BlasterArrow arrow) { return level.addFreshEntity(arrow); }
+                    public Rac1BlasterArrow prepare() {
+                        return validOwner(level, player) ? spawnArrow(level, player) : null;
+                    }
+                    public boolean admit(Rac1BlasterArrow arrow) {
+                        // EntityJoinLevelEvent may synchronously kill/remove/transfer the owner.
+                        // Reject before transaction commit/feedback and refund only its reservation.
+                        return validOwner(level, player) && level.addFreshEntity(arrow)
+                                && validOwner(level, player);
+                    }
                     public void discard(Rac1BlasterArrow arrow) { arrow.discard(); }
                 }, arrow -> {
                     state.recordShot(now);
@@ -261,6 +289,13 @@ public final class Rac1BlasterServer {
                     if (player instanceof ServerPlayer server)
                         com.github.giannigr.racmc.item.weapon.RangedFireSessions.accepted(server);
                 });
+        if (!validOwner(level, player)) {
+            // If death happened in already-accepted feedback, the live shot stays paid; never
+            // refund a committed shot, but do not let its callback restart item use/session.
+            state.reset();
+            stopInvalidOwner(player);
+            return fired;
+        }
         if (!fired) {
             player.stopUsingItem();
             if (player instanceof ServerPlayer server)
@@ -282,6 +317,11 @@ public final class Rac1BlasterServer {
      * @param now the tick of the click
      */
     private static void dryFire(Level level, Player player, Rac1BurstState state, long now) {
+        if (!validOwner(level, player)) {
+            state.reset();
+            stopInvalidOwner(player);
+            return;
+        }
         if (player instanceof ServerPlayer server)
             com.github.giannigr.racmc.item.weapon.RangedFireSessions.reject(server);
         if (!state.dryClickAllowed(now)) {

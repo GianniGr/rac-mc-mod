@@ -137,3 +137,9 @@ zero after release/depletion/reload, with one again after postreload firing. It 
 not establish hardware sample identity, subjective hearing or every stop condition.
 Corrective pass1 does not change audio binding/playback; this baseline evidence is
 not a substitute for its remaining exact-tree/live acceptance.
+
+Corrective pass2 fixes T20's confirmed dead-owner firing admission rather than merely
+muting its sound. Invalid owners stop use/burst and their own accepted session; a stale
+old player object cannot stop a replacement object's new session. Cue binding, original
+samples and client playback are unchanged. Independent new-head death/lifecycle retest
+and owner auditory acceptance remain required.

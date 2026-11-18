@@ -473,6 +473,33 @@ for an unusable configuration. It does not revalidate disk state, change configu
 start media work or imply media/cache readiness. The client-only entrypoint remains
 isolated from dedicated-server loading; no cache path enters a network message.
 
+### M2 corrective pass2: live-owner admission and physical-left first person
+
+T20 independently reproduced two production failures on `cf006dae`: shots32–40
+continued after a real active-shooter kill, and actual left first-person frames showed
+an inverted/cropped model despite subpixel ring-center agreement. Neither is waived by
+the earlier source/headless passes.
+
+All Blaster firing admissions now require a live, nonremoved, nonspectator ServerPlayer
+in the supplied server world. Invalid owners stop use, reset their burst and stop their
+own accepted audio session before preparation/payment/feedback. The predicate reported
+to renderers also denies dead/removed/spectator held use. Admission rechecks after the
+synchronous entity-join callback: death there rejects/discards the proposal and refunds
+only its actual reservation. A shot already accepted while alive stays paid if death
+occurs in its feedback; it cannot restart held use. Delayed callbacks from an old player
+object cannot create a dead session or stop a replacement object's new session.
+Immediate first shot, cadence2, arrow policy and projectile physics remain unchanged.
+
+`blaster.json` has an explicit `firstperson_lefthand` rotation `[0,180,-90]`.
+Vanilla's physical-left mirror makes this `[0,-180,90]`: imported +X stays camera-up
+and +Z stays camera-forward (-Z), as with the right hand. The existing `.55` FP fitting
+scale, source mesh/animation, translations, right FP and all world/third-person transforms
+are unchanged. Independent tests execute the actual JSON through vanilla ItemTransform,
+checking both hands' up/forward/grip, source-unit scale and the complete mirror matrix.
+This mathematical correction still needs independent actual new-head screenshots; matching
+ring centers alone does not certify model orientation, cropping or owner natural fitting.
+B3 whole-body anchoring remains installed and owner-held, not silently replaced.
+
 Accepted Creative/Survival/Adventure/main-hand/spectator rules, two-tick held cadence,
 ordinary-arrow offhand-first payment, damage/drag/no-gravity/speed2/lifetime12/no-pickup
 remain. A same-tick duplicate pull cannot admit another immediate shot. Dry-click state

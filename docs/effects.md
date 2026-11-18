@@ -152,6 +152,13 @@ effect programs. Affected exact-tree captures must be repeated. Whole-body muzzl
 anchoring remains unapproved; measured grip-preserving source attachment sampling is
 described in [development.md](development.md), not silently installed as a new policy.
 
+Corrective pass2 adds an explicit physical-left first-person fitting because T20's actual
+frames showed inversion/cropping despite matching ring centers. It preserves imported
+mesh/animation, the existing FP scale, all world/third-person transforms and effect
+programs. Dead-owner admission is denied before accepted shot effects. Neither the
+independent axis/matrix regression nor ring alignment certifies new-head screenshots;
+T20 visual retest and the owner-held whole-body-anchor decision remain pending.
+
 - Actual in-world appearance, camera/depth/FOV/material interleaving and two-client
   networking need separate T and owner playtest. Earlier actual-texture GPU
   material/resource fixtures passed; they are not live-world approval.

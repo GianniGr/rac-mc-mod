@@ -33,6 +33,10 @@ public final class RangedFireSessions {
     }
     private RangedFireSessions() {}
     public static void accepted(ServerPlayer player) {
+        if (!player.isAlive() || player.isRemoved() || player.isSpectator()) {
+            reject(player);
+            return;
+        }
         Session session = ACTIVE.get(player.getUUID());
         if (session != null && (session.player != player || session.world != player.level()
                 || session.weapon != player.getMainHandItem() || session.slot != player.getInventory().selected)) {
@@ -46,8 +50,12 @@ public final class RangedFireSessions {
         RangedFireSignal.emit(player, session.id, ++revision, true);
     }
     public static void reject(ServerPlayer player) {
-        Session session = ACTIVE.remove(player.getUUID());
-        if (session != null) session.stop();
+        Session session = ACTIVE.get(player.getUUID());
+        // A delayed old-entity callback must not stop a replacement player's new session.
+        if (session != null && session.player == player) {
+            ACTIVE.remove(player.getUUID());
+            session.stop();
+        }
     }
     @SubscribeEvent public static void tick(ServerTickEvent.Post event) {
         ACTIVE.values().removeIf(session -> {
