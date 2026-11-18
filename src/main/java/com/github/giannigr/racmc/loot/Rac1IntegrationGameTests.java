@@ -34,9 +34,10 @@ public final class Rac1IntegrationGameTests {
         var first = place(level, a, Rac1Crates.EXPLOSIVE);
         var chained = place(level, b, Rac1Crates.EXPLOSIVE);
         var wood = place(level, a.south(2), Rac1Crates.BOLT);
-        place(level, a.west(), Rac1Crates.HEALTH);
+        var health = place(level, a.west(), Rac1Crates.HEALTH);
         place(level, a.north(), Rac1Crates.AMMO);
         UUID aid = first.rewardId(), bid = chained.rewardId(), wid = wood.rewardId();
+        UUID hid = health.rewardId();
         int beforeCount = snapshot(level).getList("rewarded", Tag.TAG_COMPOUND).size();
         long beforeValue = total(snapshot(level));
         // An existing moving currency view must survive every member of the chain.
@@ -57,8 +58,9 @@ public final class Rac1IntegrationGameTests {
             var paid = snapshot(level);
             h.assertTrue(rewarded(paid, aid) && rewarded(paid, bid) && rewarded(paid, wid),
                     "Missing actual self/chain/neighbor reward");
-            // Health/ammo have zero value but are consumed through the same service.
-            h.assertTrue(paid.getList("rewarded", Tag.TAG_COMPOUND).size() == beforeCount + 6,
+            // Health now belongs only to the nanotech ledger; ammo remains zero currency.
+            h.assertTrue(paid.getList("rewarded", Tag.TAG_COMPOUND).size() == beforeCount + 5
+                    && !rewarded(paid, hid) && Rac1NanotechLedger.get(level).released(hid),
                     "Incarnation was lost or consumed more than once");
             long value = total(paid) - beforeValue;
             h.assertTrue(value >= min && value <= max, "Payout outside original profiles");

@@ -24,7 +24,10 @@ nanotech, the crate of the ammunition of Gadgetron and the red explosive crate c
 the world and are in the tab of the creative mode of the mod. They keep the size and the
 proportions they have in the game and fit into one block. Wooden and explosive crates emit
 bolt currency when destroyed; explosive crates detonate and chain-arm nearby explosives.
-Health/ammunition rewards are not implemented. See [`docs/integration.md`](docs/integration.md)
+Health crates now release eight-orb nanotech clusters healing one scaled original
+HP (5 Minecraft HP/2.5 hearts per cluster); independent verification is pending.
+Ammunition rewards remain unimplemented. See [`docs/nanotech.md`](docs/nanotech.md)
+and [`docs/integration.md`](docs/integration.md)
 for this combined candidate's verification limits and [`docs/bolt-currency.md`](docs/bolt-currency.md) for
 original payout rules, cosmetic items, persistence policy and pending verification.
 The [original bolt HUD](docs/hud-assets.md) is imported from the disc into the local cache too.

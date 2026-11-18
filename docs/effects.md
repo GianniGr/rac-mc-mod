@@ -36,11 +36,14 @@ required. Existing arrow damage/firing/physics and crate transactions are unchan
   Ordinary wood/ammo breaks use debris357/358; health breaks348/349.
   Generic static-moby import/render preserves original scale/material slots,
   rather than registering debris as unit-fitted crates. No P29 branch was merged.
-- Intact **grounded** health-crate rendering supplies visible authoritative block
+- Intact grounded health-crate rendering supplies visible authoritative block
   positions: eight procedural type62 orbs, integer-fade trails, original overlay
   hemisphere/halo/glass with FX21/FX11, and camera-dependent glass ST. The geometry
   tables are read from the player's disc, not synthesized spheres or class806 meshes.
-  Removal stops these visuals. No release, pickup, attraction or healing is added.
+  Removal stops that intact anchor. P33 additionally renders falling interiors and
+  released/free/attracting server-ledger carriers through this same local catalog;
+  released geometry has no intact glass. See [nanotech.md](nanotech.md) for gameplay,
+  scaled healing, canonical timing adaptations and current verification boundaries.
 
 ## Source and cache contracts
 
@@ -133,10 +136,10 @@ entities, health, rewards or arrow physics.
   global RNG/PS2 arithmetic and full framebuffer parity.
 - Blaster periodic camera-relative side sparks, muzzle/socket attachment, exact
   original end-reason presentation and aiming/alignment work #11.
-- Falling health-crate nanotech attachment and released/free/attracting cluster
-  rendering. Nanotech pickup/drop/target selection/healing is a separate server
-  gameplay contract: eight visual orbs equal one original HP per cluster, **not**
-  eight HP. No Minecraft health conversion or attraction policy is selected.
+- Nanotech falling/free/attracting rendering and the separate server pickup ledger
+  are now implemented by P33, pending independent T19. Eight visual orbs equal one
+  original HP/cluster, scaled to5MC-HP, not eight rewards. Type59/60 heal ring/glints,
+  exact PAL nested timing and full original platform/hazard fidelity remain missing.
 - General particle kinds1/2/3, other type11 flags/consumers, other original effect
   adapters, overlay/mesh sidecar caching and shared media-manifest integration.
 

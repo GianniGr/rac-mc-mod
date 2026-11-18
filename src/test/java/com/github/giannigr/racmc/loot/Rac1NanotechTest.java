@@ -81,19 +81,26 @@ class Rac1NanotechTest {
         var saved = ledger.save(new CompoundTag(), null);
         var clusters = saved.getList("clusters", Tag.TAG_COMPOUND);
         clusters.add(clusters.getCompound(0).copy());
-        assertThrows(IllegalArgumentException.class, () -> Rac1NanotechLedger.load(saved, null));
+        assertThrows(IllegalArgumentException.class, () -> Rac1NanotechLedger.decode(saved));
         clusters.remove(1);
         clusters.getCompound(0).getCompound("p").putDouble("x", Double.NaN);
-        assertThrows(IllegalArgumentException.class, () -> Rac1NanotechLedger.load(saved, null));
+        assertThrows(IllegalArgumentException.class, () -> Rac1NanotechLedger.decode(saved));
         assertFalse(new Rac1NanotechLedger().release(UUID.randomUUID(), Level.OVERWORLD,
                 new Vec3(Double.NaN, 0, 0), 1));
     }
     @Test void invalidVelocityAndMissingTombstoneNeverRegenerate() {
         var saved = released(UUID.randomUUID()).save(new CompoundTag(), null);
         saved.getList("clusters", Tag.TAG_COMPOUND).getCompound(0).putDouble("velocity", -100);
-        assertThrows(IllegalArgumentException.class, () -> Rac1NanotechLedger.load(saved, null));
+        assertThrows(IllegalArgumentException.class, () -> Rac1NanotechLedger.decode(saved));
         saved.getList("clusters", Tag.TAG_COMPOUND).getCompound(0).putDouble("velocity", 0);
         saved.put("released", new ListTag());
-        assertThrows(IllegalArgumentException.class, () -> Rac1NanotechLedger.load(saved, null));
+        assertThrows(IllegalArgumentException.class, () -> Rac1NanotechLedger.decode(saved));
+    }
+    @Test void malformedStorageQuarantinesRatherThanReturningFreshRewardOwner() {
+        var bad = new CompoundTag(); bad.putInt("schema", 999);
+        var disabled = Rac1NanotechLedger.load(bad, null);
+        assertEquals(0, disabled.pendingCount());
+        assertFalse(disabled.release(UUID.randomUUID(), Level.OVERWORLD, new Vec3(0, 64, 0), 1));
+        assertEquals(bad, disabled.save(new CompoundTag(), null));
     }
 }

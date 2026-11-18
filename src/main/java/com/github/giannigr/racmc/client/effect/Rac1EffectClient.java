@@ -43,7 +43,8 @@ public final class Rac1EffectClient {
     private record Nano(UUID id, EffectSignal.Point base, long seed, boolean intact,
                         EffectSignal.Point target, double age) {
         List<EffectSignal.Point> orbs(double updates) {
-            return target == null ? Rac1NanotechVisuals.orbs(base, updates, seed)
+            return target == null ? (intact ? Rac1NanotechVisuals.orbs(base, updates, seed)
+                    : Rac1NanotechVisuals.freeOrbs(base, updates, seed))
                     : Rac1NanotechVisuals.attracting(base, target, age, seed);
         }
     }
@@ -198,10 +199,14 @@ public final class Rac1EffectClient {
         if (orderedHealth.size() > 16) orderedHealth.subList(16, orderedHealth.size()).clear();
         Collections.reverse(orderedHealth);
         List<Nano> controllers = new ArrayList<>();
-        for (var pos : orderedHealth)
+        for (var pos : orderedHealth) {
+            long seed = pos.asLong();
+            if (minecraft.level.getBlockEntity(pos) instanceof com.github.giannigr.racmc.block.Rac1CrateBlockEntity crate
+                    && crate.rewardId() != null) seed = crate.rewardId().getLeastSignificantBits();
             controllers.add(new Nano(new UUID(0, pos.asLong()),
                     new EffectSignal.Point(pos.getX() + .5, pos.getY(), pos.getZ() + .5),
-                    pos.asLong(), true, null, 0));
+                    seed, true, null, 0));
+        }
         for (var entity : minecraft.level.entitiesForRendering()) {
             if (controllers.size() >= 128) break;
             if (entity.distanceToSqr(event.getCamera().getPosition()) > 64 * 64) continue;

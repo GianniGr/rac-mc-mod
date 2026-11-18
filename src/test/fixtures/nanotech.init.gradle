@@ -4,6 +4,7 @@ allprojects {
         if (!project.hasProperty('nanotechDirectory'))
             throw new GradleException('Supply private -PnanotechDirectory')
         def directory = file(project.property('nanotechDirectory'))
+        def namespace = project.findProperty('nanotechNamespace') ?: 'racmc_nanotech'
         layout.buildDirectory = new File(directory, 'build')
         sourceSets.main.java.srcDir(new File(project.projectDir, 'src/test/fixtures/nanotech/java'))
         sourceSets.main.output.classesDirs.setFrom(new File(directory, 'build/classes/java/main'))
@@ -11,7 +12,7 @@ allprojects {
         tasks.named('processResources') { destinationDir = new File(directory, 'build/resources/main') }
         sourceSets.main.output.resourcesDir = new File(directory, 'build/resources/main')
         sourceSets.main.resources.srcDir(new File(directory, 'resources'))
-        def fixture = new File(directory, 'resources/data/racmc_nanotech/structure/empty.nbt')
+        def fixture = new File(directory, "resources/data/${namespace}/structure/empty.nbt")
         tasks.register('generateNanotechFixture') {
             outputs.file(fixture)
             doLast {
@@ -31,6 +32,6 @@ allprojects {
         }
         tasks.named('processResources') { dependsOn('generateNanotechFixture') }
         neoForge.runs.gameTestServer.gameDirectory = new File(directory, 'runtime')
-        neoForge.runs.gameTestServer.systemProperty('neoforge.enabledGameTestNamespaces', 'racmc_nanotech')
+        neoForge.runs.gameTestServer.systemProperty('neoforge.enabledGameTestNamespaces', namespace)
     }
 }

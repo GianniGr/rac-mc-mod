@@ -103,6 +103,10 @@ class Rac1SoundPipelineTest {
         assertEquals(14, Rac1AudioEvent.attraction(5).classId());
         assertEquals(15, Rac1AudioEvent.attraction(20).classId());
         assertEquals(16, Rac1AudioEvent.attraction(50).classId());
+        assertEquals(501, Rac1AudioEvent.NANOTECH_FIRST_ARRIVAL.classId());
+        assertEquals(1, Rac1AudioEvent.NANOTECH_FIRST_ARRIVAL.slot());
+        assertNotEquals(Rac1AudioEvent.HEALTH_CRATE_BREAK, Rac1AudioEvent.NANOTECH_FIRST_ARRIVAL);
+        assertFalse(Rac1AudioEvent.NANOTECH_FIRST_ARRIVAL.bolt());
         for (var event : Rac1AudioEvent.values()) assertEquals(1, event.level());
     }
     @Test void beepThresholdsAreDiscreteNoDuplicateTickOrTerminalPlayback() {
@@ -120,12 +124,14 @@ class Rac1SoundPipelineTest {
         var buffer = new net.minecraft.network.RegistryFriendlyByteBuf(
                 io.netty.buffer.Unpooled.buffer(), net.minecraft.core.RegistryAccess.EMPTY);
         try {
-            var signal = new Rac1AudioSignal(Rac1AudioEvent.TNT_BEEP, 1.25, 64, -2.5, 123,
-                    net.minecraft.resources.ResourceLocation.withDefaultNamespace("overworld"));
-            Rac1AudioSignal.CODEC.encode(buffer, signal);
-            assertTrue(buffer.readableBytes() < 100);
-            assertEquals(signal, Rac1AudioSignal.CODEC.decode(buffer));
-            assertEquals(0, buffer.readableBytes());
+            for (var event : Rac1AudioEvent.values()) {
+                var signal = new Rac1AudioSignal(event, 1.25, 64, -2.5, 123,
+                        net.minecraft.resources.ResourceLocation.withDefaultNamespace("overworld"));
+                Rac1AudioSignal.CODEC.encode(buffer, signal);
+                assertTrue(buffer.readableBytes() < 100);
+                assertEquals(signal, Rac1AudioSignal.CODEC.decode(buffer));
+                assertEquals(0, buffer.readableBytes());
+            }
         } finally { buffer.release(); }
     }
 }

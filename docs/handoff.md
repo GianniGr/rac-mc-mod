@@ -1,4 +1,46 @@
-# P32 T18 repair follow-up — 2026-11-18
+# P33 nanotech — 2026-11-18
+
+Owner-authorized sole P33 writer (`openai/gpt-6.1-sol#medium`) followed T18's
+**combined PASS on exact99b781e87a255927bd1e30de6099d2252ee60033**. Same worktree
+and `integration/approved-feature-wave`; no push/PR/GitHub/provider merge.
+Implementation milestone: `143a86b`; obtain final candidate with `git rev-parse HEAD`.
+
+Now implemented: successful health-crate destruction -> exactly one source-UUID
+cluster, eight local visual paths, vertical free fall, original attraction/full
+health policy, one first-arrival5MC-HP clamp and one verified501/local1 audio cue.
+No health-crate bolts, XP or inventory item. Shared RACS v2 adds this mapping;
+RACM7 and unrelated unmapped sounds remain unchanged. [nanotech.md](nanotech.md)
+owns exact original facts, MC adaptations, safety/recovery, resource bounds and
+fidelity limitations. Wrench balance/returning-bolt attraction are untouched.
+
+P33 focused tests, hidden-context imported-orb GPU sampling, NTSC/PAL cue/hash
+tests and real headless server health/restart probes are **initial P evidence**,
+not independent T19 or actual client-network/visual/audible certification. Private
+logs/report: `%LOCALAPPDATA%\Temp\opencode\p33-nanotech`. The source-controlled
+opt-in nanotech init isolates fixture classes/resources and outputs from normal
+publication builds.
+
+Measured initial checks:109 focused JUnit passed/2 opt-in skips (23 suites);
+separate NTSC and PAL real-sound tests and hidden-context GPU probes passed.
+Nanotech headless8/8 passed, including bounded entity metadata, receiver lifetime identity and
+actual world-ledger restart; existing release5/5 and integration5/5 passed.
+The chain oracle was updated from the obsolete health-as-zero-bolt-tombstone
+expectation to a separate health UUID tombstone with unchanged bolt conservation.
+No full719-test rerun, real client session, two-client sync or audible listening
+is claimed by P33. Final exact commands/hashes/lifecycle are in the private report.
+
+**Artifact boundary:** previous P32/T18 publishable JAR/source archives describe
+the old revision and must not be published as this candidate. Default `build/`
+was already instrumented by earlier private testing; no cleanup/discard was done.
+Fresh normal non-fixture outputs must be rebuilt/audited for the new candidate,
+then independent T19 verifies that exact tree. No all-M2-complete/issue closure.
+
+All P32 sections below are historical. Their “nanotech not started” and “T18
+pending” statements describe their original candidate, not current status.
+
+---
+
+# Historical P32 T18 repair follow-up — 2026-11-18
 
 Owner resumed testing and assigned **only the T18 repairs** on the same
 `integration/approved-feature-wave`, from `27198695c3df27f3c2a59a9c80c6386f651c9558`.

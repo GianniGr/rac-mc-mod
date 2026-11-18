@@ -33,6 +33,12 @@ public final class Rac1NanotechVisuals {
         }
         return List.copyOf(points);
     }
+    public static List<Point> freeOrbs(Point base, double updates, long seed) {
+        double radiusScale = (.25 + .15 * Math.sin(updates * Math.PI / 90)) / .25;
+        Point center = base.add(0, .5 + bob(updates, seed), 0);
+        return orbs(base, updates, seed).stream().map(p ->
+                add(center, scale(sub(p, center), radiusScale))).toList();
+    }
     public static List<Group> geometry(NanotechTables tables, Point base, Point camera, double updates) {
         return geometry(tables, base, camera, updates, 0);
     }

@@ -18,12 +18,19 @@ reference profile, not a Minecraft dimension:
 | TNT blast or manual break | 505 / 0 |
 | TNT countdown beep | 505 / 1 |
 | Bolt attraction begins | 13, 14, 15, 16 / 0 |
+| Nanotech cluster first-arrival consume | 501 / 1 |
 
 These associations follow R07's verified PAL call sites and measured PAL/NTSC
 maps. NTSC gameplay machine code was not independently traced. No vendor,
 Blaster or wrench audio is bound: their event dispatch still needs research.
 Bolt collection is **not** an extra ding. Denominations use the existing
 bolt visual class mapping (1/5/20/50).
+
+The nanotech addition is separately corroborated by R10's **both NTSC and PAL**
+arrival call sites. It resolves level1 cue175/grain452 through the same shared
+catalog, never the501/local0 break or13/local0 bolt cue. One locked cluster emits
+once at first arrival (including full-during-flight consumption), not once per
+orb, release or attraction. See [nanotech.md](nanotech.md) for gameplay/scaling.
 
 Server emission follows successful exactly-once destruction, not generic block
 removal/falling transfer. TNT self-consumption uses that same destruction hook,
@@ -45,8 +52,9 @@ predictor pairs, rounded prediction and signed16 saturation, and stops at the
 first end flag within a waveform's bounded span. Loop flags/start/end are
 preserved. It does not copy or depend on a GPL decoder.
 
-`sound/sound-<verified-source-SHA1>-v1.racs` under the configured cache root is a
-**separate RACS sidecar**, schema/converter 1. It does not change RACM, its
+`sound/sound-<verified-source-SHA1>-v2.racs` under the configured cache root is a
+**separate RACS sidecar**, schema/converter2, adding501/local1. Old v1 is retained
+but no longer satisfies the complete catalog. It does not change RACM, its
 reserved section IDs, or its asset gate. Its identity includes the whole verified
 source hash and converter version; each clip also retains bank/ADPCM SHA-256,
 resolved cue, class definition, cue/grain metadata and loop markers. Runtime bank

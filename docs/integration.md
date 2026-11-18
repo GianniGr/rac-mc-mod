@@ -1,4 +1,13 @@
-# Approved feature-wave integration candidate — P32
+# Approved feature-wave integration candidate — P33
+
+**Current P33 nanotech addition:** T18 combined PASS applies to exact
+`99b781e87a255927bd1e30de6099d2252ee60033`, before this change. Owner authorized P33
+on this same branch/worktree. Health destruction/released and falling visuals,
+attraction, one scaled5HP first-arrival heal and original pickup cue are now
+implemented; see [nanotech.md](nanotech.md). **Independent T19 is required on the
+new exact candidate.** Prior P32/T18 JAR/source archives are obsolete as artifacts
+for this revision; rebuild/audit normal non-fixture artifacts before publication.
+Historical verification statements below are not new-candidate PASS claims.
 
 **2026-11-18 T18 repair follow-up:** held explosive START now respects an active
 item cooldown (no balance change); the falling regression's global-ledger oracle
@@ -22,6 +31,7 @@ Branch: `integration/approved-feature-wave`, exclusive worktree
 | Sound | `739248ad66e2c135f91bc0df186bcb5c0c96a235`; verified crate/beep/blast/bolt-attraction mappings only |
 | Effects | `7106e9dbd3a0daa0be735c3223c194a1068bee57`; imported banks + accepted procedural preview, not 1:1 original fidelity |
 | Wrench | `afca22185bbdda39af269e709c435a3ac4eaec0b`, includes server-local provider `996dc61`; held/slam/thrown crate adapters wired |
+| Nanotech | P33/R10: one ledger-owned eight-orb cluster, fixed MC5HP (scaled original1HP), class501/local1 first-arrival cue; T19 pending, fidelity limits retained |
 
 ## Final integration choices
 
@@ -30,7 +40,7 @@ Branch: `integration/approved-feature-wave`, exclusive worktree
   HUD 6, wrench 71. Client and server use one union importer. Client readiness checks
   wrench as well as vendor, HUD and every crate/bolt; incomplete caches rebuild/fail,
   never silently READY. Incomplete synthetic codec fixtures may still represent null.
-- Sound remains independently versioned RACS v1; effects remain independently
+- Sound now uses independently versioned RACS v2 (adds nanotech501/local1); effects remain independently
   schema/converter-versioned RACEFX. Neither writes a RACM section. Cosmetic RNG
   does not advance payout/fuse RNG. Optional cosmetic transport failure cannot
   suppress the accepted reward or blast.
@@ -66,9 +76,9 @@ is research-ready but **not approved or implemented**. Vendor/Blaster/wrench aud
 mappings stay **UNBOUND**, not guessed. Existing procedural FX/material/PS2 fidelity
 limits in [effects.md](effects.md) remain; this is not 1:1 emulation.
 
-**Nanotech next session only:** released/falling health orbs, pickup sound and
-healing gameplay. Current health-crate orbs are grounded visuals only, grant no
-health and do not establish a completed pickup system. No broad Blaster #11 refactor,
+**Nanotech implemented, independent verification pending:** released/falling
+clusters, original pickup sound and scaled healing; type59/60 healing ring/glints,
+exact PAL timing and PS2 presentation/audio fidelity remain excluded. No broad Blaster #11 refactor,
 shop/unfold feature, GPL implementation/dependency or proprietary Git assets added.
 
 Live dedicated/client synchronization, remote observations/late join, ground/fall

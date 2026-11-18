@@ -10,6 +10,7 @@ import net.minecraft.world.level.*;
 
 /** One bounded semantic carrier, not eight rewarding entities. No asset bytes on the wire. */
 public final class Rac1NanotechEntity extends Entity {
+    private int seenAge = -1, ageExtrapolation;
     private static final EntityDataAccessor<Long> SEED = SynchedEntityData.defineId(Rac1NanotechEntity.class, EntityDataSerializers.LONG);
     private static final EntityDataAccessor<Optional<UUID>> RECEIVER =
             SynchedEntityData.defineId(Rac1NanotechEntity.class, EntityDataSerializers.OPTIONAL_UUID);
@@ -27,11 +28,19 @@ public final class Rac1NanotechEntity extends Entity {
     }
     public long seed() { return entityData.get(SEED); }
     public Optional<UUID> receiver() { return entityData.get(RECEIVER); }
-    public int attractionAge() { return Math.clamp(entityData.get(AGE), 0, 100); }
+    public int attractionAge() {
+        int age = Math.clamp(entityData.get(AGE), 0, 100);
+        return level().isClientSide && age == seenAge ? Math.min(100, age + ageExtrapolation) : age;
+    }
     public boolean committed() { return entityData.get(COMMITTED); }
     @Override public void tick() {
         // No baseTick fire/void/item despawn policy.
         xo = getX(); yo = getY(); zo = getZ(); tickCount++;
+        if (level().isClientSide) {
+            int age = entityData.get(AGE);
+            if (age != seenAge) { seenAge = age; ageExtrapolation = 0; }
+            else if (receiver().isPresent()) ageExtrapolation = Math.min(3, ageExtrapolation + 1);
+        }
         if (level() instanceof ServerLevel s && Rac1NanotechLedger.get(s).cluster(getUUID()) == null) discard();
     }
     @Override protected void readAdditionalSaveData(CompoundTag tag) {}

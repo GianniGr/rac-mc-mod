@@ -43,6 +43,14 @@ class RealSoundDiscTest {
                 var bank = new Rac1SoundBank(container.soundBank(image));
                 byte[] index = image.readBytes(container.base() + container.coreIndexOffset(), container.coreIndexSize());
                 var assets = Rac1LevelAssets.load(image, level);
+                var healthClass = assets.coreIndex().mobyClass(501);
+                int healthCue = Rac1SoundMap.resolve(index, assets.classBlob(healthClass.offset()), 501, 1).cue();
+                assertEquals(new int[]{181, 175, 165}[level], healthCue);
+                var healthTone = bank.tone(healthCue);
+                assertEquals(new int[]{378, 452, 305}[level], healthTone.grain());
+                assertEquals(health.adpcmHash(), healthTone.adpcmHash());
+                assertEquals(77, healthTone.centerNote());
+                assertEquals(6, healthTone.fine());
                 var crate = assets.coreIndex().mobyClass(500);
                 int cue = Rac1SoundMap.resolve(index, assets.classBlob(crate.offset()), 500, 0).cue();
                 assertEquals(new int[]{179, 173, 163}[level], cue);

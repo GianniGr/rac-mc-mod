@@ -22,7 +22,10 @@ import net.neoforged.neoforge.gametest.*;
 @PrefixGameTestTemplate(false)
 public final class Rac1NanotechGameTests {
     private static ServerPlayer player(ServerLevel level, Vec3 at) {
-        var profile = new com.mojang.authlib.GameProfile(UUID.randomUUID(), "nano-probe");
+        return player(level, at, UUID.randomUUID());
+    }
+    private static ServerPlayer player(ServerLevel level, Vec3 at, UUID id) {
+        var profile = new com.mojang.authlib.GameProfile(id, "nano-probe");
         var p = new ServerPlayer(level.getServer(), level, profile, ClientInformation.createDefault());
         p.connection = new net.minecraft.server.network.ServerGamePacketListenerImpl(level.getServer(),
                 new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND),
@@ -57,6 +60,19 @@ public final class Rac1NanotechGameTests {
         try {
             run(ledger, l, 1);
             h.assertTrue(p.getHealth() == 10, "Release/attraction healed early");
+            var view = l.getEntitiesOfClass(Rac1NanotechEntity.class, new AABB(at, at).inflate(2)).getFirst();
+            var values = view.getEntityData().getNonDefaultValues();
+            h.assertTrue(values != null && values.size() <= 4, "Unbounded semantic entity metadata");
+            var buffer = new net.minecraft.network.RegistryFriendlyByteBuf(
+                    io.netty.buffer.Unpooled.buffer(), l.registryAccess());
+            try {
+                var packet = new net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket(view.getId(), values);
+                net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket.STREAM_CODEC.encode(buffer, packet);
+                h.assertTrue(buffer.readableBytes() < 128, "Cluster sends more than bounded semantic metadata");
+                var decoded = net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket.STREAM_CODEC.decode(buffer);
+                h.assertTrue(decoded.id() == view.getId() && decoded.packedItems().size() == values.size()
+                        && buffer.readableBytes() == 0, "Cluster metadata roundtrip failed");
+            } finally { buffer.release(); }
             run(ledger, l, 40);
             h.assertTrue(p.getHealth() == 15 && ledger.pendingCount() == 0, "Not exactly5HP once");
             h.assertTrue(sounds.size() == 1 && p.totalExperience == 0, "Sound duplicated or XP awarded");
@@ -167,5 +183,78 @@ public final class Rac1NanotechGameTests {
         var reload = Rac1NanotechLedger.load(health.save(new CompoundTag(), null), null);
         h.assertTrue(reload.released(source) && reload.released(groundId), "Reload tombstones lost");
         h.succeed();
+    }
+    @GameTest(template = "empty", batch = "nano_recovery")
+    public static void deniedViewAdmissionRetainsPendingAndDeathReleasesReservation(GameTestHelper h) {
+        var l = h.getLevel(); var at = base(h); var p = player(l, at.add(1, 0, 0)); p.setHealth(10);
+        var ledger = new Rac1NanotechLedger(); UUID source = UUID.randomUUID();
+        ledger.release(source, l.dimension(), at, 42);
+        Consumer<net.neoforged.neoforge.event.entity.EntityJoinLevelEvent> veto = e -> {
+            if (e.getEntity() instanceof Rac1NanotechEntity) e.setCanceled(true);
+        };
+        NeoForge.EVENT_BUS.addListener(veto);
+        try {
+            run(ledger, l, 50);
+            h.assertTrue(ledger.pendingCount() == 1 && p.getHealth() == 10, "Denied admission consumed/healed");
+        } finally { NeoForge.EVENT_BUS.unregister(veto); }
+        try {
+            run(ledger, l, 1); p.setHealth(0); run(ledger, l, 1);
+            h.assertTrue(ledger.pendingCount() == 1 && p.getHealth() == 0, "Death resurrected/consumed");
+            var tag = ledger.save(new CompoundTag(), null);
+            var c = ledger.cluster(tag.getList("clusters", Tag.TAG_COMPOUND).getCompound(0).getUUID("id"));
+            h.assertTrue(c.receiver == null && c.age == 0, "Reservation not cancelled");
+            // Same UUID, different player lifetime: replacing the receiver between server ticks cannot
+            // redirect an old flight to a respawn/rejoin instance.
+            p.setHealth(10); run(ledger, l, 1);
+            h.assertTrue(c.receiverInstance == p, "Fixture did not lock original lifetime");
+            l.removePlayerImmediately(p, net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
+            var replacement = player(l, at.add(1, 0, 0), p.getUUID()); replacement.setHealth(10);
+            try {
+                run(ledger, l, 1);
+                h.assertTrue(c.receiver == null && replacement.getHealth() == 10,
+                        "Old flight healed a respawn/rejoin replacement");
+            } finally { replacement.discard(); }
+            h.succeed();
+        } finally { cleanup(l, p); }
+    }
+    @GameTest(template = "empty", batch = "nano_restart")
+    public static void actualWorldLedgerSurvivesGracefulRestart(GameTestHelper h) {
+        var ledger = Rac1NanotechLedger.get(h.getLevel());
+        UUID source = UUID.fromString("98cdebe1-25cf-4be3-99a8-612fb53f0033");
+        boolean read = "read".equals(System.getenv("RACMC_NANOTECH_RESTART_PHASE"));
+        if (read) h.assertTrue(ledger.released(source), "Actual saved world lost source tombstone");
+        else ledger.release(source, h.getLevel(), base(h));
+        var tag = ledger.save(new CompoundTag(), h.getLevel().registryAccess());
+        h.assertTrue(tag.getList("clusters", Tag.TAG_COMPOUND).stream()
+                .anyMatch(t -> ((CompoundTag)t).getUUID("source").equals(source)), "Actual saved pending lost");
+        h.succeed(); // GameTestServer's normal shutdown saves, next read-phase process loads this same world.
+    }
+    @GameTest(template = "empty", batch = "nano_selection")
+    public static void strictRangeSightTieBreakAndMidflightMaximumClamp(GameTestHelper h) {
+        var l = h.getLevel(); var at = base(h);
+        var a = player(l, at.add(10, 0, 0)); a.setHealth(10);
+        var b = player(l, at.add(-1, 0, 0)); b.setHealth(20);
+        var ledger = new Rac1NanotechLedger(); ledger.release(UUID.randomUUID(), l.dimension(), at, 42);
+        UUID id = ledger.save(new CompoundTag(), null).getList("clusters", Tag.TAG_COMPOUND).getCompound(0).getUUID("id");
+        try {
+            run(ledger, l, 1);
+            h.assertTrue(ledger.cluster(id).receiver == null, "Distance10 admitted");
+            a.setPos(at.add(3, 0, 0));
+            var wall = BlockPos.containing(at).east();
+            l.setBlock(wall, Blocks.STONE.defaultBlockState(), 3);
+            run(ledger, l, 1);
+            h.assertTrue(ledger.cluster(id).receiver == null, "Blocked sight admitted");
+            l.removeBlock(wall, false);
+            a.setPos(at.add(1, 0, 0)); b.setHealth(10);
+            run(ledger, l, 1);
+            var expected = a.getUUID().toString().compareTo(b.getUUID().toString()) < 0 ? a : b;
+            var other = expected == a ? b : a;
+            h.assertTrue(expected.getUUID().equals(ledger.cluster(id).receiver), "Tie is not stableUUID");
+            expected.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH).setBaseValue(12);
+            run(ledger, l, 40);
+            h.assertTrue(expected.getHealth() == 12 && other.getHealth() == 10,
+                    "Changed max not clamped/overlapping second winner");
+            h.succeed();
+        } finally { cleanup(l, a, b); }
     }
 }

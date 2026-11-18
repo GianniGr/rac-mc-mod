@@ -18,6 +18,7 @@ public final class Rac1NanotechLedger extends SavedData {
     static final int BUDGET = 128;
     private final Set<UUID> released = new HashSet<>();
     private final Map<UUID, Cluster> pending = new TreeMap<>();
+    private CompoundTag quarantine;
     private int cursor;
     public static final class Cluster {
         final UUID id, source;
@@ -26,6 +27,7 @@ public final class Rac1NanotechLedger extends SavedData {
         Vec3 position, safe;
         double velocity;
         UUID receiver;
+        ServerPlayer receiverInstance; // lifetime identity: never heal a respawn/rejoin replacement with the same UUID
         int age;
         boolean committed;
         Cluster(UUID id, UUID source, ResourceKey<Level> dimension, Vec3 position, long seed) {
@@ -41,10 +43,10 @@ public final class Rac1NanotechLedger extends SavedData {
     public boolean released(UUID source) { return released.contains(source); }
     Cluster cluster(UUID id) { return pending.get(id); }
     public void release(UUID source, ServerLevel level, Vec3 position) {
-        release(source, level.dimension(), position, level.random.nextLong());
+        release(source, level.dimension(), position, source.getLeastSignificantBits());
     }
     boolean release(UUID source, ResourceKey<Level> dimension, Vec3 position, long seed) {
-        if (!valid(position) || !released.add(source)) return false;
+        if (quarantine != null || !valid(position) || !released.add(source)) return false;
         // Stable distinct view identity; never regenerate on spawn failure or load.
         UUID id = UUID.nameUUIDFromBytes(("racmc:nanotech:" + source).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         pending.put(id, new Cluster(id, source, dimension, position, seed));
@@ -56,29 +58,32 @@ public final class Rac1NanotechLedger extends SavedData {
                 && p.serverLevel() == level && Float.isFinite(p.getHealth())
                 && Float.isFinite(p.getMaxHealth()) && p.getHealth() > 0 && p.getMaxHealth() > 0;
     }
-    private int incoming(UUID player) {
-        return (int) pending.values().stream().filter(c -> !c.committed && player.equals(c.receiver)).count();
-    }
     private static void cancel(Cluster c) {
-        c.receiver = null; c.age = 0; c.position = c.safe; c.velocity = 0;
+        c.receiver = null; c.receiverInstance = null; c.age = 0; c.position = c.safe; c.velocity = 0;
     }
     public void tick(ServerLevel level) {
+        if (quarantine != null) return;
         // Bounded per-level active work; round-robin pending records, no force loading or global world scan.
         List<Cluster> records = pending.values().stream().filter(c -> c.dimension == level.dimension()).toList();
         if (records.isEmpty()) return;
+        Map<UUID, Integer> incoming = new HashMap<>();
+        for (var c : pending.values())
+            if (!c.committed && c.receiver != null) incoming.merge(c.receiver, 1, Integer::sum);
         int start = Math.floorMod(cursor, records.size()), count = Math.min(BUDGET, records.size());
         int views = 0;
         for (var c : records) if (level.getEntity(c.id) instanceof Rac1NanotechEntity) views++;
         for (int n = 0; n < count; n++) {
             Cluster c = records.get((start + n) % records.size());
             if (!level.hasChunkAt(BlockPos.containing(c.position))) {
-                if (c.receiver != null && !c.committed) { cancel(c); setDirty(); }
+                if (c.receiver != null && !c.committed) { unreserve(incoming, c); cancel(c); setDirty(); }
                 continue;
             }
             var existing = level.getEntity(c.id);
             Rac1NanotechEntity view = existing instanceof Rac1NanotechEntity e ? e : null;
             if (existing != null && view == null) continue; // UUID conflict: fail closed, no new identity
-            if (c.receiver != null && view == null && !c.committed) cancel(c); // unload recovery
+            if (c.receiver != null && view == null && !c.committed) {
+                unreserve(incoming, c); cancel(c); // unload recovery
+            }
             if (view == null && views < BUDGET) {
                 view = new Rac1NanotechEntity(RacMcEntities.NANOTECH.get(), level);
                 view.setUUID(c.id); view.snapshot(c);
@@ -90,22 +95,30 @@ public final class Rac1NanotechLedger extends SavedData {
             if (c.receiver == null) {
                 fall(level, c, view);
                 ServerPlayer receiver = level.players().stream().filter(p -> living(p, level)
-                        && Rac1NanotechRules.eligible(p.getHealth(), p.getMaxHealth(), incoming(p.getUUID()))
+                        && Rac1NanotechRules.eligible(p.getHealth(), p.getMaxHealth(), incoming.getOrDefault(p.getUUID(), 0))
                         && Rac1NanotechRules.inRange(p.position().distanceToSqr(c.position))
                         && level.clip(new ClipContext(c.position.add(0, .5, 0), p.position().add(0, .5, 0),
                                 ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, viewForRay(level, c.id)))
                                 .getType() == HitResult.Type.MISS)
                         .min(Comparator.comparingDouble((ServerPlayer p) -> p.position().distanceToSqr(c.position))
                                 .thenComparing(p -> p.getUUID().toString())).orElse(null);
-                if (receiver != null) { c.receiver = receiver.getUUID(); c.age = 0; }
+                if (receiver != null) {
+                    c.receiver = receiver.getUUID(); c.age = 0;
+                    c.receiverInstance = receiver;
+                    incoming.merge(c.receiver, 1, Integer::sum);
+                }
             } else {
                 ServerPlayer p = level.getPlayerByUUID(c.receiver) instanceof ServerPlayer player ? player : null;
-                if (!c.committed && !living(p, level)) cancel(c);
+                if (!c.committed && (!living(p, level) || p != c.receiverInstance)) {
+                    unreserve(incoming, c); cancel(c);
+                }
                 else {
                     c.age++;
                     if (!c.committed && c.age >= Rac1NanotechRules.firstArrival(c.seed)) {
                         // Terminal ownership before callbacks: no second heal/cue, even for eight equal arrivals.
                         c.committed = true;
+                        c.receiverInstance = null;
+                        unreserve(incoming, c);
                         p.setHealth(Rac1NanotechRules.arrivalHealth(p.getHealth(), p.getMaxHealth()));
                         Rac1AudioSignal.emit(level, p.position(), Rac1AudioEvent.NANOTECH_FIRST_ARRIVAL);
                     }
@@ -118,6 +131,9 @@ public final class Rac1NanotechLedger extends SavedData {
             setDirty();
         }
         cursor = (start + count) % records.size();
+    }
+    private static void unreserve(Map<UUID, Integer> incoming, Cluster c) {
+        if (c.receiver != null) incoming.computeIfPresent(c.receiver, (id, count) -> Math.max(0, count - 1));
     }
     private static net.minecraft.world.entity.Entity viewForRay(ServerLevel level, UUID id) {
         return level.getEntity(id);
@@ -138,6 +154,7 @@ public final class Rac1NanotechLedger extends SavedData {
                 && Math.abs(p.x) <= 30_000_000 && Math.abs(p.z) <= 30_000_000 && Math.abs(p.y) <= 20_000_000;
     }
     @Override public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
+        if (quarantine != null) return quarantine.copy();
         tag.putInt("schema", 1);
         ListTag sources = new ListTag(), clusters = new ListTag();
         released.forEach(id -> { var t = new CompoundTag(); t.putUUID("source", id); sources.add(t); });
@@ -167,8 +184,27 @@ public final class Rac1NanotechLedger extends SavedData {
         return p;
     }
     static Rac1NanotechLedger load(CompoundTag tag, HolderLookup.Provider registries) {
+        try { return decode(tag); }
+        catch (RuntimeException malformed) {
+            // DimensionDataStorage may treat a throwing loader as absent data. Return a disabled owner,
+            // preserve the input, and refuse new rewards instead of silently creating an empty ledger.
+            var ledger = new Rac1NanotechLedger();
+            ledger.quarantine = tag.copy();
+            com.github.giannigr.racmc.RacMcMod.LOGGER.error(
+                    "Nanotech ledger quarantined; releases/healing disabled, original NBT retained: {}", malformed.toString());
+            return ledger;
+        }
+    }
+    static Rac1NanotechLedger decode(CompoundTag tag) {
         var ledger = new Rac1NanotechLedger();
         if (tag.getInt("schema") != 1) throw new IllegalArgumentException("Unsupported nanotech ledger");
+        if (!tag.contains("released", Tag.TAG_LIST) || !tag.contains("clusters", Tag.TAG_LIST))
+            throw new IllegalArgumentException("Missing nanotech ownership lists");
+        for (String key : List.of("released", "clusters")) {
+            var list = (ListTag) tag.get(key);
+            if (!list.isEmpty() && list.getElementType() != Tag.TAG_COMPOUND)
+                throw new IllegalArgumentException("Invalid nanotech ownership list type");
+        }
         if (tag.getList("released", Tag.TAG_COMPOUND).size() > 1_000_000
                 || tag.getList("clusters", Tag.TAG_COMPOUND).size() > 1_000_000)
             throw new IllegalArgumentException("Oversized nanotech ledger");
@@ -180,6 +216,8 @@ public final class Rac1NanotechLedger extends SavedData {
         Set<UUID> sources = new HashSet<>();
         for (Tag entry : tag.getList("clusters", Tag.TAG_COMPOUND)) {
             var t = (CompoundTag) entry;
+            if (!t.contains("seed", Tag.TAG_LONG) || !t.contains("velocity", Tag.TAG_DOUBLE))
+                throw new IllegalArgumentException("Missing nanotech motion fields");
             // Fail closed rather than minting a replacement identity.
             UUID id = t.getUUID("id"), source = t.getUUID("source");
             if (!ledger.released.contains(source) || !sources.add(source) || ledger.pending.containsKey(id))
