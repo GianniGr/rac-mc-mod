@@ -123,7 +123,8 @@ class Rac1BurstStateTest {
         state.reset();
         assertTrue(state.shotDue(101L));
         assertEquals(Long.MIN_VALUE, state.lastShotTick());
-        assertEquals(Long.MIN_VALUE, state.lastDryClickTick());
+        assertEquals(100L, state.lastDryClickTick());
+        assertFalse(state.dryClickAllowed(101L), "Release must not bypass the ten-tick click bound");
     }
 
     @Test

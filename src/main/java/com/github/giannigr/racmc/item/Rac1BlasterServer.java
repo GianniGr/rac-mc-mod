@@ -69,6 +69,8 @@ public final class Rac1BlasterServer {
 
     /** The key of the tick of the last click of the empty weapon in the data of a player. */
     private static final String LAST_CLICK = "racmcBlasterLastClick";
+    private static final String CLICKED = "racmcBlasterClicked";
+    private static final String LAST_ATTEMPT = "racmcBlasterLastAttempt";
 
     private Rac1BlasterServer() {
         throw new UnsupportedOperationException("Utility class");
@@ -88,6 +90,12 @@ public final class Rac1BlasterServer {
      * @return {@code false} when the mouth of the weapon is blocked and no shot was made
      */
     public static boolean fireFirstShot(Level level, Player player) {
+        if (player.isSpectator()) {
+            player.stopUsingItem();
+            if (player instanceof ServerPlayer server)
+                com.github.giannigr.racmc.item.weapon.RangedFireSessions.reject(server);
+            return false;
+        }
         if (!blasterInMainHand(player)) {
             // The Blaster is not in the main hand: no shot is made and the weapon is not used.
             return false;
@@ -98,8 +106,12 @@ public final class Rac1BlasterServer {
             return true;
         }
         Rac1BurstState state = stateOf(player);
-        state.beginPull();
         long now = level.getGameTime();
+        CompoundTag input = player.getPersistentData();
+        // Duplicate packets in the same server tick cannot create a second immediate pull.
+        if (input.contains(LAST_ATTEMPT) && input.getLong(LAST_ATTEMPT) == now) return false;
+        input.putLong(LAST_ATTEMPT, now);
+        state.beginPull();
         boolean fired;
         switch (Rac1FirePolicy.evaluate(modeOf(player), countArrows(player),
                 Rac1FirePolicy.Hand.MAIN)) {
@@ -147,7 +159,9 @@ public final class Rac1BlasterServer {
             case FIRE_WITH_AMMO -> fire(level, player, state, now, true);
             case DRY_FIRE -> dryFire(level, player, state, now);
             case BLOCKED -> {
-                // The spectator mode never fires and never clicks.
+                player.stopUsingItem();
+                if (player instanceof ServerPlayer server)
+                    com.github.giannigr.racmc.item.weapon.RangedFireSessions.reject(server);
             }
         }
         saveState(player, state);
@@ -220,17 +234,7 @@ public final class Rac1BlasterServer {
      * @return the number of ordinary arrows
      */
     public static int countArrows(Player player) {
-        int count = 0;
-        ItemStack offhand = player.getOffhandItem();
-        if (offhand.is(Items.ARROW)) {
-            count += offhand.getCount();
-        }
-        for (ItemStack stack : player.getInventory().items) {
-            if (stack.is(Items.ARROW)) {
-                count += stack.getCount();
-            }
-        }
-        return count;
+        return com.github.giannigr.racmc.item.weapon.BlasterAmmo.count(player);
     }
 
     /**
@@ -245,21 +249,24 @@ public final class Rac1BlasterServer {
      */
     private static boolean fire(Level level, Player player, Rac1BurstState state, long now,
                                 boolean withAmmo) {
-        Rac1BlasterArrow arrow = spawnArrow(level, player);
-        if (arrow == null) {
-            // The mouth of the weapon is blocked: no shot is made, no ammunition is used and the
-            // weapon stops being used, so that the shot is not drawn either.
+        boolean fired = com.github.giannigr.racmc.item.weapon.FireService.fire(
+                () -> reserveArrow(player, withAmmo),
+                new com.github.giannigr.racmc.item.weapon.FireService.ProjectileFactory<Rac1BlasterArrow>() {
+                    public Rac1BlasterArrow prepare() { return spawnArrow(level, player); }
+                    public boolean admit(Rac1BlasterArrow arrow) { return level.addFreshEntity(arrow); }
+                    public void discard(Rac1BlasterArrow arrow) { arrow.discard(); }
+                }, arrow -> {
+                    state.recordShot(now);
+                    com.github.giannigr.racmc.effect.Rac1EffectTriggers.shot(arrow);
+                    if (player instanceof ServerPlayer server)
+                        com.github.giannigr.racmc.item.weapon.RangedFireSessions.accepted(server);
+                });
+        if (!fired) {
             player.stopUsingItem();
-            return false;
-        }        if (withAmmo && !consumeArrow(player)) {
-            // The shot is only paid for when the ammunition is really there. The arrow is taken
-            // out of the world again, so that no shot is given away.
-            arrow.discard();
-            return false;
+            if (player instanceof ServerPlayer server)
+                com.github.giannigr.racmc.item.weapon.RangedFireSessions.reject(server);
         }
-        state.recordShot(now);
-        com.github.giannigr.racmc.effect.Rac1EffectTriggers.shot(arrow);
-        return true;
+        return fired;
     }
 
     /**
@@ -275,6 +282,8 @@ public final class Rac1BlasterServer {
      * @param now the tick of the click
      */
     private static void dryFire(Level level, Player player, Rac1BurstState state, long now) {
+        if (player instanceof ServerPlayer server)
+            com.github.giannigr.racmc.item.weapon.RangedFireSessions.reject(server);
         if (!state.dryClickAllowed(now)) {
             return;
         }
@@ -313,9 +322,8 @@ public final class Rac1BlasterServer {
         // The mouth of the weapon, in the world. The place is built out of the frame of the
         // weapon and out of the place of the player, and it is the same place the weapon is
         // drawn at in the third person.
-        Rac1BlasterGrip.Look look = lookOf(player);
-        Rac1BlasterGrip.Point muzzle = Rac1BlasterGrip.muzzle(player.getX(), player.getY(),
-                player.getZ(), look);
+        Rac1BlasterGrip.Point muzzle = Rac1BlasterGrip.muzzle(
+                com.github.giannigr.racmc.item.weapon.RangedPlayerPose.of(player, 1, false));
         Vec3 spawn = new Vec3(muzzle.x(), muzzle.y(), muzzle.z());
         Vec3 eyes = player.getEyePosition();
         if (Rac1BlasterObstruction.blocked(worldOf(level, player), new double[] { eyes.x, eyes.y,
@@ -338,9 +346,6 @@ public final class Rac1BlasterServer {
         CompoundTag data = arrow.getPersistentData();
         data.putBoolean(MARKER, true);
         data.putLong(BIRTH, level.getGameTime());
-        if (!level.addFreshEntity(arrow)) {
-            return null;
-        }
         return arrow;
     }
 
@@ -427,20 +432,50 @@ public final class Rac1BlasterServer {
      * @param player the player that fires
      * @return {@code true} when an arrow was consumed
      */
-    private static boolean consumeArrow(Player player) {
+    private static com.github.giannigr.racmc.item.weapon.FireService.AmmoReservation reserveArrow(
+            Player player, boolean withAmmo) {
+        ItemStack reserved = ItemStack.EMPTY;
+        int selected = -1;
+        if (!withAmmo) return new com.github.giannigr.racmc.item.weapon.FireService.AmmoReservation() {
+            public void commit() {}
+            public void refund() {}
+        };
         ItemStack offhand = player.getOffhandItem();
         if (offhand.is(Items.ARROW) && offhand.getCount() > 0) {
-            offhand.shrink(1);
-            return true;
-        }
-        for (int index = 0; index < player.getInventory().items.size(); index++) {
-            ItemStack stack = player.getInventory().items.get(index);
-            if (stack.is(Items.ARROW) && stack.getCount() > 0) {
-                stack.shrink(1);
-                return true;
+            reserved = offhand.split(1);
+        } else {
+            for (int index = 0; index < player.getInventory().items.size(); index++) {
+                ItemStack stack = player.getInventory().items.get(index);
+                if (stack.is(Items.ARROW) && stack.getCount() > 0) {
+                    reserved = stack.split(1);
+                    selected = index;
+                    break;
+                }
             }
         }
-        return false;
+        if (reserved.isEmpty()) return null;
+        ItemStack payment = reserved;
+        int sourceSlot = selected;
+        return new com.github.giannigr.racmc.item.weapon.FireService.AmmoReservation() {
+            private boolean resolved;
+            public void commit() { resolved = true; }
+            public void refund() {
+                if (resolved) return;
+                resolved = true;
+                ItemStack current = sourceSlot < 0 ? player.getOffhandItem()
+                        : player.getInventory().items.get(sourceSlot);
+                if (current.isEmpty()) {
+                    if (sourceSlot < 0) player.setItemInHand(InteractionHand.OFF_HAND, payment);
+                    else player.getInventory().items.set(sourceSlot, payment);
+                } else if (ItemStack.isSameItemSameComponents(current, payment)
+                        && current.getCount() < current.getMaxStackSize()) {
+                    current.grow(1);
+                } else {
+                    // Preserve callback-owned slot changes; return only the reservation.
+                    player.getInventory().placeItemBackInInventory(payment);
+                }
+            }
+        };
     }
 
     /**
@@ -477,7 +512,9 @@ public final class Rac1BlasterServer {
     private static Rac1BurstState stateOf(Player player) {
         CompoundTag data = player.getPersistentData();
         Rac1BurstState state = new Rac1BurstState();
-        state.restore(data.getLong(LAST_SHOT), data.getLong(LAST_CLICK));
+        state.restore(data.contains(LAST_SHOT) ? data.getLong(LAST_SHOT) : Long.MIN_VALUE,
+                data.contains(LAST_CLICK) ? data.getLong(LAST_CLICK) : Long.MIN_VALUE,
+                data.getBoolean(CLICKED));
         return state;
     }
 
@@ -491,5 +528,6 @@ public final class Rac1BlasterServer {
         CompoundTag data = player.getPersistentData();
         data.putLong(LAST_SHOT, state.lastShotTick());
         data.putLong(LAST_CLICK, state.lastDryClickTick());
+        data.putBoolean(CLICKED, state.dryClickPlayed());
     }
 }

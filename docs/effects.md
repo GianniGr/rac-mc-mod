@@ -21,7 +21,7 @@ required. Existing arrow damage/firing/physics and crate transactions are unchan
   from sound, bolt balance, mesh cache or any shared manifest. It has no serverbound
   request, client class link, media importer or sound-engine dependency.
 - Client-local verified ISO -> bounded CPU decode/sidecar -> render-thread upload.
-  Missing/failed assets keep existing arrow graphics; effects never become another
+  Missing/failed assets do not fall back to vanilla arrow geometry; effects never become another
   mandatory media gate. F3+T reload invalidates the old generation/resources.
   Stale asynchronous results cannot attach after media/reload generation changes.
 - Tracked authoritative Blaster arrow UUIDs also admit a shot (for late tracking).
@@ -29,8 +29,11 @@ required. Existing arrow damage/firing/physics and crate transactions are unchan
   Untracking, chunk unload, dimension change and disconnect stop attached effects
   without inventing impacts. No client collision causes gameplay or crate mutation.
 - Type26 glow, seventeen type72 trail sprites, type27 accepted-impact sparks and
-  type23 end smoke follow existing arrow positions. First-flight-tick hiding is
-  preserved. Nothing changes the known Blaster alignment/aiming work deferred #11.
+  type23 end smoke follow authoritative projectile positions. Available imported
+  graphics are admitted on the first eligible entity frame, before the fixed effect
+  clock advances, and drawn through the existing AFTER_PARTICLES path. No normal
+  invisible replacement is used. Genuine unavailable media or bounded pool capacity
+  hides geometry with one diagnostic per generation, never a vanilla shaft.
 - Explosives show six type13 dust sprites, class112 flash shells, bounded type11
   recursive sparks transitioning to smoke, and original mesh debris363/364.
   Ordinary wood/ammo breaks use debris357/358; health breaks348/349.
@@ -128,6 +131,18 @@ the original PS2 world/moby sphere solver. Cosmetic collision changes no blocks,
 entities, health, rewards or arrow physics.
 
 ## Still incomplete / acceptance gaps
+
+M2 regression investigation compared `7106e9d` to the integrated base: projectile
+renderer/playback/Blaster adapter/world drawing were unchanged; nanotech controllers
+were added to the same subscriber. The proven first-frame ownership race predated
+integration (entity rendering preceded effect admission). Shared pool pressure is
+another real fallback path; the owner's earlier working imported graphics are
+preserved, not replaced wholesale. Headless first-frame tests require18 nonzero
+original-asset draw descriptors (glow32 plus17 trail28), including before clock advance.
+This does **not** certify nonzero GPU submission or reproduce the owner's symptom;
+available-media captures, missing media/reload/capacity and first/stuck/body paths
+still need T20/live checks. Blaster-only hit delivery no longer adds embedded shafts;
+ordinary bow rendering/counts and accepted debris remain intact.
 
 - Actual in-world appearance, camera/depth/FOV/material interleaving and two-client
   networking need separate T and owner playtest. Earlier actual-texture GPU

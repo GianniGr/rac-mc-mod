@@ -30,6 +30,31 @@ class EffectPlaybackSessionTest {
         assertFalse(session.receive(shot(id, Semantic.BLASTER_SHOT), 100, ZERO));
         assertEquals(18, session.runtime().size());
     }
+    @Test void firstEligibleEntityFrameHasNonzeroImportedDrawsBeforeClockAdvance() {
+        var session = session(); UUID id = UUID.randomUUID();
+        assertTrue(session.admitProjectile(source(id)));
+        var draws = session.runtime().snapshot(ZERO, 1);
+        assertEquals(18, draws.size(), "No fixed-update delay or vanilla fallback");
+        assertEquals(17, draws.stream().filter(d -> d.asset().sourceId() == 28).count());
+        assertEquals(1, draws.stream().filter(d -> d.asset().sourceId() == 32).count());
+        assertTrue(draws.stream().allMatch(d -> d.size() > 0));
+        assertTrue(session.admitProjectile(source(id)));
+        assertEquals(draws, session.runtime().snapshot(ZERO, 1), "Repeat preparation cannot jitter/reallocate");
+    }
+    @Test void actualCapacityFailureIsInvisibleAndCannotInventPartialGraphics() {
+        var session = new EffectPlaybackSession(EffectBankTest.SHA1, EffectClock.Profile.NTSC, 17);
+        session.beginWorld("minecraft:overworld", 1);
+        assertFalse(session.admitProjectile(source(UUID.randomUUID())));
+        assertTrue(session.runtime().snapshot(ZERO, 1).isEmpty());
+    }
+    @Test void clockDiscontinuityDoesNotBlankCurrentlyTrackedImportedProjectiles() {
+        var session = session(); UUID id = UUID.randomUUID();
+        session.advance(5, false, 100, List.of(source(id)));
+        var resumed = session.advance(6, false, 120, List.of(source(id)));
+        assertTrue(resumed.discontinuity());
+        assertEquals(18, session.runtime().snapshot(ZERO, resumed.interpolation()).size());
+        assertTrue(session.ownsProjectile(id));
+    }
     @Test void impactBeforeSpawnAndLaterEndNeverResurrectOrDoubleEmit() {
         var session = session(); UUID id = UUID.randomUUID();
         assertTrue(session.receive(shot(id, Semantic.BLASTER_IMPACT), 100, ZERO));

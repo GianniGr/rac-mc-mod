@@ -129,13 +129,8 @@ public final class Rac1BlasterAim {
         Vector3f wanted = atDepth(handProjection, target, -drawn.z);
         // The move of the mesh of the weapon that brings the mouth to the place that is wanted.
         Vector3f difference = wanted.sub(drawn);
-        // The mouth of the drawn weapon stays below the crosshair of the screen: the height of the
-        // weapon above its mouth is the measure of the room the weapon needs.
-        double room = (Rac1BlasterGrip.MESH_MAX_X - Rac1BlasterGrip.BORE_X)
-                * Rac1BlasterGrip.FIRST_PERSON_SCALE + CLEARANCE;
-        if (drawn.y + difference.y > -room) {
-            difference.y = (float) (-room - drawn.y);
-        }
+        // Both screen coordinates must agree. A vertical clamp creates a deliberate visible
+        // muzzle/shot separation; crosshair clearance belongs to bounded camera fitting/playtest.
         return difference.mul(new Matrix3f(space).invert());
     }
 

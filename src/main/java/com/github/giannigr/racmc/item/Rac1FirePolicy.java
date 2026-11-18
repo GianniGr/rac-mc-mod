@@ -19,7 +19,8 @@ package com.github.giannigr.racmc.item;
 public final class Rac1FirePolicy {
 
     /** The number of ticks between two shots of a burst. */
-    public static final int SHOT_INTERVAL_TICKS = 2;
+    public static final int SHOT_INTERVAL_TICKS =
+            com.github.giannigr.racmc.item.weapon.Rac1BlasterDefinition.INSTANCE.shotIntervalTicks();
 
     /** The number of ticks that have to pass before the click of an empty weapon may play again. */
     public static final int DRY_FIRE_COOLDOWN_TICKS = 10;

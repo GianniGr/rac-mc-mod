@@ -42,7 +42,11 @@ public record Rac1AudioCatalog(Map<Rac1AudioEvent, Clip> clips) {
         for (var event : Rac1AudioEvent.values()) {
             var entry = assets.coreIndex().mobyClass(event.classId());
             if (entry == null) throw new IOException("Missing reference sound class");
-            var definition = Rac1SoundMap.resolve(index, assets.classBlob(entry.offset()), event.classId(), event.slot());
+            // Gadget definitions have a class-table row/remap but their blob is in the gadget
+            // table; its moby offset is zero. Never treat that as a core-data pointer.
+            byte[] blob = event == Rac1AudioEvent.BLASTER_FIRE_LOOP
+                    ? assets.gadgetClass(event.classId()) : assets.classBlob(entry.offset());
+            var definition = Rac1SoundMap.resolve(index, blob, event.classId(), event.slot());
             var tone = bank.tone(definition.cue());
             var decoded = tone.decoded();
             result.put(event, new Clip(decoded.pcm(), tone.sampleRate(), definition.metadata(),

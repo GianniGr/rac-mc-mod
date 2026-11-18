@@ -172,16 +172,15 @@ class Rac1BlasterAimTest {
                     assertEquals(wanted.x, drawn.x, 1.0e-4,
                             "The mouth of the drawn weapon is not in the column of the mouth of "
                                     + "the weapon in the world");
+                    assertEquals(wanted.y, drawn.y, 1.0e-4, "Vertical muzzle separation is not permitted");
                 }
             }
         }
     }
 
     @Test
-    @DisplayName("The mouth of the drawn weapon stays below the crosshair of the screen")
-    void theDrawnMuzzleStaysBelowTheCrosshair() {
-        double room = (Rac1BlasterGrip.MESH_MAX_X - Rac1BlasterGrip.BORE_X)
-                * Rac1BlasterGrip.FIRST_PERSON_SCALE + Rac1BlasterAim.CLEARANCE;
+    @DisplayName("Vertical projection conversion is not silently clamped away from the actual muzzle")
+    void theDrawnMuzzleIsNotVerticallyClamped() {
         for (double worldFov : new double[] { 70.0, 77.0, 110.0 }) {
             for (double yaw : new double[] { 0.0, 30.0, -45.0 }) {
                 for (double pitch : new double[] { 0.0, -20.0, 15.0 }) {
@@ -194,8 +193,8 @@ class Rac1BlasterAimTest {
                             handProjection, world);
                     Matrix4f moved = new Matrix4f(chain).translate(move);
                     Vector3f drawn = drawnMuzzle(moved, modelView);
-                    assertEquals(-room, drawn.y, 1.0e-3,
-                            "The mouth of the drawn weapon stands over the crosshair of the screen");
+                    assertEquals(Rac1BlasterAim.screen(worldProjection, world).y,
+                            Rac1BlasterAim.screen(handProjection, drawn).y, 1.0e-4);
                 }
             }
         }

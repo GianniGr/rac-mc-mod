@@ -13,13 +13,10 @@ package com.github.giannigr.racmc.item;
 public final class Rac1BurstState {
 
     /** The tick of the last shot, or {@link Long#MIN_VALUE} when nothing was fired yet. */
-    private long lastShotTick = Long.MIN_VALUE;
-
-    /** The tick of the last click of the empty weapon. */
-    private long lastDryClickTick = Long.MIN_VALUE;
-
-    /** Whether the click of the empty weapon was already played for the current pull. */
-    private boolean dryClickPlayed;
+    private final com.github.giannigr.racmc.item.weapon.FireState shared =
+            new com.github.giannigr.racmc.item.weapon.FireState(
+                    com.github.giannigr.racmc.item.weapon.Rac1BlasterDefinition.INSTANCE.shotIntervalTicks(),
+                    Rac1FirePolicy.DRY_FIRE_COOLDOWN_TICKS);
 
     /**
      * Whether the next shot is due.
@@ -32,8 +29,7 @@ public final class Rac1BurstState {
      * @return {@code true} when a shot may be fired
      */
     public boolean shotDue(long tick) {
-        return this.lastShotTick == Long.MIN_VALUE
-                || tick - this.lastShotTick >= Rac1FirePolicy.SHOT_INTERVAL_TICKS;
+        return shared.shotDue(tick);
     }
 
     /**
@@ -42,7 +38,7 @@ public final class Rac1BurstState {
      * @param tick the tick the shot was fired on
      */
     public void recordShot(long tick) {
-        this.lastShotTick = tick;
+        shared.recordShot(tick);
     }
 
     /**
@@ -56,11 +52,7 @@ public final class Rac1BurstState {
      * @return {@code true} when the click may be played
      */
     public boolean dryClickAllowed(long tick) {
-        if (this.dryClickPlayed) {
-            return false;
-        }
-        return this.lastDryClickTick == Long.MIN_VALUE
-                || tick - this.lastDryClickTick >= Rac1FirePolicy.DRY_FIRE_COOLDOWN_TICKS;
+        return shared.dryClickAllowed(tick);
     }
 
     /**
@@ -69,8 +61,7 @@ public final class Rac1BurstState {
      * @param tick the tick the click was played on
      */
     public void recordDryClick(long tick) {
-        this.lastDryClickTick = tick;
-        this.dryClickPlayed = true;
+        shared.recordDryClick(tick);
     }
 
     /**
@@ -80,19 +71,17 @@ public final class Rac1BurstState {
      * over the pulls of the trigger as well.
      */
     public void beginPull() {
-        this.dryClickPlayed = false;
+        shared.beginPull();
     }
 
     /**
-     * Forgets the whole burst.
+     * Ends the firing pull, retaining the cross-pull dry-click rate bound.
      *
      * <p>The burst is forgotten when the trigger is released and when the player leaves, so that
      * the next pull of the trigger starts at once.
      */
     public void reset() {
-        this.lastShotTick = Long.MIN_VALUE;
-        this.lastDryClickTick = Long.MIN_VALUE;
-        this.dryClickPlayed = false;
+        shared.endPull();
     }
 
     /**
@@ -101,7 +90,7 @@ public final class Rac1BurstState {
      * @return the tick, or {@link Long#MIN_VALUE} when nothing was fired yet
      */
     public long lastShotTick() {
-        return this.lastShotTick;
+        return shared.snapshot().lastShot();
     }
 
     /**
@@ -110,7 +99,7 @@ public final class Rac1BurstState {
      * @return the tick, or {@link Long#MIN_VALUE} when the click was never played
      */
     public long lastDryClickTick() {
-        return this.lastDryClickTick;
+        return shared.snapshot().lastClick();
     }
 
     /**
@@ -120,8 +109,13 @@ public final class Rac1BurstState {
      * @param lastDryClickTick the tick of the last click, or {@link Long#MIN_VALUE}
      */
     public void restore(long lastShotTick, long lastDryClickTick) {
-        this.lastShotTick = lastShotTick;
-        this.lastDryClickTick = lastDryClickTick;
-        this.dryClickPlayed = false;
+        restore(lastShotTick, lastDryClickTick, false);
+    }
+
+    public boolean dryClickPlayed() { return shared.snapshot().clicked(); }
+
+    public void restore(long lastShotTick, long lastDryClickTick, boolean clicked) {
+        shared.restore(new com.github.giannigr.racmc.item.weapon.FireState.Snapshot(
+                lastShotTick, lastDryClickTick, clicked));
     }
 }

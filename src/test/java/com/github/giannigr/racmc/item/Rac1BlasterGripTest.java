@@ -239,6 +239,7 @@ class Rac1BlasterGripTest {
         // The renderer of the living entities.
         chain.mulPose(Axis.YP.rotationDegrees((float) (180.0 - bodyYaw)));
         chain.scale(-1.0f, -1.0f, 1.0f);
+        chain.scale(.9375f, .9375f, .9375f); // PlayerRenderer.scale, previously omitted
         chain.translate(0.0f, -1.501f, 0.0f);
         // The layer of the item in the hand: the joint of the arm of the player.
         joint.translateAndRotate(chain);

@@ -395,6 +395,80 @@ draws the hero with the Blaster as long as the cache holds the assets; the main 
 
 ## The Blaster as an item of the game
 
+### M2 shared ranged candidate (2026-11-18)
+
+The current bounded extraction routes Blaster firing through `item.weapon.FireService`,
+`FireState`, `BlasterAmmo`, and immutable `WeaponDefinition`; `Rac1BlasterGrip.muzzle`
+delegates to `HandTransform`. The synthetic test weapon has a nonorigin grip, different
+forward/up axes, off-axis muzzle, XYZ item rotations, scale1.7, cadence7 and a separate
+ammo identity. It is a test fixture, not a registered second gun.
+
+Physical points use imported mesh blocks. Item rotation is XYZ (point application Z,Y,X);
+ModelPart is ZYX (point application X,Y,Z). Item centering -.5 and imported socket
+restoration +.5 cancel exactly once. The player chain includes PlayerRenderer's .9375,
+entity scale, physical left/right hand, resolved pivot/arm scale/rotation, and body yaw.
+The ordinary player adapter includes crouch pivot/pitch/render offset and vanilla arm bob;
+client position/head/body/pitch are interpolated, and camera subtraction stays double
+precision until relative coordinates are narrowed.
+
+Bind extents remain (.7102,.3099,.7366) imported blocks on mesh X/Y/Z. World item
+scale is1; PlayerRenderer yields (.6658125,.29053125,.6905625) before rotation,
+at entity scale1. First-person .55 and separate GUI fitting are unchanged.
+No canonical Ratchet/player ratio is asserted.
+
+R11's measured 12-vertex front ring is already centered within .000081 blocks of
+(.2305,-.03,.6335) in the held pose. Firing moves it (e.g. z≈.811801 at .2s).
+Held rendering now applies a rigid translation of that sampled ring onto the definition
+muzzle. Original deformations, normals, dimensions and cycle remain; the gun body
+translates around the barrel rather than retaining a fixed source grip. GUI/demo are
+not corrected, and server firing does not require ISO/animation data. Projection alignment
+matches both screen axes, without the former deliberate vertical clamp. Natural fitting,
+crosshair clearance and jitter still require owner visual acceptance.
+
+**Limits, not acceptance claims:** this is not a complete vanilla player renderer.
+The server adapter uses canonical wide arms because client skin geometry is unavailable
+there (slim hand offset is .5/16 × .9375 ≈.0293 blocks at scale1). Swimming, riding,
+elytra, attack/body-root animation and arbitrary renderer modifications are not yet
+reconciled. Explicit final arm snapshots are supported by the shared arithmetic, but
+that does not prove all live pose paths. Fixed-camera first/third-person, FOV70/77/110,
+sprint/bob, far-world, two-client and late-observer checks remain independent T20/owner
+gates. Passing matrix tests or a source-ring measurement is not GPU/live equivalence.
+
+Accepted Creative/Survival/Adventure/main-hand/spectator rules, two-tick held cadence,
+ordinary-arrow offhand-first payment, damage/drag/no-gravity/speed2/lifetime12/no-pickup
+remain. A same-tick duplicate pull cannot admit another immediate shot. Dry-click state
+survives tick reconstruction, and its ten-tick bound survives release; initial genuine
+pulls remain immediate. Preparation/obstruction precedes reservation; spawn admission
+follows payment; veto refunds the reserved item; only accepted admission emits feedback.
+This is a synchronous server-tick contract, not arbitrary-plugin/crash atomicity.
+Held-empty animation policy has **not** been changed.
+
+`RangedCrateHits` authorizes only registered RaC1 crates, after the real projectile veto
+and a separate BreakEvent/permissions/identity recheck; Gadgetron vendor is hard denied,
+including Creative. Ordinary grounded/falling destruction delegates to the existing
+reward service: original wood bolts, one existing health cluster, no ammo reward.
+Carrier placement UUID/consumed state survives transfer; transfer itself never pays.
+Offline/dead/cross-dimension owners are denied. Airborne BreakEvent uses captured carrier
+state at its cell; arbitrary protection-plugin compatibility is not claimed.
+
+Both-disc original dispatch/hit evidence establishes ordinary Blaster→505 short fuse,
+not instant removal. Idle/long fuses use the existing conservative MC2..5 adaptation;
+already-short (≤5), chain and terminal fuses do not reroll or consume RNG. Wrench
+behavior is untouched. Original RNG is floating [5,15), then video scale/truncation
+(NTSC5..14, PAL4..12 updates), **not** inclusive uniform5..15. The retained project's
+integer adaptation is not an exact reproduction of that distribution. Landing/migration
+ordering and existing detonation/chain/reward ownership are unchanged.
+
+Blaster shafts are never submitted, including missing-effect/stuck paths. Nonpiercing
+Blaster hit delivery retains the supported vanilla damage/fire/enchantment/Enderman/
+deflection path without modifying victim arrow counts or enabling piercing. Real bow
+arrows remain unchanged. Ordinary impact audio remains unbound; firing uses the verified
+sustained class168/local1 loop, not per-shot intros or Gold local4. See
+[sound.md](sound.md) and [effects.md](effects.md).
+
+The detailed PoC narrative below is historical where it conflicts with this candidate
+section (notably omitted player scale, arrow graphics, vertical clamp and old dry state).
+
 The Blaster of the game is the first item of the mod. The item is registered under
 `racmc:blaster`, it holds one weapon per stack, and it has a tab of the creative mode of its
 own.

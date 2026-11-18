@@ -19,10 +19,13 @@ reference profile, not a Minecraft dimension:
 | TNT countdown beep | 505 / 1 |
 | Bolt attraction begins | 13, 14, 15, 16 / 0 |
 | Nanotech cluster first-arrival consume | 501 / 1 |
+| Blaster accepted firing session (sustained) | 168 / 1, sequence4 |
 
 These associations follow R07's verified PAL call sites and measured PAL/NTSC
-maps. NTSC gameplay machine code was not independently traced. No vendor,
-Blaster or wrench audio is bound: their event dispatch still needs research.
+maps. NTSC gameplay machine code was not independently traced for those earlier
+bindings. No vendor or wrench audio is bound. R11 additionally verified Blaster
+sequence4's sustained local1 association on both discs; ordinary impact is still
+UNBOUND/silent. Gold local4 is ricochet-only, not an ordinary hit binding.
 Bolt collection is **not** an extra ding. Denominations use the existing
 bolt visual class mapping (1/5/20/50).
 
@@ -52,8 +55,8 @@ predictor pairs, rounded prediction and signed16 saturation, and stops at the
 first end flag within a waveform's bounded span. Loop flags/start/end are
 preserved. It does not copy or depend on a GPL decoder.
 
-`sound/sound-<verified-source-SHA1>-v2.racs` under the configured cache root is a
-**separate RACS sidecar**, schema/converter2, adding501/local1. Old v1 is retained
+`sound/sound-<verified-source-SHA1>-v3.racs` under the configured cache root is a
+**separate RACS sidecar**, schema/converter3, adding168/local1 (v2 added501/local1). Old v1/v2 are retained
 but no longer satisfies the complete catalog. It does not change RACM, its
 reserved section IDs, or its asset gate. Its identity includes the whole verified
 source hash and converter version; each clip also retains bank/ADPCM SHA-256,
@@ -90,17 +93,26 @@ This is a bounded PCM prototype, **not an exact PS2 mixer**:
 - Pitch bend, far-volume curve/flags, ADSR, reverb, pan, interpolation and voice
   priority are retained as metadata but are not emulated. Runtime pitch stays1.
   Accurate pitch-bend conversion and gain/rate fidelity require follow-up.
-- **No loops are automatically enabled**: v1 source/cue loop semantics are not
-  proven. All bound events are one-shots. Stored loop data is not authorization
-  to start the unverified Blaster loop. There is consequently no active-loop
-  replication/late-join protocol in this candidate.
-- Four tracked one-shots at most share vanilla's scarce streaming pool.
+- Only the verified Blaster session enables looping: play its intro once, then
+  repeat imported samples28..9912. Class168 uses the gadget blob and class-table
+  sound remap, not a zero moby pointer or global cue101 binding. Existing cues
+  remain one-shots. Semantic resource-pack overrides are still supported; the
+  imported path does not invent a subtitle.
+- `RangedFireSignal` contains emitter/session UUIDs, monotonic server revision,
+  accepted tick, active/stop, dimension and position; no media data. Every accepted
+  shot refreshes the same loop, not a new stream. Rejection/end/slot/death/world/
+  logout stop it; a three-tick accepted-shot lease also bounds stale/lost transport.
+  Near observers can start on the next accepted shot (not original sample-phase
+  synchronization). Reload/media loss clears streams/gates. Client item-use packet
+  ordering does not authorize a shot or restart an intro.
+- Four total tracked sounds (at most two sustained loops) share vanilla's scarce streaming pool.
   Bolt events are coalesced to one per client game tick. Under pressure only
   audio is dropped, never currency. Native streaming-pool pressure/performance
   requires client acceptance testing.
 - Resource reload, world/dimension switch, disconnect and loss of verified media
   stop tracked sounds and close PCM streams. Finished/rejected sounds are
-  pruned; stream close is idempotent. Old import completions cannot publish after
+  pruned; stream close is idempotent, including an infinite-loop stream. Reads
+  are bounded to1MiB and never decode on the audio thread. Old import completions cannot publish after
   source invalidation. Removing an on-disk sidecar does not invalidate PCM already
   resident in memory; restart/reimport clears that generation.
 

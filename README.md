@@ -15,7 +15,10 @@ original animation.
 
 The Blaster of the game is now an item of the game as well: it has a tab of the creative mode of
 its own, it is drawn with the imported geometry, the imported textures and the imported
-animations of the weapon, and it fires the arrows of the game while the trigger is held. The
+animations of the weapon, and it fires server-owned arrow-based projectiles with imported
+Blaster effects while the trigger is held. Ordinary arrows remain its temporary Survival/
+Adventure ammunition, not a universal original-ammo contract. The shared-ranged candidate
+still needs independent live transform/audio/network acceptance. The
 details, the rules of the weapon and the way the weapon is measured are described in
 [`docs/development.md`](docs/development.md).
 

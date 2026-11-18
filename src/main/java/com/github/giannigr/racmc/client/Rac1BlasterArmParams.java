@@ -56,14 +56,12 @@ public final class Rac1BlasterArmParams {
      * @param arm the arm that is turned
      */
     private static void aimTheWeapon(HumanoidModel<?> model, LivingEntity entity, HumanoidArm arm) {
-        if (arm != HumanoidArm.RIGHT) {
-            return;
-        }
         Rac1BlasterGrip.Look look = new Rac1BlasterGrip.Look(Math.toDegrees(model.head.yRot),
                 Math.toDegrees(model.head.xRot), 0.0);
         Rac1BlasterGrip.ArmTurn turn = Rac1BlasterGrip.aim(look);
-        model.rightArm.xRot = (float) Math.toRadians(turn.x());
-        model.rightArm.yRot = (float) Math.toRadians(turn.y());
-        model.rightArm.zRot = 0.0f;
+        var part = arm == HumanoidArm.RIGHT ? model.rightArm : model.leftArm;
+        part.xRot = (float) Math.toRadians(turn.x());
+        part.yRot = (float) Math.toRadians(turn.y());
+        part.zRot = 0.0f;
     }
 }

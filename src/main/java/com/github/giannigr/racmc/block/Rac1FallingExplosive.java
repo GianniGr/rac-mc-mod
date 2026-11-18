@@ -98,6 +98,13 @@ public final class Rac1FallingExplosive extends FallingBlockEntity {
         }
     }
 
+    public boolean blasterHit() {
+        if (level().isClientSide || isRemoved()
+                || !fuse.blasterHit(() -> 5 + level().random.nextInt(11), level().getGameTime())) return false;
+        storeFuse();
+        return true;
+    }
+
     @Override
     public void onExplosionHit(@javax.annotation.Nullable net.minecraft.world.entity.Entity source) {
         if (!level().isClientSide) {
