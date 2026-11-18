@@ -40,6 +40,13 @@ public final class Rac1EffectClient {
     private static String discSha1;
     private static final Map<net.minecraft.core.BlockPos, Long> health = new HashMap<>();
     private static long nanoStep = -1;
+    private record Nano(UUID id, EffectSignal.Point base, long seed, boolean intact,
+                        EffectSignal.Point target, double age) {
+        List<EffectSignal.Point> orbs(double updates) {
+            return target == null ? Rac1NanotechVisuals.orbs(base, updates, seed)
+                    : Rac1NanotechVisuals.attracting(base, target, age, seed);
+        }
+    }
     private Rac1EffectClient() {}
 
     @SubscribeEvent public static void tick(ClientTickEvent.Post event) {
@@ -190,6 +197,32 @@ public final class Rac1EffectClient {
         // Nearest sixteen intact controllers, then draw their normal overlays back-to-front.
         if (orderedHealth.size() > 16) orderedHealth.subList(16, orderedHealth.size()).clear();
         Collections.reverse(orderedHealth);
+        List<Nano> controllers = new ArrayList<>();
+        for (var pos : orderedHealth)
+            controllers.add(new Nano(new UUID(0, pos.asLong()),
+                    new EffectSignal.Point(pos.getX() + .5, pos.getY(), pos.getZ() + .5),
+                    pos.asLong(), true, null, 0));
+        for (var entity : minecraft.level.entitiesForRendering()) {
+            if (controllers.size() >= 128) break;
+            if (entity.distanceToSqr(event.getCamera().getPosition()) > 64 * 64) continue;
+            if (entity instanceof net.minecraft.world.entity.item.FallingBlockEntity falling
+                    && falling.getBlockState().getBlock() instanceof com.github.giannigr.racmc.block.Rac1CrateBlock block
+                    && block.definition().classNumber() == 501) {
+                var p = falling.getPosition(partial);
+                long seed = falling.getUUID().getLeastSignificantBits();
+                if (falling.blockData != null && falling.blockData.hasUUID("BoltRewardId"))
+                    seed = falling.blockData.getUUID("BoltRewardId").getLeastSignificantBits();
+                controllers.add(new Nano(falling.getUUID(), Rac1EffectTriggers.point(p), seed, true, null, 0));
+            } else if (entity instanceof com.github.giannigr.racmc.loot.Rac1NanotechEntity cluster) {
+                var player = cluster.receiver().map(minecraft.level::getPlayerByUUID).orElse(null);
+                var target = player == null ? null : Rac1EffectTriggers.point(player.getPosition(partial).add(0, .75, 0));
+                controllers.add(new Nano(cluster.getUUID(), Rac1EffectTriggers.point(cluster.getPosition(partial)),
+                        cluster.seed(), false, target, (cluster.attractionAge() + partial) * 3));
+            }
+        }
+        controllers.sort(Comparator.comparingDouble(c -> c.base().distanceSquared(camera)));
+        if (controllers.size() > 16) controllers.subList(16, controllers.size()).clear();
+        Collections.reverse(controllers);
         if (nanoStep < 0) nanoStep = (long) updates;
         session.collisionContext(camera, (old, next, radius) -> {
             // Cosmetic voxel-world adaptation: conservative center sweep extended by radius.
@@ -209,20 +242,22 @@ public final class Rac1EffectClient {
         var advance = session.advance((tick + (double) partial) / 20, minecraft.isPaused(), tick, sources, () -> {
             nanoStep++;
             if (nanotech == null) return;
-            for (var pos : orderedHealth) {
+            for (var controller : controllers) {
                 if (session.runtime().remaining() < 128) break; // reserve room for shots/blasts
-                var base = new EffectSignal.Point(pos.getX() + .5, pos.getY(), pos.getZ() + .5);
+                var base = controller.base();
                 if (base.distanceSquared(camera) > 64 * 64) continue;
                 int life = session.runtime().profile().ticks(base.distanceSquared(camera) > 100 ? 5 : 40);
                 int fadeStep = Math.max(1, 127 / life), actualLife = (127 + fadeStep - 1) / fadeStep;
                 int orb = 0;
-                for (var point : Rac1NanotechVisuals.orbs(base, nanoStep, pos.asLong()))
-                    session.runtime().spawn(new EffectRuntime.Spawn(new UUID(0, pos.asLong()),
+                for (var point : controller.orbs(nanoStep)) {
+                    if (point == null) continue;
+                    session.runtime().spawn(new EffectRuntime.Spawn(controller.id(),
                             new EffectAssetRef(discSha1, 1, EffectAssetRef.Bank.PARTICLE, 33),
                             EffectRuntime.Geometry.BILLBOARD, EffectRuntime.Program.TRAIL62, point,
                             new EffectSignal.Point(0, 0, 0), 10000, 1,
-                            new EffectSignal.Point(0, 0, ((pos.asLong() ^ nanoStep ^ orb++) & 255) * Math.PI / 128),
+                            new EffectSignal.Point(0, 0, ((controller.seed() ^ nanoStep ^ orb++) & 255) * Math.PI / 128),
                             0, 0x7f7f4040, actualLife, fadeStep, EffectMaterial.ADDITIVE));
+                }
             }
         });
         if (advance.discontinuity()) nanoStep = (long) updates;
@@ -231,26 +266,30 @@ public final class Rac1EffectClient {
         // Vertices are camera-relative world coordinates; multiplying it here would rotate twice.
         List<EffectRuntime.Draw> draws = new ArrayList<>(session.runtime().snapshot(camera, advance.interpolation()));
         if (nanotech != null) {
-            for (var pos : orderedHealth) {
-                var base = new EffectSignal.Point(pos.getX() + .5, pos.getY(), pos.getZ() + .5);
+            for (var controller : controllers) {
+                var base = controller.base();
                 if (base.distanceSquared(camera) > 64 * 64) continue;
-                long seed = pos.asLong();
+                long seed = controller.seed();
                 int orb = 0;
-                for (var point : Rac1NanotechVisuals.orbs(base, updates, seed))
+                for (var point : controller.orbs(updates)) {
+                    if (point == null) continue;
                     draws.add(new EffectRuntime.Draw(-1 - orb++, new EffectAssetRef(discSha1, 1,
                             EffectAssetRef.Bank.PARTICLE, 39), EffectRuntime.Geometry.BILLBOARD, point, 60000,
                             new EffectSignal.Point(0, 0, ((seed ^ (orb * 0x9e3779b9L)) & 255)
                                     * Math.PI / 128 + updates * Math.PI / 32),
                             EffectMaterial.rgba(0x7f7f4040), EffectMaterial.ADDITIVE));
+                }
             }
         }
         EffectWorldRenderer.render(pose, minecraft.renderBuffers().bufferSource(), catalog,
                 draws, camera, event.getCamera().rotation());
         if (nanotech != null) {
-            for (var pos : orderedHealth) {
-                var base = new EffectSignal.Point(pos.getX() + .5, pos.getY(), pos.getZ() + .5);
+            for (var controller : controllers) {
+                var base = controller.base();
                 if (base.distanceSquared(camera) > 64 * 64) continue;
-                for (var group : Rac1NanotechVisuals.geometry(nanotech, base, camera, updates, pos.asLong())) {
+                var groups = Rac1NanotechVisuals.geometry(nanotech, base, camera, updates, controller.seed());
+                if (!controller.intact()) groups = controller.target() == null ? groups.subList(0, 2) : List.of();
+                for (var group : groups) {
                     var type = catalog.type(new EffectAssetRef(discSha1, 1, EffectAssetRef.Bank.FX, group.fx()), group.material());
                     if (type == null) continue;
                     var buffer = minecraft.renderBuffers().bufferSource();

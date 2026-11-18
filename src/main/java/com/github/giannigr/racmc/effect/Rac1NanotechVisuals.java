@@ -4,8 +4,8 @@ import com.github.giannigr.racmc.asset.effect.*;
 import java.util.*;
 import static com.github.giannigr.racmc.effect.EffectSignal.Point;
 
-/** Intact-crate-only class806 visual math, independently authored from R09 permitted facts.
- * Eight orbs are NOT eight pickups/HP. No free/release/attraction/heal state exists here. */
+/** Class806 presentation, independently authored from R09/R10 permitted facts.
+ * Eight cosmetic paths, never eight pickups/HP. */
 public final class Rac1NanotechVisuals {
     public record Vertex(Point position, float u, float v, int rgba) {}
     public record Group(int fx, EffectMaterial material, List<Vertex> vertices) {}
@@ -74,6 +74,25 @@ public final class Rac1NanotechVisuals {
         return List.of(new Group(21, EffectMaterial.NORMAL, List.copyOf(sphere)),
                 new Group(11, EffectMaterial.ADDITIVE, quadOrder(halo)),
                 new Group(21, EffectMaterial.NORMAL_REPEAT, quadOrder(glass)));
+    }
+    /** R10 cubic fan, moving chest target. Canonical60Hz MC timing, not exact PAL nested ticks. */
+    public static List<Point> attracting(Point base, Point target, double age, long seed) {
+        List<Point> result = new ArrayList<>(8);
+        var initial = orbs(base, 0, seed);
+        double yaw = new Random(seed).nextDouble() * Math.PI * 2;
+        for (int orb = 0; orb < 8; orb++) {
+            double t = age / com.github.giannigr.racmc.loot.Rac1NanotechRules.duration(seed, orb);
+            if (t >= 1) { result.add(null); continue; }
+            t = Math.max(0, t);
+            double angle = yaw + orb * .44854963;
+            Point a = initial.get(orb), b = a.add(Math.cos(angle) * 5, 1, Math.sin(angle) * 5);
+            Point c = target.add(Math.cos(angle) * 2, .5, Math.sin(angle) * 2);
+            double u = 1 - t;
+            result.add(new Point(u*u*u*a.x() + 3*u*u*t*b.x() + 3*u*t*t*c.x() + t*t*t*target.x(),
+                    u*u*u*a.y() + 3*u*u*t*b.y() + 3*u*t*t*c.y() + t*t*t*target.y(),
+                    u*u*u*a.z() + 3*u*u*t*b.z() + 3*u*t*t*c.z() + t*t*t*target.z()));
+        }
+        return Collections.unmodifiableList(result);
     }
     private static List<Vertex> quadOrder(List<Vertex> source) {
         List<Vertex> result = new ArrayList<>(source.size());

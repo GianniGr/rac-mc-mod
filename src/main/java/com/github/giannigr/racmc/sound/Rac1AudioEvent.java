@@ -10,7 +10,8 @@ public enum Rac1AudioEvent {
     BOLT_ATTRACTION("bolt.attraction.start", 13, 0),
     HEXNUT_ATTRACTION("bolt.hexnut.attraction.start", 14, 0),
     STARNUT_ATTRACTION("bolt.starnut.attraction.start", 15, 0),
-    CIRCLENUT_ATTRACTION("bolt.circlenut.attraction.start", 16, 0);
+    CIRCLENUT_ATTRACTION("bolt.circlenut.attraction.start", 16, 0),
+    NANOTECH_FIRST_ARRIVAL("nanotech.first_arrival", 501, 1);
 
     private final String id;
     private final int classId, slot;

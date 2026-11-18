@@ -12,7 +12,10 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
 public final class Rac1BoltEvents {
     private Rac1BoltEvents() {}
     @SubscribeEvent public static void tick(LevelTickEvent.Post event) {
-        if (event.getLevel() instanceof ServerLevel level) Rac1BoltLedger.get(level).emit(level);
+        if (event.getLevel() instanceof ServerLevel level) {
+            Rac1BoltLedger.get(level).emit(level);
+            Rac1NanotechLedger.get(level).tick(level);
+        }
     }
     @SubscribeEvent public static void login(PlayerEvent.PlayerLoggedInEvent event) { sync(event); }
     @SubscribeEvent public static void respawn(PlayerEvent.PlayerRespawnEvent event) { sync(event); }

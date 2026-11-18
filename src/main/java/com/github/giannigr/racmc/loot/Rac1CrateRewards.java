@@ -26,7 +26,8 @@ public final class Rac1CrateRewards {
             return;
         }
         // Spawn admission/retries and collection are owned by a single saved ledger.
-        award(level, pos, id, base);
+        award(level, pos, net.minecraft.world.phys.Vec3.atBottomCenterOf(pos), id, base,
+                ((Rac1CrateBlock) expectedState.getBlock()).definition().classNumber());
         sound(level, net.minecraft.world.phys.Vec3.atCenterOf(pos),
                 ((Rac1CrateBlock) expectedState.getBlock()).definition().classNumber());
         com.github.giannigr.racmc.effect.Rac1EffectTriggers.crateBreak(level, id,
@@ -51,13 +52,18 @@ public final class Rac1CrateRewards {
         var id = data.getUUID("BoltRewardId");
         int base = Math.max(0, data.getInt("BoltRewardBase"));
         falling.discard();
-        award(level, falling.blockPosition(), id, base);
+        award(level, falling.blockPosition(), falling.position(), id, base, block.definition().classNumber());
         sound(level, falling.position(), block.definition().classNumber());
         com.github.giannigr.racmc.effect.Rac1EffectTriggers.crateBreak(level, id, falling.position(),
                 block.definition().classNumber());
     }
 
-    private static void award(ServerLevel level, BlockPos pos, java.util.UUID id, int base) {
+    private static void award(ServerLevel level, BlockPos pos, net.minecraft.world.phys.Vec3 position,
+                              java.util.UUID id, int base, int classId) {
+        if (classId == 501) {
+            Rac1NanotechLedger.get(level).release(id, level, position);
+            return; // one cluster, never a bolt reward (including zero-value currency tombstones)
+        }
         Rac1BoltLedger.get(level).reward(id, level, pos,
                 Rac1BoltPayout.roll(base, new java.util.Random(level.random.nextLong())));
     }

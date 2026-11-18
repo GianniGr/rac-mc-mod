@@ -82,6 +82,8 @@ public final class RacMcClientRegistration {
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(RacMcEntities.BOLT.get(),
                 com.github.giannigr.racmc.client.render.Rac1BoltRenderer::new);
+        event.registerEntityRenderer(RacMcEntities.NANOTECH.get(),
+                com.github.giannigr.racmc.client.render.Rac1NanotechRenderer::new);
         event.registerEntityRenderer(RacMcEntities.BLASTER_ARROW.get(),
                 Rac1BlasterArrowRenderer::new);
         event.registerBlockEntityRenderer(RacMcBlockEntities.CRATE.get(), Rac1CrateRenderer::new);

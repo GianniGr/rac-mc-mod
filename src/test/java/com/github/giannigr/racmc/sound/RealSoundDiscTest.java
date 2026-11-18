@@ -16,6 +16,12 @@ class RealSoundDiscTest {
             assertTrue(result.isSupported());
             var image = result.image();
             var catalog = Rac1AudioCatalog.extract(image);
+            var health = catalog.clips().get(Rac1AudioEvent.NANOTECH_FIRST_ARRIVAL);
+            assertEquals(175, health.cueId());
+            assertEquals(21728 * 2, health.pcm().length);
+            assertEquals("e6b42259a967ba7ce01b1ed796aea3c8753b175bf2f6b671c173bf1996d9bd87", health.adpcmHash());
+            System.out.println(result.result().revision() + " nanotech501/local1 cue175 samples21728 PCM-SHA256="
+                    + SoundBytes.hash(health.pcm()));
             var events = new Rac1AudioEvent[]{Rac1AudioEvent.CRATE_BREAK, Rac1AudioEvent.TNT_BLAST,
                     Rac1AudioEvent.TNT_BEEP, Rac1AudioEvent.BOLT_ATTRACTION};
             int[] lengths = {10892, 23828, 11200, 8960};
