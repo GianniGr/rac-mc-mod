@@ -43,6 +43,7 @@ public class Rac1BlasterArrowRenderer extends ArrowRenderer<Rac1BlasterArrow> {
             // The arrow is still at the mouth of the weapon: it is not drawn.
             return;
         }
+        if (com.github.giannigr.racmc.client.effect.Rac1EffectClient.ownsProjectile(arrow)) return;
         super.render(arrow, yaw, partialTick, poseStack, buffer, light);
     }
 }

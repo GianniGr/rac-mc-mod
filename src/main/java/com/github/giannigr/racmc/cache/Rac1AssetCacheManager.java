@@ -1,11 +1,8 @@
 package com.github.giannigr.racmc.cache;
 
 import com.github.giannigr.racmc.asset.AssetFormatException;
-import com.github.giannigr.racmc.asset.Rac1AnimatedAsset;
-import com.github.giannigr.racmc.asset.Rac1AssetExtractor;
-import com.github.giannigr.racmc.asset.Rac1StaticAsset;
+import com.github.giannigr.racmc.asset.Rac1Crates;
 import com.github.giannigr.racmc.disc.DiscFormatException;
-import com.github.giannigr.racmc.disc.Rac1LevelAssets;
 import com.github.giannigr.racmc.iso.Rac1DiscValidator;
 import com.github.giannigr.racmc.iso.Rac1IsoSelectionResult;
 import com.github.giannigr.racmc.wad.WadFormatException;
@@ -192,6 +189,7 @@ public final class Rac1AssetCacheManager implements Closeable {
         try {
             Optional<Rac1CacheContent> cached = store.load(key);
             if (cached.isPresent()) {
+                requireAssets(cached.get());
                 content = cached.get();
                 progress = 100;
                 step = "The assets are ready.";
@@ -206,6 +204,7 @@ public final class Rac1AssetCacheManager implements Closeable {
         content = null;
         try {
             Rac1CacheContent built = build(key, image);
+            requireAssets(built);
             store.store(key, built);
             content = built;
             progress = 100;
@@ -219,6 +218,25 @@ public final class Rac1AssetCacheManager implements Closeable {
         }
     }
 
+    /** Readiness is the union of every approved feature, not merely a valid container. */
+    static void requireAssets(Rac1CacheContent assets) throws IOException {
+        if (assets.wrench() == null || assets.wrench().classNumber() != 71
+                || assets.wrench().mesh().triangleCount() == 0
+                || assets.wrench().textures().length == 0)
+            throw new IOException("The cache is missing the original OmniWrench.");
+        if (assets.vendor() == null) throw new IOException("The cache is missing the Gadgetron vendor.");
+        if (!com.github.giannigr.racmc.asset.hud.Rac1BoltHudDefinition.complete(assets.hud()))
+            throw new IOException("The cache is missing the original bolt HUD.");
+        var required = new java.util.ArrayList<>(Rac1Crates.definitions());
+        required.addAll(com.github.giannigr.racmc.asset.Rac1Bolts.definitions());
+        for (var definition : required) {
+            var asset = assets.crate(definition.key());
+            if (asset == null || asset.classNumber() != definition.classNumber()
+                    || asset.mesh().triangleCount() == 0 || asset.textures().length == 0)
+                throw new IOException("The cache is missing original asset " + definition.key() + ".");
+        }
+    }
+
     private Rac1CacheContent build(String key, Path image)
             throws IOException, DiscFormatException, WadFormatException, AssetFormatException {
         step = "The disc image is opened.";
@@ -227,27 +245,11 @@ public final class Rac1AssetCacheManager implements Closeable {
             if (!outcome.isSupported()) {
                 throw new IOException(outcome.result().message());
             }
-            step = "The assets of the level are read.";
-            progress = 20;
-            Rac1LevelAssets assets = Rac1LevelAssets.load(outcome.image(),
-                    Rac1AssetExtractor.LEVEL);
-            step = "The scenery is converted.";
-            progress = 40;
-            Rac1StaticAsset staticAsset = Rac1AssetExtractor.readStaticAsset(assets,
-                    Rac1AssetExtractor.STATIC_CLASS);
-            step = "The character is converted.";
-            progress = 60;
-            Rac1AnimatedAsset animatedAsset = Rac1AssetExtractor.readAnimatedAsset(assets,
-                    Rac1AssetExtractor.ANIMATED_CLASS);
-            step = "The weapon is converted.";
-            progress = 80;
-            Rac1AnimatedAsset blaster = Rac1AssetExtractor.readGadgetAsset(assets,
-                    Rac1AssetExtractor.BLASTER_CLASS);
-            int[] handChain = Rac1AssetExtractor.readHandChain(assets);
-            int handJoint = handChain.length == 0 ? 0 : handChain[handChain.length - 1];
+            Rac1CacheContent converted = Rac1CacheImporter.read(outcome.image(), key,
+                    (message, percent) -> { step = message; progress = percent; });
             step = "The cache is written.";
-            progress = 90;
-            return new Rac1CacheContent(key, staticAsset, animatedAsset, blaster, handJoint);
+            progress = 95;
+            return converted;
         }
     }
 

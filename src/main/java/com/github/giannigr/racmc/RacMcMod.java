@@ -1,5 +1,7 @@
 package com.github.giannigr.racmc;
 
+import com.github.giannigr.racmc.block.RacMcBlockEntities;
+import com.github.giannigr.racmc.block.RacMcBlocks;
 import com.github.giannigr.racmc.item.RacMcCreativeTabs;
 import com.github.giannigr.racmc.item.RacMcEntities;
 import com.github.giannigr.racmc.item.RacMcItems;
@@ -42,9 +44,23 @@ public class RacMcMod {
                 modContainer.getModInfo().getVersion().toString());
         // The items of the mod are registered with the event bus of the mod.
         RacMcItems.register(modEventBus);
+        // The blocks of the mod are registered with the same bus.
+        RacMcBlocks.register(modEventBus);
+        // The kinds of block entity of the mod are registered with the same bus.
+        RacMcBlockEntities.register(modEventBus);
         // The kinds of entity of the mod are registered with the same bus.
         RacMcEntities.register(modEventBus);
         // The tab of the creative mode of the mod is registered with the same bus.
         RacMcCreativeTabs.register(modEventBus);
+        com.github.giannigr.racmc.sound.Rac1Sounds.register(modEventBus);
+        com.github.giannigr.racmc.item.Rac1WrenchCrateHits.install((player, pos, state) -> {
+            com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(
+                    player.serverLevel(), pos, state, player);
+            return player.level().getBlockState(pos) != state;
+        });
+        com.github.giannigr.racmc.item.Rac1WrenchCrateHits.installContactHandler(
+                (player, pos, state, lifecycle, kind) ->
+                        lifecycle instanceof com.github.giannigr.racmc.block.Rac1CrateBlockEntity crate
+                                && crate.wrenchHit());
     }
 }

@@ -40,11 +40,17 @@ rac-mc-mod/
 │   │   ├── RacMcClient.java         # Client only: the gate, the menu button and the media
 │   │   ├── render/
 │   │   │   ├── Rac1ClientTextures.java  # The textures of the game in the texture manager
-│   │   │   └── Rac1MeshRenderer.java    # The renderer of the meshes of the game
+│   │   │   ├── Rac1MeshRenderer.java    # The renderer of the meshes of the game
+│   │   │   ├── Rac1CrateDrawing.java    # The drawing of a crate of the game
+│   │   │   ├── Rac1CrateRenderer.java   # The renderer of a crate in the world
+│   │   │   └── Rac1CrateItemRenderer.java # The renderer of a crate as an item
 │   │   └── screen/
 │   │       └── IsoSelectionScreen.java  # The screen where the disc image is chosen
 │   ├── asset/
 │   │   ├── Rac1AssetExtractor.java   # Reads the assets of a level out of the disc
+│   │   ├── Rac1CrateDefinition.java  # The description of a crate of the game
+│   │   ├── Rac1Crates.java           # The table of the crates of the game
+│   │   ├── Rac1CrateAsset.java       # A crate of the game that was converted
 │   │   ├── Rac1Mesh.java             # The geometry of a piece of scenery
 │   │   ├── Rac1SkinnedMesh.java      # The geometry of a character and the joints it follows
 │   │   ├── Rac1Skeleton.java         # The joints of a character and their bind matrices
@@ -57,6 +63,12 @@ rac-mc-mod/
 │   │   ├── MobySequenceReader.java   # Reads the animation sequences of the game
 │   │   ├── VifCommandList.java       # Reads the command lists of the graphics chip of the console
 │   │   └── Rac1CoordinateTransform.java # The change from the axes of the game to the axes of the blocks
+│   ├── block/
+│   │   ├── RacMcBlocks.java          # The blocks of the mod: the crates of the game
+│   │   ├── Rac1CrateBlock.java       # A crate of the game as a block
+│   │   ├── Rac1CrateBlockEntity.java # The block entity of a crate
+│   │   ├── RacMcBlockEntities.java   # The kinds of block entity of the mod
+│   │   └── Rac1CrateFit.java         # The place of a crate inside one block
 │   ├── cache/
 │   │   ├── Rac1CacheCodec.java       # The format of the cache file and its three versions
 │   │   ├── Rac1CacheStore.java       # The place where the cache is kept
@@ -751,6 +763,122 @@ is held.
   Clank is imported.
 - The weapon does not have a projectile of its own: it fires the arrows of the game.
 
+## The crates of the game as blocks
+
+The four crates of the game that the mod imports are placeable blocks of the game of blocks:
+
+| Block | Class of the game | What it is |
+| --- | --- | --- |
+| `racmc:bolt_crate` | 500 | The wooden crate of the game that holds bolts. |
+| `racmc:health_crate` | 501 | The crate of the nanotech of the game. The nanotech is the health of the game. |
+| `racmc:ammo_crate` | 511 | The light grey crate of Gadgetron that holds the ammunition of the weapons. |
+| `racmc:explosive_crate` | 505 | The red crate of the game that explodes when it is touched. The mod shows the crate and nothing else. |
+
+The classes and the names of the game are the ones the editor of the game shows; the list was
+taken from the class catalogue of the OpenRAC project (MIT), see `tools/extract/moby_classes.tsv`
+of `OpenRAC/rac1-decomp`. The same classes hold the same geometry in the NTSC-U v1.00 disc and in
+the PAL v2.00 disc, and in every level that was read. `docs/assets.md` describes the conversion of
+the crates in detail.
+
+The purple crate of the nanotech of *Going Commando* is not a crate of this game and is not in the
+mod.
+
+### The pipeline of the crates
+
+The crates are not a second pipeline: the same converter, the same cache and the same renderer
+draw them.
+
+- The table of the crates is `Rac1Crates`. Every entry of the table is a key and the number of
+  the class of the crate. The table is the only place where a crate is written down.
+- The converter reads a crate with `Rac1AssetExtractor.readCrateAsset`, which reads the geometry
+  and the textures of the class and nothing else: a crate of the game has no skeleton and no
+  animation.
+- The cache holds the crates in a section of their own, next to the scenery, the hero and the
+  Blaster. The schema of the cache was raised to 4 and the version of the converter to 2, so that
+  a cache that was written before the crates is thrown away and built again.
+- The block of a crate draws nothing itself. The crate of the game is drawn by the renderer of the
+  block entity, and the item that places it is drawn by the renderer of the item, so that the tab
+  of the creative mode shows the crate of the game and not a picture of it.
+
+### The size of the crates
+
+Every crate of the game is one unit high and one unit wide and deep, and it stands on the ground
+of its own origin. The converter does not change that, so a crate of the game is one block of the
+game of blocks without being scaled.
+
+The place of a crate inside its block is worked out by `Rac1CrateFit`: the crate is scaled by one
+factor for all three axes, so that it keeps its proportions, and the factor is the smallest one
+that makes it fit into the block. The crate is then centred above the block and stands on the
+ground of it. A crate that is smaller than a block keeps its size, and a crate that is bigger than
+a block is made smaller.
+
+### The rules of the crates
+
+- The crates are placeable blocks: they can be put down and taken down again, they fill their
+  space, they can be built on and they can be broken.
+- A crate drops nothing. The crates are a picture of the game and not a part of the game of blocks
+  yet: the bolts, the health and the ammunition of the game are not a part of this slice, and the
+  crate of the game is not broken for a reward. The explosive crate does not explode either.
+- A crate is broken with a bare hand in as long as a plank of the game of blocks: the hardness of
+  the block is two and its sound is the sound of the wood, and the block does not ask for the right
+  tool.
+- A crate falls like the sand of the game of blocks. The block of a crate is a falling block of
+  the game of blocks, so it falls when the block under it is gone, it comes to rest on the first
+  block under it, and a stack of crates falls one after the other, because every crate that comes
+  to rest schedules the fall of the crate above it. The fall is the fall of the game of blocks, so
+  the crate is carried by the falling block of the game of blocks and it keeps the physics of the
+  game of blocks.
+- The falling block of the game of blocks drops an item when it cannot come to rest. The crates
+  drop nothing, so that drop is switched off; the crate itself still comes to rest.
+- The crate comes to rest as a block with its block entity again, because the block of a crate
+  makes its block entity when it is placed.
+- The crates are in the tab of the creative mode of the mod, next to the Blaster.
+- The blocks and their block entities hold no types of the client, so a dedicated server starts
+  with them. The renderer of the crates draws nothing when the assets of the game are not in the
+  cache, so a client without the cache of the assets still plays and only sees no crate.
+
+### The drawing of a falling crate
+
+The falling block of the game of blocks is drawn by the renderer of the game of blocks, which
+draws the model of the block that falls. The crate of the game has no model: it is drawn by the
+renderer of its block entity. The renderer of the falling block is therefore replaced by one that
+draws the crate of the game with the mesh and the textures of the crate and hands every other
+falling block to the renderer of the game of blocks, so that the sand and the gravel of the game
+of blocks are still drawn by the game of blocks.
+
+The origin of the entity that falls is the middle of the ground of the place the crate was at, and
+the origin of the crate of the game is the middle of its own width and at its feet, so the crate is
+drawn where it was, without being moved.
+
+### The drawing of a crate
+
+The crate of the game is drawn in two places, and both places use the same geometry and the same
+textures:
+
+- In the world the crate is drawn by the renderer of the block entity. The renderer of the block
+  entities of the game of blocks stands at the corner of the block, so the crate is moved to the
+  middle of the block and stands on the ground of it.
+- As an item the crate is drawn by the renderer of the item, so that the tab of the creative mode
+  shows the crate of the game and not a picture of it. The model of the item names the turn and
+  the size of the crate for every place the item is drawn at, and they are the turns and the sizes
+  of a block of the game of blocks: the crate is drawn as a small block in the lists of the game,
+  as a block in the hand of the player and as a block on the ground.
+
+The place of the crate in the cube of the item follows the contract of the game of blocks: the
+cube of an item holds the block that is drawn in it, the model of a block of the game of blocks has
+its origin in the corner of that cube, and the game of blocks moves the cube by half a block in
+every direction before it hands it to the renderer of the item. The crate of the game has its
+origin in the middle of its own width and at its feet, so it is moved into the cube by half a block
+along the first and the third axis and by nothing along the second axis. The crate is then drawn
+exactly where a block of the game of blocks would be drawn.
+
+While a crate is broken, the game of blocks hands the renderer of the block entity a buffer that
+draws the crack of the block in front of the buffer of the block. The renderer of the crate draws
+the crate into that buffer as well, so that the crate stays visible while it is broken and the
+progressive crack of the game of blocks is drawn over it. The runs of the triangles of the crate
+are not closed in that buffer, because such a buffer cannot be closed; every run of the triangles
+is written into a buffer of its own, because every material of a mesh has a texture of its own.
+
 ## Gradle tasks
 
 `./gradlew tasks` lists the following groups (verified on this repository):
@@ -799,7 +927,7 @@ ModDevGradle's NeoForge aware unit test support is enabled (`neoForge { unitTest
 so the test source set has the mod and the Minecraft classes on its classpath and tests can use
 Minecraft types directly.
 
-Forty-two focused test classes exist today:
+Fifty-seven focused test classes exist today:
 
 - `ModBootstrapMetadataTest` verifies that the mod id, mod name and mod version are identical in
   `gradle.properties`, in the generated `META-INF/neoforge.mods.toml` and in `RacMcConstants`, and
@@ -884,7 +1012,8 @@ Forty-two focused test classes exist today:
   the mod.
 - `RacMcCreativeTabTest` verifies the tab of the creative mode of the mod with the mod loaded:
   the tab is registered, it is named after the mod, its sign is the picture of the mod, it holds
-  the Blaster, and the Blaster is in no other tab of the game.
+  the Blaster and it holds the crates of the game, every crate of the game is a block of the mod
+  with an item of its own, and the Blaster is in no other tab of the game.
 - `WadDecoderTest` verifies the decoder of the compressed streams of the game with streams that
   were built by hand: literals, matches with little literals, the dummy packet and the block
   marker, and the streams that are refused because they hold two literal packets in a row, because
@@ -896,7 +1025,8 @@ Forty-two focused test classes exist today:
   lies outside of the class, because their vertices do not fit into their region or because their
   strip does not start where the graphics packet of the console says.
 - `Rac1CacheCodecTest` verifies the format of the cache file: a cache that was written can be read
-  back, the file starts with the magic of the format, the identity of the disc is written into the
+  back, the crates of the game survive the round trip, the file starts with the magic of the
+  format, the identity of the disc is written into the
   file, the file carries the version of the format, the version of the schema of the assets and the
   version of the converter as three separate fields, and a cache whose bytes were changed, that was
   cut short, that belongs to another disc, that was written for another version of the format, of
@@ -1030,24 +1160,61 @@ Forty-two focused test classes exist today:
   class of the Blaster holds the chain of its muzzle, and the hero of the game holds the idle and
   the stance of the weapon with the lengths that the demo uses.
 
-The suite currently contains 280 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
+- `RealDiscCrateTest` is the opt-in check of the conversion of the crates of the game on a real
+  disc image: the three crates of the mod are converted with the numbers of the vertices, of the
+  triangles and of the textures that were measured on the disc, and every crate of the game is one
+  block big and stands on the ground of its own origin.
+- `Rac1CratesTest` verifies the table of the crates of the game: the mod has the bolt crate, the
+  health crate, the ammo crate and the explosive crate, they are the classes 500, 501, 511 and 505
+  of the game, every crate has a key of its own, a crate is found by its key, and a description of
+  a crate needs a key and a class.
+- `Rac1CrateFitTest` verifies the place of a crate inside one block: a crate that is one block big
+  is not scaled, a crate that is too big is scaled down and keeps its proportions, a crate that is
+  smaller than a block keeps its size, a crate stands on the ground of the block and is centred
+  above it, a crate fits into one block after it was placed, and a crate is placed in the cube of
+  an item the way a block of the game of blocks is placed in it.
+- `Rac1CrateItemTransformTest` verifies the place of a crate as an item with the chain of the game
+  of blocks itself: the turn of the model of the item is read with the reader of the game of
+  blocks, the cube of the item is moved by half a block in every direction the way the game of
+  blocks moves it, and the crate has to end up in the same place as a block of the game of blocks
+  in every place the item is drawn at and in both hands.
+- `Rac1CrateFallTest` verifies the fall of the crates: the block of a crate is a falling block of
+  the game of blocks and it is a fallable block, it has a block entity so that it is made again
+  when it comes to rest, it writes no fall of its own, the rule of the block under it is the rule
+  of the game of blocks, a falling crate drops nothing but still comes to rest, the renderer of
+  the falling block draws the crate of the game and hands every other block to the game of blocks,
+  and the crate is drawn where it stands while it falls.
+- `Rac1CrateAssetsTest` verifies the files of the crates in the resources of the mod: every crate
+  has the file of the states of its block, the model of its block and the model of its item, the
+  model of the item is the model of an item with a renderer of its own, it names a turn, a place
+  and a size for every place the item is drawn at, the turns and the sizes are the ones of a
+  block of the game of blocks, every crate has a name of its own, the block of a crate is as hard
+  as a plank of the game of blocks and sounds like wood, the renderer of the crate does not
+  refuse a buffer that cannot be closed, so that the crate stays visible while it is broken, and
+  the files of the crates are written without a byte order mark, or the game of blocks cannot read
+  them.
+
+The suite currently contains 432 tests: 7 in `ModBootstrapMetadataTest`, 2 in `ModNamespaceTest`,
 2 in `ModDescriptionTest`, 8 in `ModDisplayNameTest`, 8 in `ModLicenseTest`, 26 in
 `Rac1DiscValidatorTest`, 11 in `IsoPathSafetyTest`, 9 in `Rac1IsoSelectionServiceTest`, 10 in
 `Rac1MediaManagerTest`, 8 in `Rac1MediaGateTest`, 8 in `WadDecoderTest`, 5 in `TieClassReaderTest`,
 5 in `MobyClassReaderTest`, 8 in `MobySequenceReaderTest`, 6 in `MobyMeshTest`, 12 in
 `Rac1AnimationEvaluatorTest`, 7 in `Rac1CoordinateTransformTest`, 5 in `Rac1TextureReaderTest`,
 6 in `VifCommandListTest`, 10 in `Rac1CoreIndexTest`, 12 in `Rac1MeshRendererTest`, 8 in
-`Rac1PreviewLayoutTest`, 8 in `Rac1BlasterDemoTest`, 15 in `Rac1CacheCodecTest`, 9 in
+`Rac1PreviewLayoutTest`, 8 in `Rac1BlasterDemoTest`, 16 in `Rac1CacheCodecTest`, 9 in
 `Rac1CacheStoreTest`, 18 in `Rac1CacheLocationTest`, 7 in `Rac1CacheInterruptionTest`, 8 in
 `Rac1AssetCacheManagerTest`, 10 in `Rac1ScreenLayoutTest`, 18 in
-`RealDiscAssetTest`, 3 in `DiscFactsDiagnosticTest` and 1 in `RealDiscImageTest`. 257 of them pass,
-and twenty-three of them are skipped unless they are asked for: the twenty-two opt-in checks of a
+`RealDiscAssetTest`, 3 in `DiscFactsDiagnosticTest`, 2 in `RealDiscCrateTest`, 5 in
+`Rac1CratesTest`, 6 in `Rac1CrateFitTest`, 8 in `Rac1CrateAssetsTest`, 3 in
+`Rac1CrateItemTransformTest`, 8 in `Rac1CrateFallTest` and 1 in `RealDiscImageTest`.
+407 of them pass,
+and twenty-five of them are skipped unless they are asked for: the twenty-four opt-in checks of a
 real disc image and the check of the cleanup of the staging files, which needs a system that can
 build a symbolic link.
 
-`RealDiscImageTest`, `RealDiscAssetTest` and `DiscFactsDiagnosticTest` are the opt-in checks of a
-real disc image. They are skipped unless the path of an image is given on the command line, and
-they are described in the section about the disc importer above.
+`RealDiscImageTest`, `RealDiscAssetTest`, `RealDiscCrateTest` and `DiscFactsDiagnosticTest` are the
+opt-in checks of a real disc image. They are skipped unless the path of an image is given on the
+command line, and they are described in the section about the disc importer above.
 
 No test needs a game disc image to run. The images used by the tests are built by `SyntheticIso`
 and contain no game data.

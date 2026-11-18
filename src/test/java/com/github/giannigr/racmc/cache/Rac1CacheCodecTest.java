@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.github.giannigr.racmc.asset.Rac1CrateAsset;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.DisplayName;
@@ -81,6 +82,25 @@ class Rac1CacheCodecTest {
         assertEquals(0x40, content.staticAsset().textures()[0].pixels()[1] & 0xFF);
         assertEquals(1, content.animatedAsset().textures().length);
         assertEquals(1, content.blaster().textures().length);
+    }
+
+    @Test
+    @DisplayName("The crates of the game survive the round trip")
+    void theCratesSurviveTheRoundTrip() throws IOException {
+        byte[] file = Rac1CacheCodec.write(SyntheticAssets.content(KEY),
+                Rac1CacheStore.SCHEMA_VERSION);
+
+        Rac1CacheContent content = Rac1CacheCodec.read(file, KEY, Rac1CacheStore.SCHEMA_VERSION);
+
+        assertEquals(1, content.crates().size(), "The cache has to hold the crate of the checks");
+        Rac1CrateAsset crate = content.crate("bolt_crate");
+        assertNotNull(crate, "The crate has to be found by its key");
+        assertEquals(500, crate.classNumber(),
+                "The number of the class of the crate has to survive the round trip");
+        assertEquals(4, crate.mesh().vertexCount());
+        assertEquals(2, crate.mesh().triangleCount());
+        assertEquals(1, crate.textures().length);
+        assertEquals(2, crate.textures()[0].width());
     }
 
     @Test

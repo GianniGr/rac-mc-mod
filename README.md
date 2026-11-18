@@ -19,7 +19,29 @@ animations of the weapon, and it fires the arrows of the game while the trigger 
 details, the rules of the weapon and the way the weapon is measured are described in
 [`docs/development.md`](docs/development.md).
 
+The crates of the game are blocks of the game as well: the wooden bolt crate, the crate of the
+nanotech, the crate of the ammunition of Gadgetron and the red explosive crate can be placed in
+the world and are in the tab of the creative mode of the mod. They keep the size and the
+proportions they have in the game and fit into one block. Wooden and explosive crates emit
+bolt currency when destroyed; explosive crates detonate and chain-arm nearby explosives.
+Health crates now release eight-orb nanotech clusters healing one scaled original
+HP (5 Minecraft HP/2.5 hearts per cluster); independent verification is pending.
+Ammunition rewards remain unimplemented. See [`docs/nanotech.md`](docs/nanotech.md)
+and [`docs/integration.md`](docs/integration.md)
+for this combined candidate's verification limits and [`docs/bolt-currency.md`](docs/bolt-currency.md) for
+original payout rules, cosmetic items, persistence policy and pending verification.
+The [original bolt HUD](docs/hud-assets.md) is imported from the disc into the local cache too.
+
 ## Vision
+
+The original Gadgetron vendor is also a Creative block (`racmc:gadgetron_vendor`).
+Its world model uses a uniform 2× enlargement: the antenna-free enclosure is about
+one block wide, while the antenna tips span two. Items use a separate main-body
+fit so the kiosk is block-sized in the hand and recognizable in its GUI slot,
+without clipping the antenna tips. Approaching players trigger
+the growing, counter-spinning hologram; the body stays closed. It has no shop or
+right-click action. Chrome and callback beam/glow effects are not reproduced;
+see [`docs/vendor.md`](docs/vendor.md) for defaults, limitations and verification scope.
 
 Build a Minecraft experience featuring Ratchet & Clank-inspired gameplay, with a focus on importing
 original game assets from a player's legally obtained game disc image rather than distributing

@@ -127,7 +127,7 @@ public final class Rac1MeshRenderer {
     public static void render(PoseStack pose, MultiBufferSource.BufferSource buffers, Rac1Mesh mesh,
                                ResourceLocation[] textures) {
         render(pose, buffers, mesh.positions(), mesh.normals(), mesh.uvs(), mesh.indices(),
-                mesh.materials(), textures, FULL_LIGHT);
+                mesh.materials(), textures, FULL_LIGHT, true);
     }
 
     /**
@@ -142,7 +142,38 @@ public final class Rac1MeshRenderer {
     public static void render(PoseStack pose, MultiBufferSource.BufferSource buffers, Rac1Mesh mesh,
                                ResourceLocation[] textures, int light) {
         render(pose, buffers, mesh.positions(), mesh.normals(), mesh.uvs(), mesh.indices(),
-                mesh.materials(), textures, light);
+                mesh.materials(), textures, light, true);
+    }
+
+    /**
+     * Draws a mesh into buffers that cannot be closed.
+     *
+     * <p>The renderer of the block entities of the game of blocks hands the renderer of a block
+     * entity another kind of buffer while the block is being destroyed: the buffer that draws the
+     * crack of the block is put in front of the buffer of the block. Such a buffer cannot be
+     * closed, so the runs of the triangles are not closed here.
+     *
+     * <p>Closing the runs is not needed for that: every run of the triangles is written into a
+     * buffer of its own, because every material of a mesh has a texture of its own, so no buffer
+     * is written to twice and no buffer is left open while another one is written to.
+     *
+     * @param pose the place of the mesh
+     * @param buffers the buffers the triangles are written into
+     * @param mesh the mesh
+     * @param textures the place of the texture of every material
+     * @param light the light the mesh is drawn with
+     * @param closeRuns whether the runs of the triangles are closed
+     */
+    public static void render(PoseStack pose, MultiBufferSource buffers, Rac1Mesh mesh,
+                               ResourceLocation[] textures, int light, boolean closeRuns) {
+        render(pose, buffers, mesh.positions(), mesh.normals(), mesh.uvs(), mesh.indices(),
+                mesh.materials(), textures, light, closeRuns);
+    }
+
+    public static void render(PoseStack pose, MultiBufferSource buffers, Rac1Mesh mesh,
+            ResourceLocation[] textures, int light, boolean closeRuns, boolean red) {
+        render(pose, buffers, mesh.positions(), mesh.normals(), mesh.uvs(), mesh.indices(),
+                mesh.materials(), textures, light, closeRuns, red);
     }
 
     /**
@@ -179,13 +210,36 @@ public final class Rac1MeshRenderer {
                 textures, light);
     }
 
+    /** Skinned meshes also support the non-closeable destruction/crack buffer. */
+    public static void render(PoseStack pose, MultiBufferSource buffers, Rac1SkinnedMesh mesh,
+                              float[] positions, float[] normals, ResourceLocation[] textures,
+                              int light, boolean closeRuns) {
+        render(pose, buffers, positions, normals, mesh.uvs(), mesh.indices(), mesh.materials(),
+                textures, light, closeRuns);
+    }
+
     private static void render(PoseStack pose, MultiBufferSource.BufferSource buffers, float[] positions,
                                float[] normals, float[] uvs, int[] indices, int[] materials,
                                ResourceLocation[] textures, int light) {
+        render(pose, (MultiBufferSource) buffers, positions, normals, uvs, indices, materials,
+                textures, light, true);
+    }
+
+    private static void render(PoseStack pose, MultiBufferSource buffers, float[] positions,
+                                float[] normals, float[] uvs, int[] indices, int[] materials,
+                                ResourceLocation[] textures, int light, boolean closeRuns) {
+        render(pose, buffers, positions, normals, uvs, indices, materials, textures,
+                light, closeRuns, false);
+    }
+
+    private static void render(PoseStack pose, MultiBufferSource buffers, float[] positions,
+            float[] normals, float[] uvs, int[] indices, int[] materials,
+            ResourceLocation[] textures, int light, boolean closeRuns, boolean red) {
         int vertices = positions.length / 3;
         for (MaterialRun run : materialRuns(indices, materials, textures.length)) {
             ResourceLocation texture = run.slot() < 0 ? null : textures[run.slot()];
-            RenderType type = typeOf(texture);
+            RenderType type = red ? Rac1CrateAmbientRenderType.of(texture == null
+                    ? ResourceLocation.withDefaultNamespace("missing") : texture) : typeOf(texture);
             // The buffer of the kind of the triangle is asked for again for every run, because the
             // renderer of the game of blocks closes a buffer as soon as another kind of triangle
             // is written to it.
@@ -196,9 +250,14 @@ public final class Rac1MeshRenderer {
                 }
                 writeTriangle(consumer, pose, positions, normals, uvs, indices, triangle, light);
             }
-            // The run is finished, so the buffer can be closed before the next kind of triangle
-            // is written.
-            buffers.endBatch(type);
+            if (closeRuns && buffers instanceof MultiBufferSource.BufferSource source) {
+                // The run is finished, so the buffer can be closed before the next kind of
+                // triangle is written. A buffer that cannot be closed - the buffer of a block
+                // that is being destroyed, which draws the crack of the block in front of it -
+                // is left open; every run of the triangles is written into a buffer of its own,
+                // so no buffer is written to twice.
+                source.endBatch(type);
+            }
         }
     }
 
@@ -238,8 +297,8 @@ public final class Rac1MeshRenderer {
      * @param light the light the triangle is drawn with
      */
     static void writeTriangle(VertexConsumer consumer, PoseStack pose, float[] positions,
-                               float[] normals, float[] uvs, int[] indices, int triangle,
-                               int light) {
+                                float[] normals, float[] uvs, int[] indices, int triangle,
+                                int light) {
         for (int corner = 0; corner < 4; corner++) {
             int source = corner % 3;
             int vertex = indices[triangle * 3 + source];

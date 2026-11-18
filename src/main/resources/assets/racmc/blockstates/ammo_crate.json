@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "racmc:block/ammo_crate"
+    }
+  }
+}

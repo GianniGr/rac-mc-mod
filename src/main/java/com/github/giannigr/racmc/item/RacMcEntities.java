@@ -20,6 +20,18 @@ public final class RacMcEntities {
     /** The kinds of entity of the mod, registered under the identifier of the mod. */
     public static final DeferredRegister<EntityType<?>> ENTITIES =
             DeferredRegister.create(Registries.ENTITY_TYPE, RacMcConstants.MOD_ID);
+    public static final DeferredHolder<EntityType<?>, EntityType<com.github.giannigr.racmc.loot.Rac1NanotechEntity>> NANOTECH =
+            ENTITIES.register("nanotech_cluster", () -> EntityType.Builder
+                    .<com.github.giannigr.racmc.loot.Rac1NanotechEntity>of(
+                            com.github.giannigr.racmc.loot.Rac1NanotechEntity::new, MobCategory.MISC)
+                    .sized(.3F, .3F).clientTrackingRange(8).updateInterval(3).fireImmune()
+                    .build("nanotech_cluster"));
+    public static final DeferredHolder<EntityType<?>, EntityType<com.github.giannigr.racmc.loot.Rac1BoltEntity>> BOLT =
+            ENTITIES.register("bolt_pickup", () -> EntityType.Builder
+                    .<com.github.giannigr.racmc.loot.Rac1BoltEntity>of(
+                            com.github.giannigr.racmc.loot.Rac1BoltEntity::new, MobCategory.MISC)
+                    .sized(.3F, .3F).clientTrackingRange(8).updateInterval(1).fireImmune()
+                    .build("bolt_pickup"));
 
     /**
      * The arrow that the Blaster fired.
@@ -39,6 +51,14 @@ public final class RacMcEntities {
     private RacMcEntities() {
         throw new UnsupportedOperationException("Utility class");
     }
+
+    public static final DeferredHolder<EntityType<?>,
+            EntityType<com.github.giannigr.racmc.block.Rac1FallingExplosive>> FALLING_EXPLOSIVE =
+            ENTITIES.register("falling_explosive_crate", () -> EntityType.Builder
+                    .<com.github.giannigr.racmc.block.Rac1FallingExplosive>of(
+                            com.github.giannigr.racmc.block.Rac1FallingExplosive::new, MobCategory.MISC)
+                    .sized(0.98F, 0.98F).clientTrackingRange(10).updateInterval(1)
+                    .build("falling_explosive_crate"));
 
     /**
      * Registers the kinds of entity of the mod.
