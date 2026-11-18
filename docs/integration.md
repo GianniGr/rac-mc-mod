@@ -1,5 +1,12 @@
 # Approved feature-wave integration candidate — P32
 
+**2026-11-18 T18 repair follow-up:** held explosive START now respects an active
+item cooldown (no balance change); the falling regression's global-ledger oracle
+is replaced with placement UUID/profile accounting plus explicit unrelated-reward
+interleaving. No falling gameplay or nanotech production is changed. Independent
+T18 retest remains required. See [handoff.md](handoff.md); do not publish the retained
+instrumented default `build/` outputs.
+
 Owner decision, 2026-11-17: consolidate **one big PR**, after acceptance of
 combined gameplay/material debris, sound `739248a`, effects `7106e9d` and wrench
 `afca221`. This is local integration authority only: no push, public PR or provider

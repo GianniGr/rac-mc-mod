@@ -111,6 +111,8 @@ public final class Rac1IntegrationGameTests {
         var protectedFall = place(level, drop, Rac1Crates.EXPLOSIVE);
         UUID id = protectedFall.rewardId();
         protectedFall.arm(false);
+        com.github.giannigr.racmc.RacMcMod.LOGGER.info(
+                "Integration protected-fall fixture: reward={}, fuse={}", id, protectedFall.fuse.remaining());
         Consumer<net.neoforged.neoforge.event.entity.EntityJoinLevelEvent> denySpawn = event -> {
             if (event.getEntity() instanceof Rac1FallingExplosive) event.setCanceled(true);
         };
@@ -128,6 +130,15 @@ public final class Rac1IntegrationGameTests {
 
     @GameTest(template = "empty", batch = "integration_falling", timeoutTicks = 100)
     public static void fallingTransfersProfileFuseAndLandingOrder(GameTestHelper h) {
+        fallingTransfersProfileFuseAndLandingOrder(h, false);
+    }
+
+    @GameTest(template = "empty", batch = "integration_falling", timeoutTicks = 100)
+    public static void fallingAccountingIsScopedAcrossUnrelatedReward(GameTestHelper h) {
+        fallingTransfersProfileFuseAndLandingOrder(h, true);
+    }
+
+    private static void fallingTransfersProfileFuseAndLandingOrder(GameTestHelper h, boolean interleave) {
         var level = h.getLevel();
         BlockPos floor = h.absolutePos(new BlockPos(2, 1, 2));
         BlockPos origin = floor.above(4);
@@ -138,6 +149,7 @@ public final class Rac1IntegrationGameTests {
         UUID id = crate.rewardId();
         int base = crate.rewardBase();
         CompoundTag before = snapshot(level);
+        h.assertTrue(!rewarded(before, id), "Fresh falling incarnation already rewarded");
         Rac1FallingExplosive.fall(level, origin, crate.getBlockState());
         var falling = level.getEntitiesOfClass(Rac1FallingExplosive.class, new AABB(origin).inflate(2)).getFirst();
         CompoundTag saved = falling.saveWithoutId(new CompoundTag());
@@ -149,6 +161,9 @@ public final class Rac1IntegrationGameTests {
                 && restored.fuse.remaining() == falling.fuse.remaining()
                 && restored.fuse.lastTick() == falling.fuse.lastTick(), "Airborne save/load lost metadata");
         h.assertTrue(before.equals(snapshot(level)), "Transfer paid");
+        UUID unrelated = UUID.randomUUID();
+        if (interleave) h.runAfterDelay(5, () ->
+                Rac1BoltLedger.get(level).reward(unrelated, level, floor.east(4), 13));
         h.runAfterDelay(30, () -> {
             var landed = level.getBlockEntity(floor.above());
             h.assertTrue(landed instanceof Rac1CrateBlockEntity, "Explosive failed to land");
@@ -157,16 +172,34 @@ public final class Rac1IntegrationGameTests {
                     "Landing NBT overlay rerolled reward");
             h.assertTrue(result.fuse.remaining() > 0 && result.fuse.remaining() < 40,
                     "Landing reset or double-ticked fuse");
-            h.assertTrue(!rewarded(snapshot(level), id)
-                    && total(before) == total(snapshot(level))
-                    && before.getList("rewarded", Tag.TAG_COMPOUND).size()
-                    == snapshot(level).getList("rewarded", Tag.TAG_COMPOUND).size(),
-                    "Landing paid before detonation");
+            var beforeDetonation = snapshot(level);
+            // The ledger is world-global and other batches can leave ticking explosives behind.
+            // reward() reserves the placement UUID BEFORE adding any pickups, even for zero value.
+            // Absence of THIS UUID plus an unconsumed, unchanged profile proves no subject payout;
+            // global value/count equality across 30 ticks instead measures unrelated lifecycles.
+            var unconsumed = result.saveWithoutMetadata(level.registryAccess());
+            h.assertTrue(!rewarded(beforeDetonation, id) && !unconsumed.getBoolean("BoltRewardConsumed")
+                    && id.equals(unconsumed.getUUID("BoltRewardId"))
+                    && unconsumed.getInt("BoltRewardBase") == base,
+                    "Landing consumed/paid or changed the subject profile before detonation: " + id);
+            if (interleave) h.assertTrue(rewarded(beforeDetonation, unrelated),
+                    "Fixture did not exercise unrelated world-ledger activity");
+            var otherRewards = rewardIds(beforeDetonation);
+            otherRewards.removeAll(rewardIds(before));
+            com.github.giannigr.racmc.RacMcMod.LOGGER.info(
+                    "Integration landing accounting: subject={}, paid={}, fuse={}, otherNewRewards={}",
+                    id, rewarded(beforeDetonation, id), result.fuse.remaining(), otherRewards);
             // Save/load the combined grounded state, then actual detonation through shared seam.
             var tag = result.saveWithoutMetadata(level.registryAccess());
             result.loadWithComponents(tag, level.registryAccess());
             Rac1CrateBlast.detonate(level, Vec3.atCenterOf(floor.above()), result, null);
             var paid = snapshot(level);
+            var newRewards = rewardIds(paid);
+            newRewards.removeAll(rewardIds(beforeDetonation));
+            long payout = total(paid) - total(beforeDetonation);
+            h.assertTrue(newRewards.equals(java.util.Set.of(id))
+                    && payout >= lower(base) && payout <= upper(base),
+                    "Actual detonation must pay only this UUID once within its preserved profile");
             Rac1CrateRewards.destroy(level, floor.above(), result.getBlockState(), null);
             h.assertTrue(rewarded(paid, id) && paid.equals(snapshot(level)), "Landed reward duplicated/lost");
             h.succeed();
@@ -226,6 +259,13 @@ public final class Rac1IntegrationGameTests {
     private static boolean rewarded(CompoundTag ledger, UUID id) {
         return ledger.getList("rewarded", Tag.TAG_COMPOUND).stream()
                 .anyMatch(tag -> ((CompoundTag) tag).getUUID("id").equals(id));
+    }
+
+    private static java.util.Set<UUID> rewardIds(CompoundTag ledger) {
+        var result = new java.util.HashSet<UUID>();
+        for (Tag entry : ledger.getList("rewarded", Tag.TAG_COMPOUND))
+            result.add(((CompoundTag) entry).getUUID("id"));
+        return result;
     }
 
     private static long total(CompoundTag ledger) {

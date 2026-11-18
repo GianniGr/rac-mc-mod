@@ -1,4 +1,64 @@
-# P32 final approved-feature candidate — 2026-11-17
+# P32 T18 repair follow-up — 2026-11-18
+
+Owner resumed testing and assigned **only the T18 repairs** on the same
+`integration/approved-feature-wave`, from `27198695c3df27f3c2a59a9c80c6386f651c9558`.
+P32 uses the explicitly restored `openai/gpt-6.1-sol#medium` selection.
+Independent T18 retest is still required; PR readiness remains HOLD until that gate
+passes. Nanotech production is **not started**; its newly authorized future work
+remains conditional on completed independent combined verification.
+
+## Findings and corrections
+
+1. **Confirmed production defect, repaired:** held explosive START checked attack
+   charge but omitted the active item cooldown that managed intent already checks.
+   `heldExplosiveContact` now rejects `getCooldowns().isOnCooldown(heldItem)` before
+   dispatch. No balance, damage or cooldown duration change. The actual
+   `LeftClickBlock.START` regression verifies no fuse/profile/ledger/removal mutation,
+   no consumed normal attack gate, exactly one authoritative block and BE resync,
+   then successful short-fuse arming without payout after the item cooldown clears.
+2. **Confirmed fixture defect, no falling production change:** the 30-tick falling
+   assertion compared a world-global ledger's value/count across time. Baseline
+   reproduced the failure with **subjectPaid=false**, fuse30 and an unrelated new
+   reward. The corrected run identified the other reward UUID as the still-armed
+   rejected-fall fixture from the earlier protection batch. Subject UUID/base and
+   unconsumed state now define the pre-detonation oracle. Actual detonation must
+   introduce exactly that UUID and value within its preserved payout profile;
+   repeated callbacks must leave the exact immediate ledger snapshot unchanged.
+   An added interleaving test deliberately awards an unrelated UUID while falling.
+   Neither premature subject payout nor profile mutation is tolerated.
+
+The original T18 report remains retained privately. Its full-suite/runtime evidence
+applies to the old candidate only and is not being silently reclassified as a pass
+on this follow-up. No owner client/process was touched; no ISO was accessed.
+
+## Build/publication boundary
+
+T18's private instrumented **default `build/` products remain retained and must not
+be published**. Rather than delete anyone's output, P32 performs a fresh normal
+non-fixture build whose private init script changes **only the output directory**.
+No fixture source/resource paths are added to that build. The audited candidate JAR
+is under private evidence `p32-release-integration/nov18-normal-build/libs/`,
+not the old worktree `build/libs/`. There is no `clean`, manual deletion or broad
+removal. All source changes remain ordinary text; private harnesses/caches/assets
+and generated binaries are not committed.
+
+Focused commands and measured results are recorded in the private
+`P32-Nov18-repair-report.md`. T18 must independently retest the committed repair
+and audit its own final publication artifacts before orchestrator publication.
+No push, PR, GitHub edits, provider merge or nanotech production by P32.
+
+Measured P32 follow-up: **50/50 focused JUnit tests passed** (7 suites, no skips
+or failures), normal compilation/build passed; `racmc_release` **5/5** and
+`racmc_integration` **5/5** required headless tests passed. The integration5/5
+passed again in another fresh world. The bounded falling investigation used three
+runs total: diagnostic baseline, corrected run and corrected fresh-world recheck.
+The fresh non-fixture JAR audit found **0** T18/private-fixture classes or
+ISO/RACM/RACS/RACEFX/NBT/staging entries among476 entries. Default instrumented
+outputs were retained untouched by cleanup, not certified for publication.
+
+---
+
+# Historical P32 approved-feature candidate — 2026-11-17
 
 See [integration.md](integration.md) for the current approved matrix and conscious
 merge choices. Owner requested **one big PR** after approving combined gameplay,

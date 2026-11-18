@@ -12,7 +12,9 @@ Prior bounded T14/owner acceptance is retained; exact merged-tree T18 remains re
 - Otherwise an airborne attack requests slam after four airborne MC ticks, with clearance0.1
   rising /0.57 descending, regardless of MISS/ENTITY/actual BLOCK target. Grounded mining stays native.
 - Native normal attacks remain total5.1HP, sharing a10-tick accepted-start gate with actions.
-  Undercharged/overlapping starts are rejected. Slam raw10.2HP never stacks a vanilla crit/sweep.
+   Undercharged/overlapping starts are rejected. Held explosive START also rejects an
+   active item cooldown, without spending the normal attack gate; block/BE prediction
+   is resynchronized. Slam raw10.2HP never stacks a vanilla crit/sweep.
   Native mitigation/hurt immunity, attack protection hooks and PvP/team checks apply. Slam retains
   native reach/visibility checks; ranged throw uses bounded authoritative flight, not melee reach3.
 

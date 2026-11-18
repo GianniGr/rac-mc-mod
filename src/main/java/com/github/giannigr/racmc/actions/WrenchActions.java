@@ -285,6 +285,7 @@ public final class WrenchActions {
         var level = player.serverLevel();
         if (busy(player) || !valid(player) || !player.isAlive() || !isWrench(player.getMainHandItem())
                 || !normalAttackAllowed(player) || player.getAttackStrengthScale(0) < .999F
+                || player.getCooldowns().isOnCooldown(player.getMainHandItem().getItem())
                 || !level.hasChunkAt(pos) || level.isOutsideBuildHeight(pos)
                 || !level.getWorldBorder().isWithinBounds(pos) || !player.canInteractWithBlock(pos, 0)
                 || !level.mayInteract(player, pos)

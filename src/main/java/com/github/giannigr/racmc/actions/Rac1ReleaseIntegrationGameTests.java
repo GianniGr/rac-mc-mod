@@ -226,17 +226,72 @@ public final class Rac1ReleaseIntegrationGameTests {
                 .anyMatch(t -> ((CompoundTag) t).getUUID("id").equals(id));
     }
     private static ServerPlayer player(ServerLevel level, BlockPos pos) {
+        return player(level, pos, new ArrayList<>());
+    }
+
+    private static ServerPlayer player(ServerLevel level, BlockPos pos,
+            List<net.minecraft.network.protocol.Packet<?>> packets) {
         var profile = new com.mojang.authlib.GameProfile(UUID.randomUUID(), "release-account");
         var player = new ServerPlayer(level.getServer(), level, profile, ClientInformation.createDefault());
         player.connection = new net.minecraft.server.network.ServerGamePacketListenerImpl(level.getServer(),
                 new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND),
                 player, net.minecraft.server.network.CommonListenerCookie.createInitial(profile, false)) {
-            @Override public void send(net.minecraft.network.protocol.Packet<?> packet) {}
+            @Override public void send(net.minecraft.network.protocol.Packet<?> packet) { packets.add(packet); }
         };
         player.setGameMode(GameType.SURVIVAL);
         player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
                 new net.minecraft.world.item.ItemStack(RacMcItems.OMNIWRENCH.get()));
         player.teleportTo(pos.getX() + .5, pos.getY(), pos.getZ() - 1.5);
         return player;
+    }
+
+    @GameTest(template = "empty", batch = "release_cooldown")
+    public static void heldStartCooldownRejectsWithoutMutationAndResyncs(GameTestHelper h) {
+        var level = h.getLevel();
+        var pos = h.absolutePos(new BlockPos(3, 2, 3));
+        var crate = place(level, pos, Rac1Crates.EXPLOSIVE);
+        List<net.minecraft.network.protocol.Packet<?>> packets = new ArrayList<>();
+        var player = player(level, pos, packets);
+        for (int tick = 0; tick < 20; tick++) {
+            player.doTick();
+            player.teleportTo(pos.getX() + .5, pos.getY(), pos.getZ() - 1.5);
+        }
+        var item = RacMcItems.OMNIWRENCH.get();
+        player.getCooldowns().addCooldown(item, 100);
+        h.assertTrue(WrenchActions.valid(player) && player.getAttackStrengthScale(0) >= .999F
+                && player.getCooldowns().isOnCooldown(item), "Fixture must be charged with active item cooldown");
+        var state = crate.getBlockState();
+        var metadata = crate.saveWithoutMetadata(level.registryAccess());
+        var ledger = Rac1BoltLedger.get(level).save(new CompoundTag(), level.registryAccess());
+        packets.clear();
+        var event = new net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.LeftClickBlock(
+                player, pos, Direction.NORTH,
+                net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.LeftClickBlock.Action.START);
+        NeoForge.EVENT_BUS.post(event);
+        h.assertTrue(event.isCanceled() && level.getBlockState(pos) == state
+                && level.getBlockEntity(pos) == crate && !crate.isRemoved()
+                && crate.fuse.remaining() == Rac1ExplosiveFuse.IDLE,
+                "Cooldown START armed/removed/replaced explosive");
+        h.assertTrue(metadata.equals(crate.saveWithoutMetadata(level.registryAccess()))
+                && ledger.equals(Rac1BoltLedger.get(level).save(new CompoundTag(), level.registryAccess())),
+                "Rejected START mutated fuse/profile/reward");
+        h.assertTrue(packets.stream().filter(p ->
+                p instanceof net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket block
+                        && block.getPos().equals(pos) && block.getBlockState() == state).count() == 1,
+                "Rejected START must resync the authoritative block exactly once");
+        h.assertTrue(packets.stream().filter(p ->
+                p instanceof net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket data
+                        && data.getPos().equals(pos) && metadata.equals(data.getTag())).count() == 1,
+                "Rejected START must resync unchanged block-entity metadata exactly once");
+        h.assertTrue(player.getAttackStrengthScale(0) >= .999F
+                && WrenchActions.normalAttackAllowed(player), "Rejected START consumed normal attack gate");
+        player.getCooldowns().removeCooldown(item);
+        NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.LeftClickBlock(
+                player, pos, Direction.NORTH,
+                net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.LeftClickBlock.Action.START));
+        h.assertTrue(crate.fuse.remaining() >= 2 && crate.fuse.remaining() <= 5
+                && ledger.equals(Rac1BoltLedger.get(level).save(new CompoundTag(), level.registryAccess())),
+                "Cleared cooldown must permit short fuse without premature reward");
+        h.succeed();
     }
 }
