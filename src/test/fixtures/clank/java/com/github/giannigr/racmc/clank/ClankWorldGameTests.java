@@ -30,8 +30,15 @@ public final class ClankWorldGameTests {
     private static final class Sink extends ServerGamePacketListenerImpl {
         boolean open=true;
         int disconnects;
+        private static Connection fixtureConnection() {
+            return new Connection(PacketFlow.SERVERBOUND) {
+                private final io.netty.channel.embedded.EmbeddedChannel fixtureChannel=
+                        new io.netty.channel.embedded.EmbeddedChannel();
+                @Override public io.netty.channel.Channel channel(){return fixtureChannel;}
+            };
+        }
         Sink(ServerLevel level,ServerPlayer player,GameProfile profile) {
-            super(level.getServer(),new Connection(PacketFlow.SERVERBOUND),player,
+            super(level.getServer(),fixtureConnection(),player,
                     CommonListenerCookie.createInitial(profile,false));
         }
         @Override public void send(Packet<?> packet) {}
@@ -120,6 +127,11 @@ public final class ClankWorldGameTests {
                     net.neoforged.bus.api.EventPriority.LOWEST,listener);
         }
         void close(){net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(listener);}
+        void protectedLanding(GameTestHelper h,int i) {
+            h.assertTrue(count[i]==1&&distance[i]==0&&players[i].getHealth()==20,
+                    "Expected one protected whole-fall landing index="+i+" distance="+distance[i]
+                            +" count="+count[i]+" health="+players[i].getHealth());
+        }
         void damaged(GameTestHelper h,int i,double min,double max) {
             h.assertTrue(count[i]==1&&distance[i]>=min&&distance[i]<=max,
                     "Native fall distance/count index="+i+" distance="+distance[i]+" count="+count[i]);
@@ -176,7 +188,7 @@ public final class ClankWorldGameTests {
                     for(int i=0;i<2;i++)h.assertTrue(falls.count[i]==1&&falls.distance[i]==0
                                     &&players[i].getHealth()==20,
                             "Final held Heli did not negate the full pre-activation fall");
-                    falls.damaged(h,2,12.79,12.81);falls.damaged(h,3,12.7,12.81);
+                    falls.protectedLanding(h,2);falls.protectedLanding(h,3);
                     falls.damaged(h,4,12,12.01); // No same-glide Heli policy expansion to Thruster.
                     for(int i=0;i<players.length;i++)h.assertTrue(Rac1ClankServer.session(players[i])
                                     .snapshot(h.getLevel().getGameTime()).actionSerial()==actions[i],
@@ -220,10 +232,140 @@ public final class ClankWorldGameTests {
                             "Did not exercise three distinct admitted glides and final accepted release");
                     h.assertTrue(falls.count[0]==1&&falls.distance[0]==0&&held.getHealth()==20,
                             "Distinct final held glide lost whole-fall protection");
-                    falls.damaged(h,1,7,8.01);
+                    falls.protectedLanding(h,1);
                     System.out.println("CLANK_DISTINCT_HEALTH held="+held.getHealth()
                             +" released="+released.getHealth()+" distance="+falls.distance[1]);
                     falls.close();done(h,players);
+                }
+            });
+        }
+    }
+
+    @GameTest(template="empty",batch="clank_15_release_grace_boundary",timeoutTicks=85)
+    public static void releaseGraceNativeHandoffHasExactFortyTickBoundaryAndOneShotTouchdown(GameTestHelper h) {
+        Vec3 base=platform(h);var inside=player(h,base.add(0,2,8));
+        var expired=player(h,base.add(8,2,8));var players=new ServerPlayer[]{inside,expired};
+        for(var p:players){equip(h,p,"heli");p.fallDistance=12;}
+        var falls=new Falls(players);long[] release={-1};
+        for(int tick=1;tick<=65;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                if(t<=12)for(var p:players)fallFrame(p,t,t==1);
+                else if(t<41)for(var p:players) {
+                    // Keep this isolated fixture airborne and stationary to time the boundary
+                    // exactly; no synthetic fall event or production clock/protection mutation.
+                    Rac1ClankRuntime.input(p,new Rac1ClankMovementWire.Input(
+                            Rac1ClankServer.session(p).epoch(),t,Rac1ClankInput.RELEASED));
+                }
+                if(t==2)release[0]=Rac1ClankRuntime.graceDiagnostics(inside).releaseTick();
+                if(t==14)for(var p:players)h.assertTrue(
+                        Rac1ClankServer.session(p).motion().action()==Rac1ClankCapability.Action.IDLE
+                                &&!p.onGround(),"Grace did not survive original motion's native handoff");
+                if(t>=3&&t<41)for(var p:players) {
+                    var proof=Rac1ClankRuntime.graceDiagnostics(p);
+                    h.assertTrue(proof.releaseTick()==release[0]&&proof.releaseSerial()==2,
+                            "Repeated unheld samples restarted/refreshed grace");
+                }
+                if(t==41||t==42) {
+                    int i=t==41?0:1;var p=players[i];
+                    long elapsed=h.getLevel().getGameTime()-release[0];
+                    h.assertTrue(elapsed==(i==0?39:40),"Wrong native boundary timing");
+                    Vec3 before=p.position();p.move(MoverType.SELF,new Vec3(0,-4,0));
+                    Vec3 actual=p.position().subtract(before);
+                    h.assertTrue(p.onGround(),"Boundary case did not collide with actual native floor");
+                    p.doCheckFallDamage(actual.x,actual.y,actual.z,true);
+                    h.assertTrue(Rac1ClankRuntime.graceDiagnostics(p).releaseTick()==-1,
+                            "First touchdown did not consume grace");
+                    System.out.println("CLANK_GRACE_BOUNDARY elapsed="+elapsed+" distance="
+                            +falls.distance[i]+" health="+p.getHealth());
+                }
+                if(t==43){falls.protectedLanding(h,0);falls.damaged(h,1,13,14.01);}
+                if(t==44) {
+                    inside.setPos(base.add(0,.8,8));inside.setOnGround(false);
+                    inside.setDeltaMovement(Vec3.ZERO);inside.fallDistance=12;
+                    inside.connection.resetPosition();
+                }
+                if(t>=44)fallFrame(inside,t,false);
+                if(t==65) {
+                    h.assertTrue(falls.count[0]==2&&falls.distance[0]>=12&&inside.getHealth()<20,
+                            "Consumed grace protected an unrelated subsequent native fall");
+                    falls.close();done(h,players);
+                }
+            });
+        }
+    }
+
+    @GameTest(template="empty",batch="clank_16_release_grace_lifecycle",timeoutTicks=35)
+    public static void graceClearsOnNativeTeleportDeathWorldChangeAndEquipmentAndNeverProtectsHazards(GameTestHelper h) {
+        Vec3 base=platform(h);
+        var tele=player(h,base.add(0,2,8));var dead=player(h,base.add(4,2,8));
+        var world=player(h,base.add(8,2,8));var equip=player(h,base.add(12,2,8));
+        var hazard=player(h,base.add(16,2,8));var voidDamage=player(h,base.add(20,2,8));
+        var unadmitted=player(h,base.add(0,0,16));
+        var players=new ServerPlayer[]{tele,dead,world,equip,hazard,voidDamage,unadmitted};
+        for(var p:players)equip(h,p,"heli");
+        h.runAtTickTime(1,()->{for(var p:players)frame(p,1,true,false,false);});
+        h.runAtTickTime(2,()->{
+            for(var p:players)frame(p,2,false,false,false);
+            for(int i=0;i<6;i++)h.assertTrue(Rac1ClankRuntime.graceDiagnostics(players[i]).covers(),
+                    "Genuine released Heli did not start grace");
+            h.assertTrue(Rac1ClankRuntime.graceDiagnostics(unadmitted).releaseTick()==-1,
+                    "Equipping/unadmitted ordinary Jump release started grace");
+        });
+        h.runAtTickTime(3,()->{
+            long epoch=Rac1ClankServer.session(tele).epoch();
+            tele.connection.teleport(tele.getX(),tele.getY(),tele.getZ(),0,0);
+            h.assertTrue(Rac1ClankServer.session(tele).epoch()>epoch
+                            &&Rac1ClankRuntime.graceDiagnostics(tele).releaseTick()==-1,
+                    "Native same-world teleport retained grace/serial namespace");
+            h.assertTrue(dead.hurt(dead.damageSources().fellOutOfWorld(),1000)&&!dead.isAlive()
+                            &&Rac1ClankRuntime.graceDiagnostics(dead).releaseTick()==-1,
+                    "Death/void retained grace");
+            var other=h.getLevel().getServer().getLevel(net.minecraft.world.level.Level.END);
+            h.assertTrue(world.teleportTo(other,0,150,0,java.util.Set.of(),0,0)
+                            &&world.level()==other&&Rac1ClankRuntime.graceDiagnostics(world).releaseTick()==-1,
+                    "Actual world transfer retained release grace");
+            equip(h,equip,"unequip");
+            h.assertTrue(Rac1ClankRuntime.graceDiagnostics(equip).releaseTick()==-1,
+                    "Equipment invalidation retained grace");
+            h.assertTrue(hazard.hurt(hazard.damageSources().cactus(),2)&&hazard.getHealth()==18,
+                    "Release grace protected cactus damage");
+            h.assertTrue(voidDamage.hurt(voidDamage.damageSources().fellOutOfWorld(),2)
+                            &&voidDamage.getHealth()==18,"Release grace protected void damage");
+            done(h,players);
+        });
+    }
+
+    @GameTest(template="empty",batch="clank_17_active_without_fresh_input",timeoutTicks=80)
+    public static void genuineActiveHeliProtectsWithoutFreshInputButEndedGlideWithoutReleaseDoesNot(GameTestHelper h) {
+        Vec3 base=platform(h);var active=player(h,base.add(0,.8,8));
+        var ended=player(h,base.add(8,6,8));
+        for(var p:new ServerPlayer[]{active,ended}){equip(h,p,"heli");p.fallDistance=12;}
+        var falls=new Falls(active,ended);boolean[] activeNoFresh={false},nativeExpired={false};
+        java.util.function.Consumer<net.neoforged.neoforge.event.entity.living.LivingFallEvent> before=event->{
+            if(event.getEntity()==active)activeNoFresh[0]=
+                    Rac1ClankServer.session(active).motion().action()==Rac1ClankCapability.Action.GLIDE
+                    &&!Rac1ClankRuntime.inputDiagnostics(active).heldProof()
+                    &&Rac1ClankRuntime.graceDiagnostics(active).releaseTick()==-1;
+            if(event.getEntity()==ended)nativeExpired[0]=
+                    Rac1ClankServer.session(ended).motion().action()==Rac1ClankCapability.Action.IDLE
+                    &&Rac1ClankRuntime.graceDiagnostics(ended).releaseTick()==-1;
+        };
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+                net.neoforged.bus.api.EventPriority.HIGH,before);
+        for(int tick=1;tick<=55;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                for(var p:new ServerPlayer[]{active,ended}) {
+                    if(t==1)fallFrame(p,1,true);
+                    else tickWithoutInput(p);
+                }
+                if(t==55) {
+                    h.assertTrue(activeNoFresh[0]&&nativeExpired[0],
+                            "Did not isolate active vs inactive/no-grace native landing routes");
+                    falls.protectedLanding(h,0);falls.damaged(h,1,17,18.01);
+                    net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(before);
+                    falls.close();done(h,active,ended);
                 }
             });
         }
@@ -281,8 +423,8 @@ public final class ClankWorldGameTests {
                 if(t==35) {
                     h.assertTrue(falls.count[0]==1&&falls.distance[0]==0&&held.getHealth()==20,
                             "Queued fresh held Heli landing lost temporal proof");
-                    falls.damaged(h,1,12.79,12.81);
-                    falls.damaged(h,2,12.7,12.81);
+                    falls.protectedLanding(h,1);
+                    falls.protectedLanding(h,2);
                     falls.close();done(h,players);
                 }
             });
@@ -315,7 +457,7 @@ public final class ClankWorldGameTests {
                 else {tickWithoutInput(p);if(t<20)queueInput(p,t,true);}
                 if(t==35) {
                     h.assertTrue(revoked[0],"Release did not run inside the native landing boundary");
-                    falls.damaged(h,0,12.79,12.81);falls.close();
+                    falls.protectedLanding(h,0);falls.close();
                     net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(release);
                     done(h,p);
                 }
@@ -375,13 +517,13 @@ public final class ClankWorldGameTests {
                 if(t==55) {
                     h.assertTrue(falls.count[0]==1&&falls.distance[0]==0&&held.getHealth()==20,
                             "Late held Heli did not protect the whole native fall");
-                    falls.damaged(h,1,12.79,12.81);
-                    falls.damaged(h,2,12.7,12.81);
+                    falls.protectedLanding(h,1);
+                    falls.protectedLanding(h,2);
                     falls.damaged(h,3,12.1,12.81);
                     falls.damaged(h,4,12,12.81);
                     falls.damaged(h,5,12,12.81);
                     falls.damaged(h,6,12,12.01); // Thruster retains the existing debt policy.
-                    falls.damaged(h,7,13.5,14.01);
+                    falls.protectedLanding(h,7); // Grace survives ordinary native-travel handoff.
                     falls.close();
                     System.out.println("CLANK_POLICY health held="+held.getHealth()
                             +" released="+released.getHealth()+" interrupted="+interrupted.getHealth());
@@ -489,7 +631,7 @@ public final class ClankWorldGameTests {
                             "Pre-activation distance did not come from actual native descent");
                     h.assertTrue(falls.count[0]==1&&falls.distance[0]==0&&held.getHealth()==20,
                             "Real late held Heli fall was not fully protected");
-                    falls.damaged(h,1,7.5,8.01);
+                    falls.protectedLanding(h,1);
                     falls.damaged(h,2,7,8.01);
                     for(int i=0;i<2;i++)h.assertTrue(Rac1ClankServer.session(gliders[i])
                             .snapshot(h.getLevel().getGameTime()).actionSerial()==serial[i],

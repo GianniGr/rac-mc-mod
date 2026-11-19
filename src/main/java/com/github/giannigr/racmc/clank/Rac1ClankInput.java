@@ -62,6 +62,7 @@ public record Rac1ClankInput(boolean jumpA, boolean jumpB, boolean crouch,
                     ? RELEASED : sample;
         }
         public long acknowledgedSerial() { return acceptedSerial; }
+        public boolean acceptedJumpHeld() { return acceptedHeld; }
         public long receivedTick() { return receivedTick; }
         public record Consumed(long serial,long receiptTick,long controlTick,
                                boolean fresh,Rac1ClankInput frame) {}

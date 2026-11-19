@@ -29,6 +29,7 @@ public final class Rac1ClankRuntime {
         final long epoch;
         final Rac1ClankInput.Stream input;
         final Rac1ClankFallEpisode fall=new Rac1ClankFallEpisode();
+        final Rac1ClankLandingGrace grace=new Rac1ClankLandingGrace();
         long tick=-1,steps,creditCount;
         boolean controlled,stepping,proof,landed;
         boolean settling,heliGlide,heliReleased;
@@ -52,6 +53,19 @@ public final class Rac1ClankRuntime {
                 &&Rac1ClankNativeCollision.compatible(c.player)&&c.player.hurtTime==0
                 &&!teleporting(c.player);
     }
+    private static boolean activeHeli(Control c) {
+        return c.heliGlide&&c.fall.active()&&c.session.motion().action()==Action.GLIDE
+                &&c.session.motion().airborne()
+                &&c.session.equipment().selected()==Rac1ClankEquipment.Module.HELI
+                &&c.session.snapshot(c.player.serverLevel().getGameTime()).actionSerial()==c.heliActionSerial;
+    }
+    private static void consumeZeroDistanceTouchdown(Control c) {
+        c.grace.clear();
+        if(activeHeli(c)) {
+            c.fall.heliLandingDistance(0,true);
+            cancelMotion(c);
+        }
+    }
     private static Control control(ServerPlayer player) {
         var session=Rac1ClankServer.session(player);
         var old=CONTROLS.get(player.getUUID());
@@ -63,9 +77,15 @@ public final class Rac1ClankRuntime {
     }
     public static void input(ServerPlayer player,Rac1ClankMovementWire.Input sample) {
         var c=control(player);
+        boolean wasHeld=c.input.acceptedJumpHeld();
         if(eligible(c)&&c.input.offer(sample.epoch(),sample.serial(),
                 player.serverLevel().getGameTime(),sample.frame())
                 &&c.heliGlide&&!sample.frame().jumpHeld()) {
+            if(wasHeld&&!c.heliReleased&&c.fall.active()&&!player.onGround()
+                    &&c.session.motion().action()==Action.GLIDE&&c.session.motion().airborne()
+                    &&c.session.equipment().selected()==Rac1ClankEquipment.Module.HELI
+                    &&c.session.snapshot(player.serverLevel().getGameTime()).actionSerial()==c.heliActionSerial)
+                c.grace.start(player.serverLevel().getGameTime(),c.heliActionSerial,sample.serial());
             c.heliReleased=true;c.heliReleaseSerial=sample.serial();
         }
     }
@@ -79,10 +99,17 @@ public final class Rac1ClankRuntime {
         if(c.tick==tick)return;
         c.tick=tick;c.controlled=false;c.proof=false;c.landed=false;c.actualY=0;
         if(!eligible(c)) {
-            boolean wasActive=c.fall.active()||c.session.motion().action()!=Action.IDLE;
+            boolean wasActive=c.grace.active()||c.fall.active()||c.session.motion().action()!=Action.IDLE;
             cancel(c);c.lastPosition=player.position();
             if(wasActive)Rac1ClankServer.cancelEpisode(player);
             return;
+        }
+        if((c.grace.active()||activeHeli(c))&&player.onGround()
+                &&Rac1ClankNativeCollision.observe(player,Vector.ZERO).grounded()) {
+            // Native travel may land before packet-side fall settlement; settle before another jump.
+            if(player.fallDistance>0)player.doCheckFallDamage(0,0,0,true);
+            else consumeZeroDistanceTouchdown(c);
+            if(!eligible(c)){cancel(c);return;}
         }
         // External knockback/slam takes priority over an old controlled velocity.
         if(c.expectedDelta!=null&&player.getDeltaMovement().distanceToSqr(c.expectedDelta)>.0004) {
@@ -114,7 +141,7 @@ public final class Rac1ClankRuntime {
             var step=motion.step(c.session.equipment(),observed);
             c.steps++;
             if(!step.controlled()) {
-                if(c.fall.active()){cancel(c);break;}
+                if(c.fall.active()){cancelMotion(c);break;}
                 continue;
             }
             // Original capsule displacement clamp is bounded; never accept a large/NaN host delta.
@@ -167,11 +194,27 @@ public final class Rac1ClankRuntime {
         correct(player);
     }
     private static void cancel(Control c) {
+        c.grace.clear();
+        cancelMotion(c);
+    }
+    /** Normal end of glide hands movement/debt back to vanilla without ending the airborne grace. */
+    private static void cancelMotion(Control c) {
         if(c.fall.active())c.player.fallDistance=(float)c.fall.cancelDistance(
                 Math.max(0,c.player.fallDistance));
         c.session.motion().cancel();c.expectedDelta=null;c.proof=false;
         c.heliGlide=false;c.heliReleased=false;c.heliActionSerial=-1;c.heliReleaseSerial=-1;
         c.session.motion().discardBufferedInput();
+    }
+    @SubscribeEvent public static void after(PlayerTickEvent.Post event) {
+        if(event.getEntity() instanceof ServerPlayer player) {
+            var c=CONTROLS.get(player.getUUID());
+            if(c!=null&&c.player==player&&(c.grace.active()||activeHeli(c))) {
+                if(!eligible(c))c.grace.clear();
+                else if(player.onGround()&&player.fallDistance<=0
+                        &&Rac1ClankNativeCollision.observe(player,Vector.ZERO).grounded())
+                    consumeZeroDistanceTouchdown(c);
+            }
+        }
     }
     public static boolean ownsTravel(ServerPlayer player) {
         var c=CONTROLS.get(player.getUUID());
@@ -204,28 +247,52 @@ public final class Rac1ClankRuntime {
     @SubscribeEvent public static void landing(LivingFallEvent event) {
         if(!(event.getEntity() instanceof ServerPlayer player))return;
         var c=CONTROLS.get(player.getUUID());
+        if(c!=null&&c.player==player&&(c.grace.active()||activeHeli(c))&&player.onGround()) {
+            boolean nativeGround=Rac1ClankNativeCollision.observe(player,Vector.ZERO).grounded();
+            if(!eligible(c)||!nativeGround
+                    ||c.session.equipment().selected()!=Rac1ClankEquipment.Module.HELI)c.grace.clear();
+            else {
+                boolean protectedLanding=activeHeli(c);
+                protectedLanding=c.grace.land(player.serverLevel().getGameTime())||protectedLanding;
+                if(protectedLanding) {
+                    if(c.fall.active())c.fall.heliLandingDistance(Math.max(0,event.getDistance()),true);
+                    c.heliGlide=false; // First touchdown consumes this admitted episode on either route.
+                    if(!c.settling)cancelMotion(c);
+                    event.setDistance(0);
+                    return;
+                }
+            }
+        }
         if(c==null||c.player!=player||!c.settling||!c.controlled||!eligible(c)
                 ||c.tick!=player.serverLevel().getGameTime()||!player.onGround()
                 ||c.requestedY>0||!c.session.motion().airborne()||!c.fall.active())return;
         double distance=Math.max(0,event.getDistance());
-        if(c.heliGlide) {
-            boolean held=!c.heliReleased&&c.input.heldForStep(c.tick)
-                    &&c.session.equipment().selected()==Rac1ClankEquipment.Module.HELI
-                    &&c.session.motion().action()==Action.GLIDE
-                    &&c.session.snapshot(c.tick).actionSerial()==c.heliActionSerial;
-            event.setDistance((float)c.fall.heliLandingDistance(distance,held));
-        } else event.setDistance((float)c.fall.landingDistance(distance));
+        if(c.heliGlide)event.setDistance((float)c.fall.heliLandingDistance(distance,false));
+        else event.setDistance((float)c.fall.landingDistance(distance));
     }
     @SubscribeEvent public static void knockback(LivingKnockBackEvent event) {
         if(event.getEntity() instanceof ServerPlayer player) {
             var c=CONTROLS.get(player.getUUID());
-            if(c!=null&&(c.fall.active()||c.session.motion().action()!=Action.IDLE))
+            if(c!=null&&(c.grace.active()||c.fall.active()||c.session.motion().action()!=Action.IDLE))
                 Rac1ClankServer.cancelEpisode(player);
         }
     }
     public static void invalidate(ServerPlayer player) {
         var c=CONTROLS.remove(player.getUUID());
         if(c!=null)cancel(c);
+    }
+    /** Called on the native connection teleport path, including same-world teleports and corrections. */
+    public static void teleport(ServerPlayer player) {
+        var c=CONTROLS.get(player.getUUID());
+        if(c!=null&&(c.grace.active()||c.fall.active()||c.session.motion().action()!=Action.IDLE))
+            Rac1ClankServer.cancelEpisode(player);
+    }
+    public record GraceDiagnostics(long releaseTick,long releaseSerial,long actionSerial,boolean covers) {}
+    public static GraceDiagnostics graceDiagnostics(ServerPlayer player) {
+        var c=CONTROLS.get(player.getUUID());
+        return c==null||c.player!=player?new GraceDiagnostics(-1,-1,-1,false)
+                :new GraceDiagnostics(c.grace.releaseTick(),c.grace.inputSerial(),c.grace.actionSerial(),
+                        c.grace.covers(player.serverLevel().getGameTime()));
     }
     static void clear(){CONTROLS.clear();}
     static void correct(ServerPlayer player) {

@@ -20,6 +20,10 @@ abstract class ClankMovePacketMixin implements Rac1ClankConnectionAccess {
     @Shadow private Vec3 awaitingPositionFromClient;
     @Shadow private boolean clientIsFloating;
     @Override public boolean racmc$clankAwaitingTeleport(){return awaitingPositionFromClient!=null;}
+    @Inject(method="teleport(DDDFFLjava/util/Set;)V",at=@At("HEAD"),require=1)
+    private void racmc$clearClankFallOnTeleport(CallbackInfo callback) {
+        Rac1ClankRuntime.teleport(player);
+    }
 
     // Vanilla tests coordinate NaN but clamps infinity. Strengthen only controlled Clank packets.
     @Inject(method="handleMovePlayer(Lnet/minecraft/network/protocol/game/ServerboundMovePlayerPacket;)V",

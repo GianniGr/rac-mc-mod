@@ -5,7 +5,7 @@ feature. Native Steve remains the player. The operator-only session setup below
 can equip the visible backpack. The independent source-step controller is tested,
 and the approved travel/network/fall hooks are installed in the current integration.
 The owner subsequently approved a Heli-only landing policy correction. P36's fresh
-normal build and 14 real-player headless tests pass; independent T22 and actual
+normal build and 17 real-player headless tests pass; independent T22 and actual
 client/owner playtesting remain required. There is no Clank
 item, inventory/chest slot, NPC purchase, generic jump boost or playable class87.
 No upgrade is automatically granted. The normal mandatory local disc/cache gate
@@ -173,29 +173,27 @@ bit-exact PS2 trajectories or complete original game feel from this checkpoint.
 and conservative cancellation. The approved scoped `LivingFallEvent` adjustment
 and native `ServerPlayer.doCheckFallDamage` processing are installed.
 
-Owner-approved Heli policy: an admitted Heli glide held through a normal landing
-negates **all fall damage from that fall**, including distance before late activation.
-Releasing glide revokes protection immediately, even while the original minimum
-glide motion timer remains active. Under the owner-approved same-episode re-press
-policy, fresh held input consumed after that accepted release restores protection
-if the same authoritative Heli GLIDE/action serial is still active. It never
-restarts/extends motion or animation. A final accepted release without a subsequent
-fresh consumed re-press still takes native damage. Interrupted/released glide conservatively restores
-pre-activation plus actual glide descent without charging it twice.
-A protected landing requires fresh held input consumed by that authoritative step, the same player,
-world, epoch and admitted action, and a collision-resolved native landing.
-Main-thread payload receipt may precede the next world-time increment: a new serial
-received in that immediately preceding tick can belong to its first consumption.
-Each serial proves at most one authoritative tick; receipt alone or a later held
-sample cannot retroactively prove an already-running step. The original four-tick
-motion-input grace is unchanged and does not grant damage protection. Accepted
-release revokes protection immediately, including after consumption and before
-landing. Receipt of a newer held sample alone cannot clear the latch: it must own
-a fresh authoritative consumption, with a serial later than the latest release,
-while the same Heli action remains active. Releasing again revokes it again.
-Missing input and grace-only/stale/replayed samples cannot restore protection.
-The separate input-stall caveat remains open; no grace extension is introduced.
-Missing/stale/replayed input does not prove a held landing. Equipping/toggling or
+Current owner-approved Heli policy negates **all fall damage from that fall** on
+the first normal touchdown while a genuine valid server-admitted Heli glide is
+still active. This deliberately no longer requires fresh held input at touchdown.
+A qualifying accepted Jump release also starts a 40-server-tick window, independent
+of glide motion/animation. If release occurs at tick R, touchdown at R through
+R+39 is covered; R+40 is not, unless a genuine Heli glide is still active.
+Grace follows the same airborne fall through native movement after glide ends.
+It consumes on touchdown and clears on death, world change, teleport, equipment/
+epoch invalidation and incompatible lifecycle. The scoped connection teleport
+hook invalidates only an existing Clank episode/grace, not bystanders.
+
+Repeated unheld samples, stale/replayed input, unadmitted actions and an unrelated
+fall cannot start/refresh grace. A deliberate subsequent genuine glide/release
+can start a new window; a same-action re-press must first be freshly consumed
+before its later release can renew that window. No timer is extended by old input.
+Original motion input grace, admission and strict source glide-release timing are
+unchanged. If starvation ends the glide before touchdown and no qualifying server
+release window exists, damage is normal. The separate stall caveat remains open.
+After expiry, interrupted descent retains native pre-activation plus actual
+controlled distance conservatively, without duplicate charging.
+Equipping/toggling or
 launching high/long does not itself grant this protection. Thruster/high/long retain
 their existing policy; unrelated, void and hazard damage are not intercepted.
 No blanket event cancellation, global movement/flight flag or native render-root
@@ -221,27 +219,18 @@ native cape/mesh/mount are not hidden or rescaled.
 
 Native collision substeps, high/long/glide admission, prediction/reconciliation,
 fall bookkeeping and action blends are installed, not independently accepted.
-The earlier owner-approved Heli correction passed its normal build and 10 headless
-tests, but T22's actual-network held landing on `3b85b86` failed (distance10,
-health20→13). After the consumed-input correction, T22 verified actual integrated
-singleplayer held/released landings after three distinct admitted glides on `528ac17`.
-Its separate brief-release/re-press case retained the old same-episode release latch
-and died despite fresh held proof. The owner then approved the same-active-action
-re-press restoration above; independent integrated retest of that change is required.
-The same-active-action re-press correction passes a fresh full build (821 passed,
-51 skipped, zero failures) and all 14 required native headless world tests,
-including all prior 12 unchanged cases. The native queued
-regression first reproduced the failure, then passed with prior-world-tick receipt
-followed by next-tick authoritative consumption/landing. Release-after-consumption
-and stale/replay controls retain normal damage. New queued short re-press tests
-retain the same action/phase/trajectory and restore whole-fall protection only
-after fresh held consumption; final-release, missing-input and Thruster controls
-still damage. Repeated three-distinct-glide held/release controls also pass.
-Fixture players
-age through native `tick`/`doTick`, without disabling spawn protection. The
-real late-fall case accumulated 6.5938 blocks before glide activation: held Heli
-landed at 20 health; released Heli and the native control both landed at 15.
-Interrupted/released tests also check distance/count and no duplicate charging.
+Earlier T22 live and owner reports are retained historical evidence, not waived
+by headless checks. The owner subsequently changed active/released landing policy
+to the rule above. Independent integrated-singleplayer retest is required.
+This protection scope passes a fresh full build (824 passed, 51 skipped,
+zero failures) and 17 native headless world tests. Native boundary landings prove
+R+39 distance0/health20 and R+40 distance13.224/health9. Tests cover original
+motion ending into native travel, one-shot consumption, actual same-world teleport,
+death/world transfer/equipment invalidation, hazard/void controls, and active
+missing-fresh-input landing versus ended-glide/no-release native damage.
+Fixture players age through native `tick`/`doTick`, without disabling spawn protection.
+Existing source timing, collision, packet authority, native falls and Thruster
+controls remain tested; older released-Heli damage oracles within R+40 are superseded.
 Earlier pre-policy failed outputs remain historical evidence, not current oracles.
 No actual owner client was controlled. Required T22 exact-tree real render,
 dedicated-server/two-client equipment/time/lifecycle checks and eventual movement
