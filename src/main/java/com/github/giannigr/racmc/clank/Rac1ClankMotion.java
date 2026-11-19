@@ -217,6 +217,7 @@ public final class Rac1ClankMotion {
                 blocked(requested.z(), actual.z()) ? 0 : velocity.z());
         boolean landed = airborne && grounded && requested.y() <= 0;
         if (landed) {
+            velocity = new Vector(velocity.x(), 0, velocity.z());
             // Source Heli long lands into skid with .8 horizontal momentum.
             if (action == Action.LONG_JUMP && module == Module.HELI)
                 velocity = new Vector(velocity.x()*.8, velocity.y(), velocity.z()*.8);
@@ -237,6 +238,12 @@ public final class Rac1ClankMotion {
     public Module module() { return module; }
     public int sourceTime() { return phase; }
     public Vector velocity() { return velocity; }
+    /** Checkpoints of vanilla travel must carry native delta, not this tick's idle displacement probe. */
+    public void nativeIdleVelocity(Vector nativeVelocity) {
+        if(action!=Action.IDLE||awaitingCollision||nativeVelocity==null||nativeVelocity.length()>1)
+            throw new IllegalStateException("Not a bounded idle native checkpoint");
+        velocity=nativeVelocity;
+    }
     public boolean spentAirJump() { return spentAirJump; }
     public boolean airborne() { return airborne; }
     /** Only a connection-owned accepted-input stream may latch a coalesced pressed edge. */

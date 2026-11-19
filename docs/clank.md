@@ -5,7 +5,7 @@ feature. Native Steve remains the player. The operator-only session setup below
 can equip the visible backpack. The independent source-step controller is tested,
 and the approved travel/network/fall hooks are installed in the current integration.
 The owner subsequently approved a Heli-only landing policy correction. P36's fresh
-normal build and 17 real-player headless tests pass; independent T22 and actual
+normal build and 19 real-player headless tests pass; independent T22 and actual
 client/owner playtesting remain required. There is no Clank
 item, inventory/chest slot, NPC purchase, generic jump boost or playable class87.
 No upgrade is automatically granted. The normal mandatory local disc/cache gate
@@ -198,6 +198,23 @@ launching high/long does not itself grant this protection. Thruster/high/long re
 their existing policy; unrelated, void and hazard damage are not intercepted.
 No blanket event cancellation, global movement/flight flag or native render-root
 hook change is used.
+
+## Landing momentum handoff
+
+Ground resolution retains collision-resolved horizontal velocity and clears
+controlled downward velocity, including exact-contact cases. Original Heli-long
+authored skid scaling remains; no replacement jump impulse or wall momentum is
+created. The next tick returns to ordinary native ground travel/friction.
+
+While the controller is idle, authoritative correction checkpoints carry native
+`deltaMovement`, not the idle displacement probe. Existing client restore/replay
+therefore receives the server's retained velocity instead of a false zero during
+the landing correction interval. Actual network/client feel still requires T22;
+headless packet capture and checkpoint roundtrip are not an owner playtest.
+The combined candidate passes a fresh full build (827 passed, 51 skipped, zero
+failures) and all 19 native world tests. Both packs' high/long/glide handoffs are
+checked unobstructed and against walls, including next-tick vanilla friction and
+the actual emitted authoritative checkpoint. Protection checks remain green.
 
 ## Pending owner choices and verification
 

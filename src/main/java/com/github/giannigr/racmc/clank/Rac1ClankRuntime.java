@@ -297,6 +297,8 @@ public final class Rac1ClankRuntime {
     static void clear(){CONTROLS.clear();}
     static void correct(ServerPlayer player) {
         var session=Rac1ClankServer.session(player);
+        if(session.motion().action()==Action.IDLE)
+            session.motion().nativeIdleVelocity(Rac1ClankNativeCollision.sourceVelocity(player.getDeltaMovement()));
         var c=CONTROLS.get(player.getUUID());
         PacketDistributor.sendToPlayer(player,new Rac1ClankNetwork.Correction(
                 new Rac1ClankMovementWire.Correction(player.getUUID(),session.epoch(),

@@ -8,6 +8,18 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class Rac1ClankIntegrationTest {
+    @Test void idleLandingCheckpointWireAndPredictionRestoreKeepAuthoritativeNativeVelocity()throws Exception {
+        var motion=new Rac1ClankMotion(Rac1ClankClock.Profile.ORIGINAL_60);
+        var delta=new net.minecraft.world.phys.Vec3(.12,0,.24);
+        motion.nativeIdleVelocity(Rac1ClankNativeCollision.sourceVelocity(delta));
+        var packet=new Rac1ClankMovementWire.Correction(UUID.randomUUID(),4,8,10,
+                Rac1ClankMotion.Vector.ZERO,motion.state());
+        var decoded=Rac1ClankMovementWire.correction(Rac1ClankMovementWire.encode(packet));
+        var predicted=new Rac1ClankMotion(Rac1ClankClock.Profile.ORIGINAL_60);
+        predicted.restore(decoded.state());
+        assertEquals(delta,Rac1ClankNativeCollision.minecraftDelta(predicted.velocity()));
+        assertEquals(Rac1ClankCapability.Action.IDLE,predicted.action());
+    }
     @Test void releaseRepressReleaseRequiresOrderedFreshConsumptionAndNeverMotionGrace() {
         var stream=new Rac1ClankInput.Stream(4);
         var held=new Rac1ClankInput(true,true,false,0,0,0);

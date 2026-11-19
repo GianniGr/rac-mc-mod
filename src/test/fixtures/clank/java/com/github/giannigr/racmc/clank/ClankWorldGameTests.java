@@ -30,6 +30,7 @@ public final class ClankWorldGameTests {
     private static final class Sink extends ServerGamePacketListenerImpl {
         boolean open=true;
         int disconnects;
+        Rac1ClankMovementWire.Correction lastCorrection;
         private static Connection fixtureConnection() {
             return new Connection(PacketFlow.SERVERBOUND) {
                 private final io.netty.channel.embedded.EmbeddedChannel fixtureChannel=
@@ -41,7 +42,11 @@ public final class ClankWorldGameTests {
             super(level.getServer(),fixtureConnection(),player,
                     CommonListenerCookie.createInitial(profile,false));
         }
-        @Override public void send(Packet<?> packet) {}
+        @Override public void send(Packet<?> packet) {
+            if(packet instanceof net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket custom
+                    &&custom.payload() instanceof Rac1ClankNetwork.Correction correction)
+                lastCorrection=correction.value();
+        }
         @Override public boolean isAcceptingMessages(){return open;}
         @Override public void disconnect(Component reason){open=false;disconnects++;}
     }
@@ -366,6 +371,81 @@ public final class ClankWorldGameTests {
                     falls.protectedLanding(h,0);falls.damaged(h,1,17,18.01);
                     net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(before);
                     falls.close();done(h,active,ended);
+                }
+            });
+        }
+    }
+
+    @GameTest(template="empty",batch="clank_18_momentum_open",timeoutTicks=110)
+    public static void landingMomentumAndAuthoritativeCorrectionHandOffToNativeFriction(GameTestHelper h) {
+        momentumHandoff(h,false);
+    }
+    @GameTest(template="empty",batch="clank_19_momentum_wall",timeoutTicks=110)
+    public static void landingHandoffCannotRestoreWallClippedMomentum(GameTestHelper h) {
+        momentumHandoff(h,true);
+    }
+    private static void momentumHandoff(GameTestHelper h,boolean wall) {
+        Vec3 base=platform(h);
+        for(int x=-2;x<=22;x++)for(int z=23;z<=48;z++) {
+            var at=BlockPos.containing(base).offset(x,0,z);
+            h.getLevel().setBlock(at.below(),Blocks.STONE.defaultBlockState(),3);
+            for(int y=0;y<13;y++)h.getLevel().setBlock(at.above(y),Blocks.AIR.defaultBlockState(),3);
+        }
+        // Long admission needs a clear forward probe; short high/glide trajectories need a nearer wall.
+        if(wall)for(int lane=0;lane<6;lane++)for(int x=lane*4-1;x<=lane*4+1;x++)
+            for(int y=0;y<12;y++)h.getLevel().setBlock(
+                    BlockPos.containing(base).offset(x,y,lane%3==1?5:2),Blocks.STONE.defaultBlockState(),3);
+        var actors=new ServerPlayer[6];var nativeControls=new ServerPlayer[6];
+        int[] landing=new int[6];boolean[] checked=new boolean[6],admitted=new boolean[6];
+        for(int i=0;i<6;i++) {
+            actors[i]=player(h,base.add(i*4,i%3==2?(wall?6:3):0,0));
+            nativeControls[i]=player(h,base.add(i*4,0,30));
+            equip(h,actors[i],i<3?"heli":"thruster");
+        }
+        for(int tick=1;tick<=85;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                for(int i=0;i<6;i++) {
+                    var p=actors[i];var motion=Rac1ClankServer.session(p).motion();
+                    var beforeAction=motion.action();Vec3 before=p.getDeltaMovement();
+                    if(landing[i]==0&&i%3==1&&t<=4)p.move(MoverType.SELF,new Vec3(0,0,.12));
+                    boolean airMove=landing[i]==0;
+                    frame(p,t,airMove&&(i%3==2||t==4||t==5),airMove&&i%3!=2&&t<=5,airMove);
+                    admitted[i]|=motion.action()==(i%3==0?Rac1ClankCapability.Action.HIGH_JUMP:
+                            i%3==1?Rac1ClankCapability.Action.LONG_JUMP:Rac1ClankCapability.Action.GLIDE);
+                    if(landing[i]>0&&landing[i]==t-1) {
+                        nativeControls[i].doTick();
+                        h.assertTrue(p.getDeltaMovement().distanceToSqr(nativeControls[i].getDeltaMovement())<1e-12,
+                                "Landing did not return to ordinary native friction i="+i+" wall="+wall);
+                        var correction=((Sink)p.connection).lastCorrection;
+                        var expected=Rac1ClankNativeCollision.sourceVelocity(before);
+                        h.assertTrue(correction!=null&&correction.state().action()==Rac1ClankCapability.Action.IDLE
+                                        &&correction.state().velocity().equals(expected),
+                                "Post-landing S2C checkpoint erased native momentum i="+i+" wall="+wall
+                                        +" before="+before+" expected="+expected+" checkpoint="+correction);
+                        checked[i]=true;
+                        System.out.println("CLANK_MOMENTUM_HANDOFF i="+i+" wall="+wall+" before="+before
+                                +" afterNative="+p.getDeltaMovement()+" correction="+correction.state().velocity());
+                    }
+                    if(landing[i]==0&&beforeAction!=Rac1ClankCapability.Action.IDLE
+                            &&motion.action()==Rac1ClankCapability.Action.IDLE&&p.onGround()
+                            &&Rac1ClankRuntime.diagnostics(p).controlled()) {
+                        landing[i]=t;Vec3 delta=p.getDeltaMovement();
+                        System.out.println("CLANK_MOMENTUM_LANDING_RAW i="+i+" wall="+wall+" native="+delta
+                                +" controller="+motion.velocity()+" checkpoint="+((Sink)p.connection).lastCorrection);
+                        h.assertTrue(motion.velocity().y()==0,"Landing retained downward controlled velocity");
+                        h.assertTrue(wall?Math.abs(delta.z)<1e-9:delta.horizontalDistance()>.01,
+                                "Landing lost open momentum or restored blocked momentum i="+i+" wall="+wall+" "+delta);
+                        nativeControls[i].setDeltaMovement(delta);
+                        System.out.println("CLANK_MOMENTUM_LANDING i="+i+" wall="+wall+" delta="+delta
+                                +" source="+motion.velocity());
+                    }
+                }
+                if(t==85) {
+                    for(int i=0;i<6;i++)h.assertTrue(admitted[i]&&landing[i]>0&&checked[i],
+                            "Missing high/long/glide native handoff case i="+i+" wall="+wall);
+                    for(var p:nativeControls){Rac1ClankRuntime.invalidate(p);p.discard();}
+                    done(h,actors);
                 }
             });
         }

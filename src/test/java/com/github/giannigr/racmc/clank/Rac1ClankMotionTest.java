@@ -14,6 +14,31 @@ import org.junit.jupiter.api.Test;
 
 /** Native voxel-geometry stepping, NOT a substitute for a real ServerLevel/player test. */
 class Rac1ClankMotionTest {
+    @Test void exactGroundContactRetainsUnblockedHorizontalButNeverDownwardMomentum() {
+        for(Module module:new Module[]{Module.HELI,Module.THRUSTER})for(boolean wall:new boolean[]{false,true}) {
+            var motion=new Rac1ClankMotion(Profile.ORIGINAL_60);
+            motion.input(input(true,false,true));
+            var step=motion.step(equipment(module),new Observation(false,2,false,true,false,2,
+                    new Vector(0,-.04,.06)));
+            assertEquals(Action.GLIDE,step.action());
+            var actual=new Vector(step.displacement().x(),step.displacement().y(),
+                    wall?0:step.displacement().z());
+            assertTrue(motion.resolved(actual,true));assertEquals(Action.IDLE,motion.action());
+            assertEquals(0,motion.velocity().y());
+            assertEquals(wall?0:step.displacement().z(),motion.velocity().z());
+        }
+    }
+    @Test void idleCheckpointRetainsNativeHorizontalAndRejectsActiveOrUnboundedMutation() {
+        var motion=new Rac1ClankMotion(Profile.ORIGINAL_60);
+        var nativeVelocity=new Vector(.02,0,.08);
+        motion.nativeIdleVelocity(nativeVelocity);
+        assertEquals(nativeVelocity,motion.state().velocity());
+        var copy=motion.copy();assertEquals(nativeVelocity,copy.velocity());
+        assertThrows(IllegalStateException.class,()->motion.nativeIdleVelocity(new Vector(2,0,0)));
+        motion.input(input(true,false,true));
+        motion.step(equipment(Module.HELI),new Observation(false,2,false,true,false,2,new Vector(0,-.04,.06)));
+        assertThrows(IllegalStateException.class,()->motion.nativeIdleVelocity(nativeVelocity));
+    }
     private static Rac1ClankEquipment equipment(Module module) {
         return new Rac1ClankEquipment(true, true, module == Module.THRUSTER, true, module);
     }
