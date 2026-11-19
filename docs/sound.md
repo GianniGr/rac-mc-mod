@@ -143,3 +143,8 @@ muting its sound. Invalid owners stop use/burst and their own accepted session; 
 old player object cannot stop a replacement object's new session. Cue binding, original
 samples and client playback are unchanged. Independent new-head death/lifecycle retest
 and owner auditory acceptance remain required.
+
+Final corrective pass3 changes only Blaster left-hand presentation/source-frame
+metadata and its tests. It retains the verified dead-owner/session fix and original
+audio binding/playback. Numeric fitting success does not establish owner audio or
+natural-grip approval; remaining gates are escalated after this third corrective pass.

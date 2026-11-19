@@ -6,6 +6,11 @@
       "translation": [ 0, 0, 0 ],
       "scale": [ 1, 1, 1 ]
     },
+    "thirdperson_lefthand": {
+      "rotation": [ 180, 0, 90 ],
+      "translation": [ 0, 0, 0 ],
+      "scale": [ 1, 1, 1 ]
+    },
     "firstperson_righthand": {
       "rotation": [ 0, 180, 90 ],
       "translation": [ 0, 0, 0 ],
@@ -13,7 +18,7 @@
     },
     "firstperson_lefthand": {
       "rotation": [ 0, 180, -90 ],
-      "translation": [ 0, 0, 0 ],
+      "translation": [ 0, 0, -16 ],
       "scale": [ 0.55, 0.55, 0.55 ]
     },
     "gui": {

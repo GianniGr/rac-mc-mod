@@ -20,7 +20,7 @@ public final class HandTransform {
         double[] p = {(local.x() - weapon.grip().x()) * weapon.worldScale(),
                 (local.y() - weapon.grip().y()) * weapon.worldScale(),
                 (local.z() - weapon.grip().z()) * weapon.worldScale()};
-        var rotation = weapon.itemRotation();
+        var rotation = weapon.itemRotation(pose.left());
         // ItemTransform rotationXYZ; mirrored Y/Z for physical LEFT.
         rotate(p, 2, pose.left() ? -rotation.z() : rotation.z());
         rotate(p, 1, pose.left() ? -rotation.y() : rotation.y());

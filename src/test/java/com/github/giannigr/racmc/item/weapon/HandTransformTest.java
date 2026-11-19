@@ -29,7 +29,7 @@ class HandTransformTest {
                     Vector actual = HandTransform.muzzle(weapon, pose);
                     // Independent matrix chain transcribed from source, not production rotations.
                     double mirror = left ? -1 : 1;
-                    var r = weapon.itemRotation();
+                    var r = weapon.itemRotation(left);
                     var matrix = new Matrix4d().translation(pose.position().x(), pose.position().y(), pose.position().z())
                             .scale(1.12).rotateY(Math.toRadians(180 - 137))
                             .scale(-1, -1, 1).scale(.9375).translate(0, -1.501, 0)
@@ -59,6 +59,13 @@ class HandTransformTest {
         assertEquals(-.3234375, result.x(), 1e-8);
         assertEquals(1.62328125, result.y(), 1e-8);
         assertEquals(1.17984375, result.z(), 1e-8);
+    }
+
+    @Test void compatibilityConstructorRetainsRawRightFallbackForOtherDefinitions() {
+        assertEquals(SYNTHETIC.itemRotation(), SYNTHETIC.leftItemRotation());
+        assertEquals(SYNTHETIC.itemRotation(), SYNTHETIC.itemRotation(true));
+        assertEquals(new Vector(180, 0, -90), Rac1BlasterDefinition.INSTANCE.itemRotation(false));
+        assertEquals(new Vector(180, 0, 90), Rac1BlasterDefinition.INSTANCE.itemRotation(true));
     }
 
     @Test void invalidContentAndPoseFailBeforeWorldMutation() {

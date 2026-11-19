@@ -7,11 +7,24 @@ import java.util.Objects;
  * not physical scale. Ammo identity names a policy, not an inventory implementation or shop price.
  */
 public record WeaponDefinition(String id, String sourceAsset, Vector grip, Vector forward,
-                               Vector up, Vector muzzle, double worldScale, Vector itemRotation,
+                               Vector up, Vector muzzle, double worldScale, Vector itemRotation, Vector leftItemRotation,
                                int heldSequence, int fireSequence, int shotIntervalTicks,
                                String ammoPolicy, String projectilePolicy, FireMode fireMode,
                                Presentation firstPerson, Presentation gui) {
     public enum FireMode { HELD }
+    /** Existing definitions retain vanilla's raw-right-slot fallback in the left hand. */
+    public WeaponDefinition(String id, String sourceAsset, Vector grip, Vector forward,
+                            Vector up, Vector muzzle, double worldScale, Vector itemRotation,
+                            int heldSequence, int fireSequence, int shotIntervalTicks,
+                            String ammoPolicy, String projectilePolicy, FireMode fireMode,
+                            Presentation firstPerson, Presentation gui) {
+        this(id, sourceAsset, grip, forward, up, muzzle, worldScale, itemRotation, itemRotation,
+                heldSequence, fireSequence, shotIntervalTicks, ammoPolicy, projectilePolicy, fireMode,
+                firstPerson, gui);
+    }
+
+    /** Raw physical display slot, before ItemTransform's left Y/Z sign mirror. */
+    public Vector itemRotation(boolean left) { return left ? leftItemRotation : itemRotation; }
     /** Presentation translation is in blocks, NOT the JSON's sixteenth-block input units. */
     public record Presentation(Vector rotation, Vector translation, double scale) {
         public Presentation {
@@ -26,6 +39,7 @@ public record WeaponDefinition(String id, String sourceAsset, Vector grip, Vecto
         Objects.requireNonNull(grip);
         Objects.requireNonNull(muzzle);
         Objects.requireNonNull(itemRotation);
+        Objects.requireNonNull(leftItemRotation);
         Objects.requireNonNull(forward);
         Objects.requireNonNull(up);
         Objects.requireNonNull(fireMode);

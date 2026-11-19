@@ -31,7 +31,7 @@ class HandRootTest {
             var pose = new HandPoseSnapshot(new Vector(20_000_000.125, 65, -10_000_000.25),
                     37, 1.2, left, new Vector(left ? 4.5 : -4.5, 5.2, .3),
                     new Vector(-63, 27, -9), new Vector(1, 1, 1), .9375, 1.501, roots.get(i));
-            var r = weapon.itemRotation();
+            var r = weapon.itemRotation(left);
             var expected = new Matrix4d().translate(20_000_000.125, 65, -10_000_000.25).scale(1.2)
                     .mul(matrices.get(i)).scale(-1, -1, 1).scale(.9375).translate(0, -1.501, 0)
                     .translate((left ? 4.5 : -4.5) / 16, 5.2 / 16, .3 / 16)

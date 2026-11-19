@@ -159,6 +159,14 @@ programs. Dead-owner admission is denied before accepted shot effects. Neither t
 independent axis/matrix regression nor ring alignment certifies new-head screenshots;
 T20 visual retest and the owner-held whole-body-anchor decision remain pending.
 
+Final corrective pass3 separates Blaster's physical-left TP slot from FP fitting.
+The world/source-up frame and matching authoritative muzzle are corrected together;
+FP-left adds a measured camera-only depth offset while preserving original posed
+vertices, baseline scale and effect programs. Full-source silhouette and ring checks
+are now separate numeric oracles. Right-crouch clipping found at the independent fixed
+camera remains an unchanged, escalated reference—not a visual pass. New-head actual
+screenshots and the unchanged B3 whole-body-anchor strategy still need owner/T20 review.
+
 - Actual in-world appearance, camera/depth/FOV/material interleaving and two-client
   networking need separate T and owner playtest. Earlier actual-texture GPU
   material/resource fixtures passed; they are not live-world approval.

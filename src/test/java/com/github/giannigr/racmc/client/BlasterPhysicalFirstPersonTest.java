@@ -36,8 +36,8 @@ class BlasterPhysicalFirstPersonTest {
             assertEquals(0, up.x, 1e-6); assertEquals(.55, up.y, 1e-6); assertEquals(0, up.z, 1e-6);
             assertEquals(0, forward.x, 1e-6); assertEquals(0, forward.y, 1e-6); assertEquals(-.55, forward.z, 1e-6);
             assertEquals(left ? -.56 : .56, grip.x, 1e-6);
-            assertEquals(-.52, grip.y, 1e-6); assertEquals(-.72, grip.z, 1e-6);
-            var expected = new Matrix4d().translate(left ? -.56 : .56, -.52, -.72)
+            assertEquals(-.52, grip.y, 1e-6); assertEquals(left ? -1.72 : -.72, grip.z, 1e-6);
+            var expected = new Matrix4d().translate(left ? -.56 : .56, -.52, left ? -1.72 : -.72)
                     .rotateY(left ? -Math.PI : Math.PI).rotateZ(Math.PI / 2).scale(.55);
             double[] oracle = expected.get(new double[16]);
             float[] drawn = actual.get(new float[16]);
@@ -45,8 +45,8 @@ class BlasterPhysicalFirstPersonTest {
             assertEquals(.55, actual.transformDirection(new Vector3f(0, 1, 0)).length(), 1e-6,
                     "Source units/proportions must not be retuned for left");
         }
-        // Independent hand translation mirror; proper source orientation remains the same.
-        var mirrored = new Matrix4f(matrices[0]).m30(-matrices[0].m30());
-        assertTrue(mirrored.equals(matrices[1], 1e-6f), "Only physical hand placement differs");
+        // Left-only bounded camera depth is separate from physical/world grip and mesh scale.
+        var mirrored = new Matrix4f(matrices[0]).m30(-matrices[0].m30()).m32(matrices[0].m32() - 1);
+        assertTrue(mirrored.equals(matrices[1], 1e-6f), "Only physical side/camera depth placement differs");
     }
 }

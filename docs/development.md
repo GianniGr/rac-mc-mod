@@ -500,6 +500,45 @@ This mathematical correction still needs independent actual new-head screenshots
 ring centers alone does not certify model orientation, cropping or owner natural fitting.
 B3 whole-body anchoring remains installed and owner-held, not silently replaced.
 
+### M2 final corrective pass3: separate physical-left world and camera slots
+
+T20's independent actual-model source-up probe on `45cc252` ran and failed: the
+right-hand vanilla world chain sent imported +X to +.9375Y, but the left sent it
+to -.9375Y. FP-left was upright, yet still cropped in reviewed WIDE captures.
+`THIRD_PERSON_LEFT_HAND` was falling back to the right JSON slot before vanilla
+negated left Y/Z angles. The shared physical hand math agreed with that inverted
+frame, which also put its world muzzle low and pulled FP alignment down.
+
+Blaster now has raw `thirdperson_lefthand` rotation `[180,0,90]`, whose effective
+left-mirrored rotation is `[180,0,-90]`. `WeaponDefinition.leftItemRotation` names
+the raw physical-left display slot, selected before vanilla's sign mirror.
+The existing constructor still defaults left to the raw right slot, preserving
+other definitions' previous behavior. Only Blaster opts into the explicit slot.
+Independent tests execute real ItemTransforms/ModelPart/ItemTransform operations,
+check source-up/forward/grip separately, and compare the physical muzzle against
+that JSON/vanilla oracle. A real headless left shot checks the upright spawn and
+one ordinary-arrow payment. Right-hand physical numbers/source scale remain intact.
+
+Correcting the world frame fixes standing left FP's low target, but the full-source
+fixed-camera test still measured crouch clipping (bottom865px at1000×720).
+Measured extra left camera depths .5 and1 blocks produced bottom728 and673px,
+respectively. The explicit FP-left slot therefore keeps rotation `[0,180,-90]`
+and scale`.55`, but uses JSON translation `[0,0,-16]` (one camera block).
+This is a fixed, left-only camera placement—not a physical/world grip displacement,
+mesh-scale change, new animation policy or server-media dependency. Its apparent
+screen size changes with depth; unchanged mesh scale does not imply unchanged pixels.
+Right FP, GUI, wrench and ordinary bow contexts are untouched.
+
+The real-disc fitting regression projects all original posed vertices and the original
+12-vertex ring at1080 fixed-camera phase/hand/skin/crouch/FOV samples per disc.
+Its LEFT fit bounds are x10..990px, y7.2..676.8px at1000×720 (6% bottom clearance).
+Right is retained as an unchanged reference, not falsely certified: the same independent
+camera test exposes pre-existing right-crouch cropping (bottom865px atFOV70), which is
+outside this left-only repair and is escalated rather than silently retuned.
+These numeric bounds are not GPU/new-head screenshots or owner natural-fit acceptance.
+Independent T20 exact-head visual checks and B3 owner-held grip/audio gates remain.
+This is corrective pass3 of3; unresolved genuine criteria require escalation, not pass4.
+
 Accepted Creative/Survival/Adventure/main-hand/spectator rules, two-tick held cadence,
 ordinary-arrow offhand-first payment, damage/drag/no-gravity/speed2/lifetime12/no-pickup
 remain. A same-tick duplicate pull cannot admit another immediate shot. Dry-click state

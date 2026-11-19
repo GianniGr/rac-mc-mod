@@ -220,6 +220,37 @@ public final class RangedGameTests {
         h.assertTrue(blocked.getOffhandItem().getCount() == 1, "Obstruction consumed ammo");
         h.succeed();
     }
+    @GameTest(template = "empty", batch = "ranged_left_source")
+    public static void actualLeftShotUsesUprightPinnedSourceFrameAndPaysExactlyOneArrow(GameTestHelper h) {
+        var level = h.getLevel(); var pos = h.absolutePos(new BlockPos(4, 4, 4));
+        var player = player(level, pos);
+        player.setMainArm(net.minecraft.world.entity.HumanoidArm.LEFT);
+        player.yBodyRot = player.yBodyRotO = player.yHeadRot = player.yHeadRotO = 0;
+        player.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.ARROW));
+        boolean slim = Math.floorMod(player.getUUID().hashCode(), 18) < 9; // pinned UUID fallback
+        double xRot = -(float) (Math.PI / 2) - net.minecraft.util.Mth.sin(.067f) * .05f;
+        double zRot = -(net.minecraft.util.Mth.cos(.09f) * .05f + .05f);
+        // Literal pinned LEFT ModelPart/ItemInHandLayer + effective explicit-left JSON rotation.
+        // Not a call to the production hand or arm solver.
+        var matrix = new org.joml.Matrix4d().translate(player.getX(), player.getY(), player.getZ())
+                .rotateY(Math.PI).scale(-1, -1, 1).scale(.9375).translate(0, -1.501, 0)
+                .translate((slim ? 4.5 : 5) / 16, 2.0 / 16, 0)
+                .rotateZYX(zRot, 0, xRot).rotateX(-Math.PI / 2).rotateY(Math.PI)
+                .translate(-1.0 / 16, .125, -.625).rotateXYZ(Math.PI, 0, -Math.PI / 2)
+                .translate(-.5, -.5, -.5).translate(.5, .5, .5);
+        var up = matrix.transformDirection(new org.joml.Vector3d(1, 0, 0));
+        h.assertTrue(up.y > .93, "Literal physical left source-up fixture must be upright");
+        var expected = matrix.transformPosition(new org.joml.Vector3d(.2305, -.03, .6335));
+        h.assertTrue(Rac1BlasterServer.fireFirstShot(level, player), "Actual left immediate shot denied");
+        var arrows = level.getEntitiesOfClass(Rac1BlasterArrow.class, player.getBoundingBox().inflate(4)).stream()
+                .filter(arrow -> arrow.getOwner() == player).toList();
+        h.assertTrue(arrows.size() == 1 && BlasterAmmo.count(player) == 0, "Left first shot did not pay/admit exactly once");
+        h.assertTrue(arrows.getFirst().position().distanceTo(new Vec3(expected.x, expected.y, expected.z)) < 1e-5,
+                "Actual left authoritative spawn disagrees with independent upright source hand frame");
+        arrows.getFirst().discard();
+        RangedFireSessions.reject(player);
+        h.succeed();
+    }
     @GameTest(template = "empty", batch = "ranged_pose")
     public static void actualPlayerPassengerFlightSwimAttackAndSkinInputsReachAuthority(GameTestHelper h) {
         var level = h.getLevel(); var pos = h.absolutePos(new BlockPos(4, 4, 4));
