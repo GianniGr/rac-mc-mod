@@ -23,10 +23,12 @@ public final class Rac1ClankClient {
         Rac1ClankResources.update(VIEWS.anyWorn());
     }
     @SubscribeEvent public static void logout(ClientPlayerNetworkEvent.LoggingOut event) {
-        VIEWS.clear(); Rac1ClankResources.clear();
+        VIEWS.clear(); Rac1ClankResources.clear(); Rac1ClankPrediction.clear();Rac1ClankPlayback.clear();
     }
     @SubscribeEvent public static void leave(EntityLeaveLevelEvent event) {
-        if (event.getLevel().isClientSide()) VIEWS.forget(event.getEntity().getUUID());
+        if (event.getLevel().isClientSide()) {
+            VIEWS.forget(event.getEntity().getUUID());Rac1ClankPlayback.forget(event.getEntity().getUUID());
+        }
     }
 
     @EventBusSubscriber(modid = RacMcConstants.MOD_ID, value = Dist.CLIENT,
@@ -35,10 +37,13 @@ public final class Rac1ClankClient {
     public static final class Registration {
         private Registration() {}
         @SubscribeEvent public static void setup(FMLClientSetupEvent event) {
-            event.enqueueWork(() -> Rac1ClankNetwork.receiver(snapshot -> {
+            event.enqueueWork(() -> {
+                Rac1ClankPrediction.install();
+                Rac1ClankNetwork.receiver(snapshot -> {
                 var level = Minecraft.getInstance().level;
                 if (level != null) VIEWS.accept(snapshot, level.getGameTime());
-            }));
+                });
+            });
         }
         @SubscribeEvent public static void layers(EntityRenderersEvent.AddLayers event) {
             for (var skin : event.getSkins()) {
@@ -47,7 +52,9 @@ public final class Rac1ClankClient {
             }
         }
         @SubscribeEvent public static void reload(RegisterClientReloadListenersEvent event) {
-            event.registerReloadListener((ResourceManagerReloadListener) manager -> Rac1ClankResources.reload());
+            event.registerReloadListener((ResourceManagerReloadListener) manager -> {
+                Rac1ClankResources.reload();Rac1ClankPlayback.clear();
+            });
         }
     }
 }

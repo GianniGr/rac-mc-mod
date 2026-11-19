@@ -17,19 +17,29 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 @SuppressWarnings("removal")
 public final class Rac1ClankNetwork {
     private static Consumer<Rac1ClankSession.Snapshot> receiver = snapshot -> {};
+    private static Consumer<Rac1ClankMovementWire.Correction> movementReceiver = snapshot -> {};
     private Rac1ClankNetwork() {}
     public static void receiver(Consumer<Rac1ClankSession.Snapshot> consumer) {
         receiver = java.util.Objects.requireNonNull(consumer);
     }
+    public static void movementReceiver(Consumer<Rac1ClankMovementWire.Correction> consumer) {
+        movementReceiver=java.util.Objects.requireNonNull(consumer);
+    }
     @SubscribeEvent
     public static void register(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("clank-foundations-1");
+        var registrar = event.registrar("clank-moveset-2");
         registrar.playToServer(Intent.TYPE, Intent.CODEC, (packet, context) -> {
             if (context.player() instanceof ServerPlayer player)
                 Rac1ClankServer.intent(player, packet.value());
         });
         registrar.playToClient(Snapshot.TYPE, Snapshot.CODEC,
                 (packet, context) -> receiver.accept(packet.value()));
+        registrar.playToServer(HeldInput.TYPE,HeldInput.CODEC,(packet,context)->{
+            if(context.player() instanceof ServerPlayer player)
+                Rac1ClankRuntime.input(player,packet.value());
+        });
+        registrar.playToClient(Correction.TYPE,Correction.CODEC,
+                (packet,context)->movementReceiver.accept(packet.value()));
     }
     public record Intent(Rac1ClankSession.Intent value) implements CustomPacketPayload {
         public static final Type<Intent> TYPE = new Type<>(id("clank_intent"));
@@ -52,6 +62,28 @@ public final class Rac1ClankNetwork {
                     catch (IOException bad) { throw new IllegalArgumentException(bad); }
                 });
         @Override public Type<Snapshot> type() { return TYPE; }
+    }
+    public record HeldInput(Rac1ClankMovementWire.Input value) implements CustomPacketPayload {
+        public static final Type<HeldInput> TYPE=new Type<>(id("clank_held_input"));
+        public static final StreamCodec<RegistryFriendlyByteBuf,HeldInput> CODEC=StreamCodec.of(
+                (out,packet)->out.writeByteArray(Rac1ClankMovementWire.encode(packet.value())),
+                in->{
+                    try{return new HeldInput(Rac1ClankMovementWire.input(
+                            in.readByteArray(Rac1ClankMovementWire.MAX_BYTES)));}
+                    catch(IOException bad){throw new IllegalArgumentException(bad);}
+                });
+        @Override public Type<HeldInput> type(){return TYPE;}
+    }
+    public record Correction(Rac1ClankMovementWire.Correction value) implements CustomPacketPayload {
+        public static final Type<Correction> TYPE=new Type<>(id("clank_correction"));
+        public static final StreamCodec<RegistryFriendlyByteBuf,Correction> CODEC=StreamCodec.of(
+                (out,packet)->out.writeByteArray(Rac1ClankMovementWire.encode(packet.value())),
+                in->{
+                    try{return new Correction(Rac1ClankMovementWire.correction(
+                            in.readByteArray(Rac1ClankMovementWire.MAX_BYTES)));}
+                    catch(IOException bad){throw new IllegalArgumentException(bad);}
+                });
+        @Override public Type<Correction> type(){return TYPE;}
     }
     private static ResourceLocation id(String path) {
         return ResourceLocation.fromNamespaceAndPath(RacMcConstants.MOD_ID, path);

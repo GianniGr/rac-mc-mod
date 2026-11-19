@@ -25,6 +25,7 @@ public final class Rac1ClankSession {
     }
     private final UUID player;
     private long epoch, revision, lastSerial = -1;
+    private long actionSerial, actionStartTick;
     private Rac1ClankEquipment equipment;
     private final Rac1ClankMotion motion = new Rac1ClankMotion(Rac1ClankClock.Profile.ORIGINAL_60);
     public Rac1ClankSession(UUID player, long epoch, Rac1ClankEquipment saved) {
@@ -48,12 +49,21 @@ public final class Rac1ClankSession {
         revision = Math.incrementExact(revision);
         lastSerial = -1;
         motion.cancel();
+        motion.discardBufferedInput();
     }
     public Snapshot snapshot(long serverTick) {
         return new Snapshot(player, epoch, revision, serverTick, equipment,
-                Rac1ClankCapability.Action.IDLE, 0, 0, 0);
+                motion.action(), actionSerial, Math.min(actionStartTick,serverTick),
+                motion.action()==Rac1ClankCapability.Action.IDLE?0:Math.min(36000,motion.sourceTime()));
     }
     public long lastSerial() { return lastSerial; }
+    long epoch() { return epoch; }
+    Rac1ClankEquipment equipment() { return equipment; }
+    Rac1ClankMotion motion() { return motion; }
+    void actionStarted(long tick) {
+        actionSerial=Math.incrementExact(actionSerial); actionStartTick=tick;
+        revision=Math.incrementExact(revision);
+    }
 
     /** Package-local explicit operator fixture only; never called from a client equip packet. */
     void testEquipment(Rac1ClankEquipment.Module module) {

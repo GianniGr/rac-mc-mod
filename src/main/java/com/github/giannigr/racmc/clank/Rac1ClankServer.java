@@ -23,7 +23,7 @@ public final class Rac1ClankServer {
     private static long nextEpoch;
     private Rac1ClankServer() {}
     private static long epoch() { return nextEpoch = Math.incrementExact(nextEpoch); }
-    private static Rac1ClankSession session(ServerPlayer player) {
+    static Rac1ClankSession session(ServerPlayer player) {
         return SESSIONS.computeIfAbsent(player.getUUID(),
                 id -> new Rac1ClankSession(id, epoch(), Rac1ClankEquipment.EMPTY));
     }
@@ -33,17 +33,24 @@ public final class Rac1ClankServer {
     private static Rac1ClankNetwork.Snapshot packet(ServerPlayer player) {
         return new Rac1ClankNetwork.Snapshot(session(player).snapshot(player.serverLevel().getGameTime()));
     }
-    private static void broadcast(ServerPlayer player) {
+    static void broadcast(ServerPlayer player) {
         PacketDistributor.sendToPlayersTrackingEntityAndSelf(player, packet(player));
+    }
+    static void cancelEpisode(ServerPlayer player) {
+        Rac1ClankRuntime.invalidate(player);
+        session(player).invalidate(epoch());
+        broadcast(player);Rac1ClankRuntime.correct(player);
     }
     /** Permission is checked here as well as in Brigadier; no client packet grants equipment. */
     public static boolean configureTest(CommandSourceStack source, ServerPlayer target,
             Rac1ClankEquipment.Module module) {
         if (!source.hasPermission(2) || !target.isAlive() || target.isRemoved()) return false;
+        Rac1ClankRuntime.invalidate(target);
         var state = session(target);
         state.testEquipment(module);
         state.invalidate(epoch());
         broadcast(target);
+        Rac1ClankRuntime.correct(target);
         return true;
     }
     @SubscribeEvent public static void login(PlayerEvent.PlayerLoggedInEvent event) {
@@ -60,12 +67,14 @@ public final class Rac1ClankServer {
     }
     @SubscribeEvent public static void dimension(PlayerEvent.PlayerChangedDimensionEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            Rac1ClankRuntime.invalidate(player);
             session(player).invalidate(epoch());
             broadcast(player);
         }
     }
     @SubscribeEvent public static void respawn(PlayerEvent.PlayerRespawnEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            Rac1ClankRuntime.invalidate(player);
             session(player).testEquipment(Rac1ClankEquipment.Module.NONE);
             session(player).invalidate(epoch());
             broadcast(player);
@@ -73,13 +82,17 @@ public final class Rac1ClankServer {
     }
     @SubscribeEvent public static void death(LivingDeathEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            Rac1ClankRuntime.invalidate(player);
             session(player).testEquipment(Rac1ClankEquipment.Module.NONE);
             session(player).invalidate(epoch());
             broadcast(player);
         }
     }
     @SubscribeEvent public static void logout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if(event.getEntity() instanceof ServerPlayer player)Rac1ClankRuntime.invalidate(player);
         SESSIONS.remove(event.getEntity().getUUID());
     }
-    @SubscribeEvent public static void stopped(ServerStoppedEvent event) { SESSIONS.clear(); }
+    @SubscribeEvent public static void stopped(ServerStoppedEvent event) {
+        Rac1ClankRuntime.clear(); SESSIONS.clear();
+    }
 }

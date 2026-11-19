@@ -1,6 +1,6 @@
 package com.github.giannigr.racmc.clank;
 
-/** Pure proposed episode ledger. No damage event/hook is installed by this class. */
+/** Pure one-landing ledger; motion timing and damage eligibility remain separate. */
 public final class Rac1ClankFallEpisode {
     private boolean active;
     private double debt, descent;
@@ -28,6 +28,14 @@ public final class Rac1ClankFallEpisode {
         double remaining = Math.max(nativeDistance, debt + descent);
         active = false;
         return remaining;
+    }
+    /** Owner policy: only a proven held Heli glide landing negates the whole fall. */
+    public double heliLandingDistance(double nativeDistance, boolean heldLanding) {
+        requireDistance(nativeDistance);
+        if (!active) return nativeDistance;
+        if (!heldLanding) return cancelDistance(nativeDistance);
+        active=false;
+        return 0;
     }
     public boolean active() { return active; }
     public double debt() { return debt; }

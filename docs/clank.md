@@ -3,8 +3,10 @@
 This is an **aerial moveset integration checkpoint**, not completion of either
 feature. Native Steve remains the player. The operator-only session setup below
 can equip the visible backpack. The independent source-step controller is tested,
-but player travel/network/fall hooks still require explicit integration review:
-normal gameplay motion is **not activated by this checkpoint**. There is no Clank
+and the approved travel/network/fall hooks are installed in the current integration.
+The owner subsequently approved a Heli-only landing policy correction. P36's fresh
+normal build and 10 real-player headless tests pass; independent T22 and actual
+client/owner playtesting remain required. There is no Clank
 item, inventory/chest slot, NPC purchase, generic jump boost or playable class87.
 No upgrade is automatically granted. The normal mandatory local disc/cache gate
 is unchanged.
@@ -76,16 +78,15 @@ per-frame fit, Ratchet dynamic joint5 or additional entity/root/crouch transform
 is applied. Native crouch/swim/riding/root effects are inherited, not re-created.
 Numeric checks do **not** prove visible attachment or absence of clipping.
 
-Only idle component playback is wired to the layer in this stage, with semantic
-server-time anchoring for late observers. Action rendering is held alongside
-action admission. Source-backed selection metadata retains Heli high
+Idle and action component playback are wired with semantic server-time anchoring,
+local-joint snapshot blending and authored high-action clock segments. These
+integration changes still require actual client verification. Selection retains Heli high
 `601:12 / 607:5 / hero:21`, long `601:15 / 607:8 / hero:18`, and glide
 `607:6`, with regional ticks(10) blend. Thruster long/high have no special
 back-table pair; no fake rotor clips are assigned. Nonrendered authored hero-phase
 segments and a generic component interval clock preserve separate source keys,
 raw frame times, per-key/override rates, crossing/wrap flags and blend duration.
-Full PS2 snapshot blend/quantization, fidgets and hero frame-retiming integration
-are not certified or enabled.
+Full PS2 quantization and fidgets are not implemented; visual fidelity is not certified.
 
 Regular textured high-LOD meshes are **not complete original rendering**.
 601/608 metal packets, dynamic eyelids/antenna glow, original material callbacks
@@ -126,9 +127,10 @@ phase snapshot. No paths, ISO identity, textures, models, joints, client velocit
 or target positions cross the network. Decoders reject unknown fields/enums,
 invalid times and inconsistent equipment. Server-local visuals are not required.
 Per-observer views reject stale snapshots, isolate UUIDs and bound retained
-entries. No vanilla movement-network or anti-flight changes are made.
+entries. The additional bounded movement wire carries held input and authoritative
+S2C controller/position checkpoints. Client positions never drive server physics.
 
-## Source-step controller checkpoint, not yet hooked player motion
+## Source-step controller and unaccepted runtime integration
 
 The engineering baseline is original60, **three source steps per MC tick**.
 The client ISO never selects gameplay speed. Original50 timing data remains
@@ -167,22 +169,34 @@ Original eased turning, momentum/ice/slope, side/back flip, conditioned wall/
 ledge and airborne combo branches still need exact runtime coverage; do not claim
 bit-exact PS2 trajectories or complete original game feel from this checkpoint.
 
-`Rac1ClankFallEpisode` tests the proposed narrow distance ledger (pre-admission
-debt, controlled descent, one landing and conservative cancellation). It installs
-no damage event and grants no immunity. Actual travel replacement, packet
-authority/reconciliation and scoped fall integration remain uninstalled pending
-the exact hook review; no global movement/flight flag or native root hook changed.
+`Rac1ClankFallEpisode` tracks pre-admission distance, controlled descent, one landing
+and conservative cancellation. The approved scoped `LivingFallEvent` adjustment
+and native `ServerPlayer.doCheckFallDamage` processing are installed.
+
+Owner-approved Heli policy: an admitted Heli glide held through a normal landing
+negates **all fall damage from that fall**, including distance before late activation.
+Releasing glide revokes protection immediately, even while the original minimum
+glide motion timer remains active. Interrupted/released glide conservatively restores
+pre-activation plus actual glide descent without charging it twice.
+A protected landing requires current-tick accepted held input, the same player,
+world, epoch and admitted action, and a collision-resolved native landing.
+Missing/stale/replayed input does not prove a held landing. Equipping/toggling or
+launching high/long does not itself grant this protection. Thruster/high/long retain
+their existing policy; unrelated, void and hazard damage are not intercepted.
+No blanket event cancellation, global movement/flight flag or native render-root
+hook change is used.
 
 ## Pending owner choices and verification
 
 Permanent acquisition/death/drop policy remains future work. For this iteration
 the owner approved provisional operator test setup, remapped native Jump/Sneak
 and no aerial activation while swimming/riding/elytra/flying/spectating. The
-following integration still requires exact engineering review:
+approved integration is installed; verification status:
 
-1. Native travel/packet hooks, bounded prediction/reconciliation and collision.
-2. Episode-scoped fall bookkeeping without clearing unrelated falls.
-3. Genuine runtime input/action animations and dedicated/two-client checks.
+1. P36 verified the Heli policy using damage-eligible native players, native
+   fall-event distance/count, real pre-activation descent and positive damage controls.
+2. Fresh normal build passed; independent exact-candidate T22 checks remain.
+3. Verify native input/prediction/action animations with dedicated/two-client runtime.
 
 Hydro609 is deferred until the aerial moveset is playable, independently checked
 and owner-playtested. Current aerial water gates are not a final “no Clank
@@ -190,9 +204,16 @@ swimming” product policy. No Hydro research, bundle expansion or water boost i
 part of this checkpoint. The observed lower-cape overlap is owner-accepted;
 native cape/mesh/mount are not hidden or rescaled.
 
-Native collision substeps, movement admission, original high/long/glide full
-controllers, prediction/reconciliation, fall-distance/damage, controller
-coexistence, action blends and original render fidelity are not enabled.
+Native collision substeps, high/long/glide admission, prediction/reconciliation,
+fall bookkeeping and action blends are installed, not independently accepted.
+The owner-approved Heli correction has a successful fresh normal build:
+818 passed, 51 skipped, zero failures. All 10 required native headless world tests
+passed, including packet authority and native damage controls. Fixture players
+age through native `tick`/`doTick`, without disabling spawn protection. The
+real late-fall case accumulated 6.5938 blocks before glide activation: held Heli
+landed at 20 health; released Heli and the native control both landed at 15.
+Interrupted/released tests also check distance/count and no duplicate charging.
+Earlier pre-policy failed outputs remain historical evidence, not current oracles.
 No actual owner client was controlled. Required T22 exact-tree real render,
 dedicated-server/two-client equipment/time/lifecycle checks and eventual movement
 checks remain pending. Armor/cape/slim/crouch/swim/riding clipping needs actual

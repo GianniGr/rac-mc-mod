@@ -268,4 +268,15 @@ class Rac1ClankMotionTest {
         assertEquals(18,ledger.cancelDistance(0)); // native ascent reset must not erase the debt
         assertEquals(18,ledger.landingDistance(18));
     }
+    @Test void heliHeldLandingProtectsWholeFallButReleaseAndCancelRestoreWithoutDoubleCharging() {
+        var ledger=new Rac1ClankFallEpisode();
+        ledger.begin(12);ledger.moved(-2);
+        assertEquals(0,ledger.heliLandingDistance(14,true));
+        assertEquals(7,ledger.heliLandingDistance(7,true)); // no stale second landing
+        ledger.begin(12);ledger.moved(-2);
+        assertEquals(14,ledger.heliLandingDistance(14,false));
+        ledger.begin(12);ledger.moved(-2);
+        assertEquals(14,ledger.cancelDistance(14)); // native already includes glide descent
+        assertEquals(14,ledger.cancelDistance(14));
+    }
 }

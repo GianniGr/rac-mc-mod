@@ -229,9 +229,66 @@ public final class Rac1ClankMotion {
     }
     private Step idleStep() { return new Step(false, false, Action.IDLE, 0, Vector.ZERO); }
     public void cancel() { action = Action.IDLE; phase = 0; lift = null; awaitingCollision = false; }
+    public void discardBufferedInput() {
+        input=Rac1ClankInput.RELEASED;previousJump=false;
+        jumpPressed=Long.MIN_VALUE/2;crouchSteps=0;
+    }
     public Action action() { return action; }
     public Module module() { return module; }
     public int sourceTime() { return phase; }
     public Vector velocity() { return velocity; }
     public boolean spentAirJump() { return spentAirJump; }
+    public boolean airborne() { return airborne; }
+    /** Only a connection-owned accepted-input stream may latch a coalesced pressed edge. */
+    public void bufferJumpEdge() { jumpPressed=sourceClock; }
+
+    /** Bounded semantic checkpoint for server correction; no models/joints/client authority. */
+    public record State(long clock, long jumpPressed, int crouch, int phase, Action action,
+            Module module, Vector velocity, boolean previousJump, boolean spentAir, boolean airborne,
+            double hopHeight, double appliedHop, double windupSpeed, double gravity,
+            double facingX, double facingZ, Rac1ClankInput input) {
+        public State {
+            if (clock < 0 || jumpPressed > clock || crouch < 0 || crouch > 1000
+                    || phase < 0 || phase > 1_000_000 || action == null || module == null
+                    || velocity == null || velocity.length() > 1 || input == null
+                    || (action == Action.IDLE && phase != 0)
+                    || !Double.isFinite(hopHeight) || hopHeight < 0 || hopHeight > 3
+                    || !Double.isFinite(appliedHop) || appliedHop < 0 || appliedHop > 1
+                    || !Double.isFinite(windupSpeed) || windupSpeed < 0 || windupSpeed > 1
+                    || !Double.isFinite(gravity) || gravity < 0 || gravity > 200
+                    || !Double.isFinite(facingX) || !Double.isFinite(facingZ)
+                    || Math.abs(facingX) > 1.000001 || Math.abs(facingZ) > 1.000001
+                    || (action != Action.IDLE && module == Module.NONE))
+                throw new IllegalArgumentException("Invalid source controller checkpoint");
+        }
+    }
+    public State state() {
+        if (awaitingCollision) throw new IllegalStateException("Cannot snapshot unresolved collision");
+        return new State(sourceClock,jumpPressed,crouchSteps,phase,action,module,velocity,
+                previousJump,spentAirJump,airborne,hopHeight,appliedHop,windupSpeed,gravity,
+                facingX,facingZ,input);
+    }
+    public void restore(State s) {
+        if (s.action() != Action.IDLE && s.action() != Action.GLIDE
+                && s.phase() > profile.ticks(parameters(s.module(),s.action()).maximumAir60()) + 1)
+            throw new IllegalArgumentException("Jump checkpoint outside source budget");
+        sourceClock=s.clock(); jumpPressed=s.jumpPressed(); crouchSteps=s.crouch(); phase=s.phase();
+        action=s.action(); module=s.module(); velocity=s.velocity(); previousJump=s.previousJump();
+        spentAirJump=s.spentAir(); airborne=s.airborne(); hopHeight=s.hopHeight();
+        appliedHop=s.appliedHop(); windupSpeed=s.windupSpeed(); gravity=s.gravity();
+        facingX=s.facingX(); facingZ=s.facingZ(); input=s.input(); awaitingCollision=false;
+        lift=null;
+        if (action != Action.IDLE && action != Action.GLIDE) {
+            parameters=parameters(module,action);
+            if (action == Action.HIGH_JUMP) {
+                lift=new Rac1ClankLiftCurve(profile,module==Module.THRUSTER);
+                for(int i=0;i<phase;i++) lift.step(i);
+            }
+        }
+    }
+    public Rac1ClankMotion copy() {
+        var result=new Rac1ClankMotion(profile);
+        result.restore(state());
+        return result;
+    }
 }

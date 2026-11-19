@@ -35,6 +35,7 @@ public record Rac1ClankInput(boolean jumpA, boolean jumpB, boolean crouch,
         private final long epoch;
         private long serial = -1, acceptedSerial = -1, receivedTick = -1, rateTick = -1;
         private int receivedThisTick;
+        private boolean acceptedHeld,pressed;
         private Rac1ClankInput sample = RELEASED;
         public Stream(long epoch) {
             if (epoch < 0) throw new IllegalArgumentException("Invalid epoch");
@@ -49,6 +50,8 @@ public record Rac1ClankInput(boolean jumpA, boolean jumpB, boolean crouch,
             if (++receivedThisTick > 2) return false;
             receivedTick = serverTick;
             acceptedSerial = serial;
+            if(input.jumpHeld()&&!acceptedHeld)pressed=true;
+            acceptedHeld=input.jumpHeld();
             sample = input;
             return true;
         }
@@ -58,5 +61,14 @@ public record Rac1ClankInput(boolean jumpA, boolean jumpB, boolean crouch,
                     ? RELEASED : sample;
         }
         public long acknowledgedSerial() { return acceptedSerial; }
+        /** Damage policy must not infer a same-tick hold from the motion grace period. */
+        public boolean heldThisTick(long tick) {
+            return receivedTick==tick&&sample.jumpHeld();
+        }
+        public boolean takeJumpEdge(long tick) {
+            boolean result=pressed&&receivedTick>=0&&tick>=receivedTick&&tick-receivedTick<=4;
+            pressed=false;
+            return result;
+        }
     }
 }
