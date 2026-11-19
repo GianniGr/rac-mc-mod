@@ -1,13 +1,13 @@
 # Wearable Clank foundations (#26 / #27)
 
 This is an **aerial moveset integration checkpoint**, not completion of either
-feature. Native Steve remains the player. The operator-only session setup below
+feature. Native Steve remains the player. The Creative-item and operator session setup below
 can equip the visible backpack. The independent source-step controller is tested,
 and the approved travel/network/fall hooks are installed in the current integration.
 The owner subsequently approved a Heli-only landing policy correction. P36's fresh
-normal build and 19 real-player headless tests pass; independent T22 and actual
-client/owner playtesting remain required. There is no Clank
-item, inventory/chest slot, NPC purchase, generic jump boost or playable class87.
+normal build and 21 real-player headless tests pass; independent T22 and actual
+client/owner playtesting remain required. There is no survival acquisition,
+dedicated inventory/chest slot, NPC purchase, generic jump boost or playable class87.
 No upgrade is automatically granted. The normal mandatory local disc/cache gate
 is unchanged.
 
@@ -22,6 +22,38 @@ Dimension change invalidates the episode/serial namespace but retains selected
 test equipment. Reapply the command after death/reconnect as needed.
 Permission is checked by both Brigadier and the server mutation entry point;
 legacy client equip/action requests remain denied.
+
+## Creative-only companion entries
+
+The existing RaC Creative tab contains distinct **Clank Heli-Pack**
+(`racmc:clank_heli_pack`) and **Clank Thruster-Pack**
+(`racmc:clank_thruster_pack`) entries. Right-click either hand to equip/switch the
+matching session companion. No item is consumed. Reusing the selected pack is
+idempotent and does not restart movement; changing packs uses existing epoch/action
+invalidation without replenishing an airborne action budget.
+
+The server checks actual Creative mode and the actual held registered item.
+Survival/Adventure/Spectator use is denied, even if the stack was retained/given
+or contains forged custom data. No item payload grants an arbitrary module or
+operator permission. Thruster fixture retains the Heli ownership prerequisite.
+The item follows existing session lifetime: death/logout/server stop clear it;
+dimension invalidates the episode but retains equipment. A later mode change does
+not invent a new lifetime rule; the already-equipped temporary session remains.
+`/clanktest` is still the operator fallback, including Survival playtest setup.
+
+These are checkpoint setup items, not survival entitlement, recipes, progression,
+armor slots, persistence or a new death/drop policy. Inventory stacks retain native
+Minecraft behavior; worn companion facts still are not loaded from item NBT/save.
+
+Item visuals reuse the existing client-local Clank sidecar/resource/texture leases
+and shared mesh submission: original idle601 plus the matching607/608, fitted as
+one item-only composite. No proprietary artwork is bundled, no shared renderer or
+wearable mount is replaced, and no player action clock drives inventory poses.
+Loading is lazy; unavailable/loading local assets produce no substitute art.
+Actual Creative inventory/hand orientation and readable pack silhouettes still
+require T22 client verification. Existing original-material fidelity gaps remain.
+Fresh Creative verification passed a normal full build (835 passed, 51 skipped,
+zero failures) and all 21 native world tests, including the prior 19 movement cases.
 
 ## Local original assets
 
@@ -99,7 +131,7 @@ material API does not itself supply those missing systems.
 module. Its strict seven-byte versioned save codec contains durable facts only.
 It does **not** select permanent acquisition, player-storage or death/drop policy;
 actual player save/load/clone hooks are deliberately not wired. The provisional
-operator fixture has the explicit session-only clearing behavior above.
+operator/Creative fixture has the explicit session-only clearing behavior above.
 Synthetic upgraded test fixtures are not general grant authority.
 
 Per-action source predicates remain separate from complete start admission:
@@ -114,8 +146,8 @@ Per-action source predicates remain separate from complete start admission:
   rejects forged unowned Thruster selection.
 
 `Rac1ClankSession` owns epoch/serial replay checks. All equipment intents and action
-legacy client starts **fail closed**; the approved operator command alone mutates
-test equipment. Runtime server sessions start `EMPTY`. New common
+legacy client starts **fail closed**; only the approved operator command and
+Creative held-item server use path mutate test equipment. Runtime server sessions start `EMPTY`. New common
 subscribers provide tracking+self and late-tracking full snapshots; dimension/
 respawn invalidate transient/replay epochs, logout/server stop forget sessions.
 These are foundations, not live dedicated/two-client certification.

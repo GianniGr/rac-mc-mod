@@ -37,6 +37,12 @@ public final class RacMcItems {
 
     public static final DeferredItem<Rac1WrenchItem> OMNIWRENCH =
             ITEMS.registerItem("omniwrench", Rac1WrenchItem::new, new Item.Properties());
+    public static final DeferredItem<Rac1ClankPackItem> CLANK_HELI_PACK =
+            ITEMS.registerItem("clank_heli_pack", properties -> new Rac1ClankPackItem(properties,
+                    com.github.giannigr.racmc.clank.Rac1ClankEquipment.Module.HELI));
+    public static final DeferredItem<Rac1ClankPackItem> CLANK_THRUSTER_PACK =
+            ITEMS.registerItem("clank_thruster_pack", properties -> new Rac1ClankPackItem(properties,
+                    com.github.giannigr.racmc.clank.Rac1ClankEquipment.Module.THRUSTER));
 
     /**
      * The picture of the tab of the creative mode of the mod.

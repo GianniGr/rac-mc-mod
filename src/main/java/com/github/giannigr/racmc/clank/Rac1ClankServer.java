@@ -45,13 +45,33 @@ public final class Rac1ClankServer {
     public static boolean configureTest(CommandSourceStack source, ServerPlayer target,
             Rac1ClankEquipment.Module module) {
         if (!source.hasPermission(2) || !target.isAlive() || target.isRemoved()) return false;
+        applySessionEquipment(target,module);
+        return true;
+    }
+    /** Native item-use path derives the module from the actual server-held registered item only. */
+    public static boolean equipCreative(ServerPlayer player,net.minecraft.world.InteractionHand hand) {
+        if(player==null||hand==null||!player.isCreative()||player.isSpectator()
+                ||!player.isAlive()||player.isRemoved())return false;
+        var held=player.getItemInHand(hand);
+        Rac1ClankEquipment.Module module;
+        if(held.is(com.github.giannigr.racmc.item.RacMcItems.CLANK_HELI_PACK.get()))
+            module=Rac1ClankEquipment.Module.HELI;
+        else if(held.is(com.github.giannigr.racmc.item.RacMcItems.CLANK_THRUSTER_PACK.get()))
+            module=Rac1ClankEquipment.Module.THRUSTER;
+        else return false;
+        var current=session(player).equipment();
+        // Repeated native right-click of an already selected pack must not restart an episode.
+        if(current.worn()&&current.selected()==module)return true;
+        applySessionEquipment(player,module);
+        return true;
+    }
+    private static void applySessionEquipment(ServerPlayer target,Rac1ClankEquipment.Module module) {
         Rac1ClankRuntime.invalidate(target);
         var state = session(target);
         state.testEquipment(module);
         state.invalidate(epoch());
         broadcast(target);
         Rac1ClankRuntime.correct(target);
-        return true;
     }
     @SubscribeEvent public static void login(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {

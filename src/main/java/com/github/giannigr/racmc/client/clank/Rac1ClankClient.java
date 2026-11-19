@@ -35,7 +35,18 @@ public final class Rac1ClankClient {
             bus = EventBusSubscriber.Bus.MOD)
     @SuppressWarnings("removal")
     public static final class Registration {
+        private static Rac1ClankItemRenderer itemRenderer;
         private Registration() {}
+        @SubscribeEvent public static void items(
+                net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent event) {
+            event.registerItem(new net.neoforged.neoforge.client.extensions.common.IClientItemExtensions() {
+                @Override public net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer getCustomRenderer() {
+                    if(itemRenderer==null)itemRenderer=new Rac1ClankItemRenderer();
+                    return itemRenderer;
+                }
+            },com.github.giannigr.racmc.item.RacMcItems.CLANK_HELI_PACK.get(),
+                    com.github.giannigr.racmc.item.RacMcItems.CLANK_THRUSTER_PACK.get());
+        }
         @SubscribeEvent public static void setup(FMLClientSetupEvent event) {
             event.enqueueWork(() -> {
                 Rac1ClankPrediction.install();

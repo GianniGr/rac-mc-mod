@@ -74,6 +74,7 @@ public final class Rac1ClankResources {
         return lease.get(asset, generation, asset.textures()).toArray(ResourceLocation[]::new);
     }
     public static void reload() {
+        Rac1ClankItemRenderer.clear();
         LEASES.values().forEach(Rac1ItemTextureLease::clear);
         generation++;
     }

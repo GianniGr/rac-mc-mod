@@ -31,6 +31,7 @@ public final class ClankWorldGameTests {
         boolean open=true;
         int disconnects;
         Rac1ClankMovementWire.Correction lastCorrection;
+        Rac1ClankSession.Snapshot lastSnapshot;
         private static Connection fixtureConnection() {
             return new Connection(PacketFlow.SERVERBOUND) {
                 private final io.netty.channel.embedded.EmbeddedChannel fixtureChannel=
@@ -46,6 +47,9 @@ public final class ClankWorldGameTests {
             if(packet instanceof net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket custom
                     &&custom.payload() instanceof Rac1ClankNetwork.Correction correction)
                 lastCorrection=correction.value();
+            if(packet instanceof net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket custom
+                    &&custom.payload() instanceof Rac1ClankNetwork.Snapshot snapshot)
+                lastSnapshot=snapshot.value();
         }
         @Override public boolean isAcceptingMessages(){return open;}
         @Override public void disconnect(Component reason){open=false;disconnects++;}
@@ -446,6 +450,104 @@ public final class ClankWorldGameTests {
                             "Missing high/long/glide native handoff case i="+i+" wall="+wall);
                     for(var p:nativeControls){Rac1ClankRuntime.invalidate(p);p.discard();}
                     done(h,actors);
+                }
+            });
+        }
+    }
+
+    @GameTest(template="empty",batch="clank_20_creative_item_security",timeoutTicks=35)
+    public static void creativeItemsUseActualHeldPackAndAuthoritativeModeWithoutConsumptionOrOperatorBypass(GameTestHelper h) {
+        Vec3 base=platform(h);var p=player(h,base);
+        var heli=com.github.giannigr.racmc.item.RacMcItems.CLANK_HELI_PACK.get();
+        var thruster=com.github.giannigr.racmc.item.RacMcItems.CLANK_THRUSTER_PACK.get();
+        var main=net.minecraft.world.InteractionHand.MAIN_HAND;var off=net.minecraft.world.InteractionHand.OFF_HAND;
+        p.setItemInHand(main,heli.getDefaultInstance());
+        var initial=Rac1ClankServer.session(p).snapshot(h.getLevel().getGameTime());
+        for(var mode:new GameType[]{GameType.SURVIVAL,GameType.ADVENTURE,GameType.SPECTATOR}) {
+            p.setGameMode(mode);
+            h.assertTrue(!p.gameMode.useItem(p,h.getLevel(),p.getItemInHand(main),main).consumesAction()
+                            &&!Rac1ClankServer.equipCreative(p,main)
+                            &&Rac1ClankServer.session(p).epoch()==initial.epoch()
+                            &&!Rac1ClankServer.session(p).equipment().worn(),
+                    "Non-Creative item use granted/mutated session: "+mode);
+        }
+        p.setGameMode(GameType.SURVIVAL);p.getAbilities().instabuild=true;
+        h.assertTrue(!Rac1ClankServer.equipCreative(p,main),"Spoofed ability flag bypassed actual server game mode");
+        p.getAbilities().instabuild=false;p.setGameMode(GameType.CREATIVE);
+        h.assertTrue(p.gameMode.useItem(p,h.getLevel(),p.getItemInHand(main),main).consumesAction(),
+                "Native Creative Heli item use failed");
+        var state=Rac1ClankServer.session(p);long heliEpoch=state.epoch();
+        h.assertTrue(state.equipment().worn()&&state.equipment().selected()==Rac1ClankEquipment.Module.HELI
+                        &&state.equipment().heliOwned()&&!state.equipment().thrusterOwned()
+                        &&p.getItemInHand(main).is(heli)&&p.getItemInHand(main).getCount()==1,
+                "Heli item granted wrong module or consumed its stack");
+        var sink=(Sink)p.connection;
+        h.assertTrue(sink.lastSnapshot!=null&&sink.lastSnapshot.epoch()==heliEpoch
+                        &&sink.lastSnapshot.equipment().equals(state.equipment())
+                        &&sink.lastCorrection!=null&&sink.lastCorrection.epoch()==heliEpoch,
+                "Creative equip did not send authoritative equipment and correction snapshots");
+        var forged=new net.minecraft.nbt.CompoundTag();forged.putInt("module",608);forged.putBoolean("worn",true);
+        p.getItemInHand(main).set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                net.minecraft.world.item.component.CustomData.of(forged));
+        h.assertTrue(p.gameMode.useItem(p,h.getLevel(),p.getItemInHand(main),main).consumesAction()
+                        &&state.epoch()==heliEpoch&&state.equipment().selected()==Rac1ClankEquipment.Module.HELI,
+                "Repeated use restarted session or custom item data changed trusted module");
+        p.setItemInHand(off,thruster.getDefaultInstance());
+        h.assertTrue(p.gameMode.useItem(p,h.getLevel(),p.getItemInHand(off),off).consumesAction()
+                        &&state.epoch()>heliEpoch&&state.equipment().selected()==Rac1ClankEquipment.Module.THRUSTER
+                        &&state.equipment().thrusterOwned()&&state.equipment().heliOwned()
+                        &&p.getItemInHand(off).getCount()==1&&p.getItemInHand(main).getCount()==1,
+                "Offhand Thruster switch lost prerequisite, authority or unchanged item stacks");
+        long thrusterEpoch=state.epoch();p.setItemInHand(main,new net.minecraft.world.item.ItemStack(
+                net.minecraft.world.item.Items.STICK));
+        h.assertTrue(!Rac1ClankServer.equipCreative(p,main)
+                        &&!heli.use(h.getLevel(),p,main).getResult().consumesAction()
+                        &&state.epoch()==thrusterEpoch,
+                "Wrong held item/forged direct use granted equipment");
+        p.setGameMode(GameType.SURVIVAL);p.setItemInHand(main,heli.getDefaultInstance());
+        h.assertTrue(!Rac1ClankServer.equipCreative(p,main)&&state.epoch()==thrusterEpoch
+                        &&state.equipment().selected()==Rac1ClankEquipment.Module.THRUSTER,
+                "Creative-granted item could switch equipment from Survival");
+        h.assertTrue(!Rac1ClankServer.configureTest(p.createCommandSourceStack().withPermission(0),p,
+                        Rac1ClankEquipment.Module.HELI),
+                "Creative item route escalated operator command permission");
+        System.out.println("CLANK_CREATIVE_SECURITY epoch="+state.epoch()+" equipment="+state.equipment()
+                +" mainCount="+p.getItemInHand(main).getCount()+" offCount="+p.getItemInHand(off).getCount());
+        done(h,p);
+    }
+
+    @GameTest(template="empty",batch="clank_21_creative_item_lifecycle",timeoutTicks=40)
+    public static void creativeEquipSwitchKeepsAirBudgetAndExistingTemporaryDeathLifecycle(GameTestHelper h) {
+        Vec3 base=platform(h);var p=player(h,base);p.setGameMode(GameType.CREATIVE);
+        var main=net.minecraft.world.InteractionHand.MAIN_HAND;
+        p.setItemInHand(main,com.github.giannigr.racmc.item.RacMcItems.CLANK_HELI_PACK.get().getDefaultInstance());
+        h.assertTrue(p.gameMode.useItem(p,h.getLevel(),p.getItemInHand(main),main).consumesAction(),
+                "Creative session setup did not equip");
+        for(int tick=1;tick<=8;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                frame(p,t,t==4||t==5,t<=5,false);
+                if(t==8) {
+                    var state=Rac1ClankServer.session(p);long old=state.epoch();
+                    h.assertTrue(state.motion().spentAirJump()&&p.getY()>base.y+.1,
+                            "No genuine airborne high action before item switch");
+                    p.setItemInHand(main,com.github.giannigr.racmc.item.RacMcItems.CLANK_THRUSTER_PACK.get().getDefaultInstance());
+                    h.assertTrue(p.gameMode.useItem(p,h.getLevel(),p.getItemInHand(main),main).consumesAction()
+                                    &&state.epoch()>old&&state.motion().spentAirJump()
+                                    &&state.motion().action()==Rac1ClankCapability.Action.IDLE,
+                            "Creative pack switch replenished airborne action budget");
+                    Rac1ClankRuntime.input(p,new Rac1ClankMovementWire.Input(old,999,
+                            Rac1ClankInput.digital(true,true,true,false,false,true,false,0)));
+                    h.assertTrue(state.motion().action()==Rac1ClankCapability.Action.IDLE,
+                            "Old-epoch held input resurrected switched equipment action");
+                    p.setGameMode(GameType.SURVIVAL);
+                    h.assertTrue(state.equipment().worn()&&state.equipment().selected()==Rac1ClankEquipment.Module.THRUSTER,
+                            "Mode change invented a new session lifetime policy");
+                    h.assertTrue(p.hurt(p.damageSources().fellOutOfWorld(),1000)&&!p.isAlive()
+                                    &&!state.equipment().worn(),
+                            "Actual death did not clear Creative session companion");
+                    System.out.println("CLANK_CREATIVE_LIFECYCLE deathCleared=true oldEpoch="+old+" newEpoch="+state.epoch());
+                    done(h,p);
                 }
             });
         }
