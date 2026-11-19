@@ -147,6 +147,41 @@ class Rac1BoltMotionTest {
         assertEquals(Phase.IDLE, disconnected.phase());
         assertNull(disconnected.target());
     }
+    @Test void remoteStartAcceptsFallingSettlingAndIdleWithoutResettingExistingCollector() {
+        UUID owner = UUID.randomUUID(), rival = UUID.randomUUID();
+        Collision floor = (p, v, r) -> new Movement(p, List.of(new Contact(V.ZERO, V.UP, V.UP)));
+        State falling = east();
+        State settling = frame(falling, 1, floor, null).state();
+        assertEquals(Phase.SETTLING, settling.phase());
+        State idle = Rac1BoltMotion.legacy(V.ZERO);
+        for (var before : List.of(falling, settling, idle)) {
+            var started = Rac1BoltMotion.beginRemoteAttraction(before, owner, () -> .5);
+            assertEquals(Phase.ATTRACTING, started.phase());
+            assertEquals(owner, started.target());
+            assertEquals(before.position(), started.position());
+            assertEquals(0, started.flySpeed());
+            vector(before == idle ? V.UP.mul(5.0 / 60) : before.velocity(), started.velocity());
+            assertSame(started, Rac1BoltMotion.beginRemoteAttraction(started, rival,
+                    () -> { throw new AssertionError("Existing attraction must not restart"); }));
+        }
+    }
+
+    @Test void remoteFlightUsesMovingBodyAndDoesNotSwitchOnTargetLoss() {
+        UUID owner = UUID.randomUUID();
+        State started = Rac1BoltMotion.beginRemoteAttraction(Rac1BoltMotion.legacy(V.ZERO), owner, () -> 0);
+        Hero first = new Hero(owner, V.ZERO, new V(4, 1, 0));
+        Step beforeMove = frame(started, 20, AIR, first);
+        assertFalse(beforeMove.collect());
+        assertTrue(beforeMove.state().position().x() > 0);
+        Hero moved = new Hero(owner, V.ZERO, new V(-4, 1, 0));
+        Step afterMove = frame(beforeMove.state(), 20, AIR, moved);
+        assertTrue(afterMove.state().position().x() < beforeMove.state().position().x());
+        Step lost = frame(afterMove.state(), 20, AIR, new Hero(UUID.randomUUID(), V.ZERO, V.ZERO));
+        assertFalse(lost.collect());
+        assertEquals(Phase.IDLE, lost.state().phase());
+        assertNull(lost.state().target());
+        assertFalse(frame(afterMove.state(), 20, AIR, null).collect());
+    }
     @Test void fallingBelowBothLaunchAndHeroCanAttractWithoutContact() {
         State s = Rac1BoltMotion.relocated(east(), new V(.5, -2, 0));
         Hero hero = new Hero(UUID.randomUUID(), new V(10, 1, 0), new V(10, 2, 0));

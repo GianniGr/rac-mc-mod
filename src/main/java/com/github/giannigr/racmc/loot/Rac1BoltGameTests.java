@@ -124,20 +124,27 @@ public final class Rac1BoltGameTests {
         var owner = ledgerAccount(level, new java.util.ArrayList<>());
         var other = ledgerAccount(level, new java.util.ArrayList<>());
         BlockPos pos = helper.absolutePos(new BlockPos(2, 2, 2));
-        Vec3 center = Vec3.atCenterOf(pos);
+        // Keep the other denominations from the payout outside the scan sphere.
+        Vec3 center = Vec3.atCenterOf(pos).add(0, 5, 0);
         owner.setPos(center.add(5, 0, 0));
         other.setPos(center);
         var bounds = new net.minecraft.world.phys.AABB(pos).inflate(4);
         var existing = new java.util.HashSet<>(level.getEntitiesOfClass(Rac1BoltEntity.class, bounds));
-        for (int i = 0; i < 3; i++) ledger.reward(UUID.randomUUID(), level, pos, 1);
+        ledger.reward(UUID.randomUUID(), level, pos, 300);
         ledger.emit(level);
+        var denominations = new java.util.HashSet<Integer>();
         var bolts = level.getEntitiesOfClass(Rac1BoltEntity.class, bounds).stream()
                 .filter(bolt -> !existing.contains(bolt))
-                .sorted(java.util.Comparator.comparingInt(Rac1BoltEntity::getId)).toList();
-        helper.assertTrue(bolts.size() == 3, "Expected three admitted test bolts");
-        double[] offsets = {1, 2.69, 2.71};
+                .sorted(java.util.Comparator.comparingInt(Rac1BoltEntity::getId))
+                .filter(bolt -> denominations.add(bolt.value())).toList();
+        helper.assertTrue(denominations.equals(java.util.Set.of(1, 5, 20, 50)),
+                "Expected all four admitted denominations");
+        // The first bolt is farther away than the second. The last is inside the broadphase
+        // on every axis, but outside the sphere.
+        Vec3[] offsets = {new Vec3(0, 2.69, 0), new Vec3(0, 1, 0),
+                new Vec3(2.7F, 0, 0), new Vec3(2, 2, 0)};
         for (int i = 0; i < bolts.size(); i++) {
-            var point = center.add(0, offsets[i], 0);
+            var point = center.add(offsets[i]);
             var state = Rac1BoltMotion.legacy(new Rac1BoltMotion.V(point.x, point.y, point.z));
             bolts.get(i).restoreMotion(state);
             ledger.move(bolts.get(i).getUUID(), state);
@@ -154,7 +161,13 @@ public final class Rac1BoltGameTests {
                 "An already attracting bolt must not consume the next update's quota");
         Rac1BoltEntity.attractFromReturningWrench(owner, center);
         helper.assertTrue(ledger.pickup(bolts.get(2).getUUID()).motion().target() == null,
-                "A vertical offset outside the 3D radius must not attract");
+                "An offset exactly on the radius must not attract");
+        helper.assertTrue(ledger.pickup(bolts.get(3).getUUID()).motion().target() == null,
+                "A diagonal offset outside the sphere but inside the broadphase must not attract");
+        var restored = Rac1BoltLedger.load(ledger.save(new CompoundTag(), level.registryAccess()),
+                level.registryAccess());
+        helper.assertTrue(restored.pickup(bolts.get(0).getUUID()).equals(ledger.pickup(bolts.get(0).getUUID())),
+                "Pending motion, owner and denomination must survive the existing ledger save/load");
         helper.assertTrue(ledger.balance(owner.getUUID()) == 0 && ledger.balance(other.getUUID()) == 0,
                 "Attraction must not award currency before body arrival");
         helper.succeed();

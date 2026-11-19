@@ -171,6 +171,7 @@ public final class WrenchActionState {
             double dy = Math.clamp(target - position.y(), -limit, limit);
             position = position.add(new ActionVector(0, dy, 0));
         }
+        // Capture the branch entered, not the phase after an outward reversal or a return catch.
         ActionVector returnOrigin = phase == Phase.DETACHED_BACK ? position : null;
         if (phase == Phase.DETACHED_OUT) {
             ActionVector next = position.add(direction.multiply(speed * dt));
@@ -235,6 +236,8 @@ public final class WrenchActionState {
     }
 
     public java.util.List<FlightStep> flightSteps() { return java.util.List.copyOf(flightSteps); }
+    boolean hasPendingFlightContacts() { return !flightSteps.isEmpty(); }
+
     public java.util.List<FlightStep> beginFlightContacts(long tick) {
         if (tick != lastTick || dispatchedFlightTick == tick) return java.util.List.of();
         dispatchedFlightTick = tick;

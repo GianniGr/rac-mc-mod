@@ -104,6 +104,29 @@ class WrenchActionStateTest {
         assertEquals(last.from(), last.returnOrigin());
     }
 
+    @Test void returnScanOriginFollowsGroundCorrectionAndBatchCannotReplay() {
+        var state = throwing();
+        state.tick(1, true, false, HAND, new ClipFrame(.1, true, false, false),
+                new WrenchActionState.Surface() {
+                    @Override public ActionVector firstContact(ActionVector from, ActionVector to) {
+                        return from;
+                    }
+                    @Override public double groundHeight(ActionVector position) {
+                        return position.y() - .35;
+                    }
+                });
+        var batch = state.beginFlightContacts(1);
+        assertEquals(3, batch.size());
+        assertNull(batch.getFirst().returnOrigin());
+        for (var update : batch.subList(1, 3)) {
+            assertEquals(update.from().add(new ActionVector(0, 4.0 / 60, 0)), update.returnOrigin());
+            assertNotEquals(update.to(), update.returnOrigin());
+        }
+        assertTrue(state.beginFlightContacts(1).isEmpty());
+        state.cancel();
+        assertFalse(state.hasPendingFlightContacts());
+    }
+
     @Test void lowFlightApproachesOriginalFloorClearanceEvenBelowWorldZero() {
         var state = new WrenchActionState();
         assertTrue(state.start(1, Intent.THROW, 0, THROW,

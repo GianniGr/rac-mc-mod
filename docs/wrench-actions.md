@@ -7,8 +7,8 @@ Prior bounded T14/owner acceptance is retained; exact merged-tree T18 remains re
 ## Controls and availability
 
 - Main-hand wrench, crouch + attack (default left click): comet throw over block/entity/miss.
-  Both legs can deliver normal-strength5.1HP and contact ordinary RaC crates. Pickup, currency
-  attraction, enemy homing and multi-bounce ricochet remain excluded.
+  Both legs can deliver normal-strength5.1HP and contact ordinary RaC crates. Only the return
+  leg can start ordinary bolt attraction. Enemy homing and multi-bounce ricochet remain excluded.
 - Otherwise an airborne attack requests slam after four airborne MC ticks, with clearance0.1
   rising /0.57 descending, regardless of MISS/ENTITY/actual BLOCK target. Grounded mining stays native.
 - Native normal attacks remain total5.1HP, sharing a10-tick accepted-start gate with actions.
@@ -88,12 +88,46 @@ are not action-destroyed. Thrown ordinary-crate contact is an exact radius0.4 sw
 posed head samples, with authoritative flight reach and once-per-block-entity-lifecycle dispatch.
 Throw does not impose a blanket world-LOS gate on return contacts. P32 installs the same real
 short-fuse handler for held/slam/thrown contacts: 5–15 source updates round up to 2–5 MC ticks,
-shorten-only and no payout until actual detonation. There is no duplicate reward or currency-attraction implementation.
+shorten-only and no payout until actual detonation. Return attraction never generates a reward.
 
 Protocol `wrench-actions-3` uses a10-byte C2S serial/intent/default-or-slim flag. The flag selects
 one of two fixed native rigs, not a client pose/target. The server owns clocks/collision/damage.
 S2C carries phase, authoritative facing yaw, separate body/child time/blend, held visibility and world attachment
 position/spin/release orientation, never original joint/clip/texture arrays or ISO/operator details.
+
+## Returning wrench and ordinary bolts (#11)
+
+The NTSC-U and PAL RaC1 return helpers summarized in the R08 comet-bolts addendum use a
+strict 3D radius `< 2.7` around the wrench's own position. The scan belongs to an update that
+**entered** the return branch: sample after ground-height correction and before displacement
+toward the hand. Neither the outbound update that turns the wrench around nor a subsequent
+in-hand update scans; a real return update that ends in a catch still scans once.
+
+On the server, the accepted throw's player-post-tick batch dispatches these sampled positions
+once in 60 Hz substep order, before damage/crate contact for each corresponding substep.
+The bolt scan uses loaded, bounded authoritative positions, not the head damage sphere, a
+swept path or terrain line of sight. It tests existing admitted ordinary bolt entities and
+tries ascending runtime entity ID (Minecraft's substitute for retail run-list order), stopping
+after one successful start **per substep**, not per 20 TPS tick. Falling, settling and idle bolts
+are eligible; already attracting, removed or unadmitted bolts are skipped. Ground swings and
+normal player proximity are unchanged. Ammo, gold bolts, XP and other items are not included.
+
+Wrench substeps are batched, not interleaved with bolt entity substeps. A scan sees the current
+bolt positions when the player post-tick callback runs; ordinary pickup or another player's
+throw can win first according to server entity tick order. Crate rewards follow their existing
+ledger admission path (level post-tick emission), so a new payout is not necessarily visible to
+later wrench substeps in the same batch. Each successful start persists the owner UUID and
+motion in the existing ledger and plays its existing attraction cue. The bolt homes independently
+to the player's moving mid-body, not the wrench or catch point; only the existing arrival path
+credits the exact denomination, once. Target loss/recovery and save/load retain the existing
+bolt policy; cancelling the throw does not pay or reset a bolt already in flight.
+
+This uses the existing [Minecraft bolt motion](bolt-motion.md): idle rest-normal launch,
+retained falling/settling velocity, and the current straight body-homing drag/speed ramp.
+Original randomized path bends, below-ground steering, hero-motion compensation, full tumble
+and original cue throttling are not added; no original code/assets were reused. The asset-free
+headless fixtures check the scan and ledger without enabling managed wrench actions; real
+throw/catch, multiplayer and live lifecycle checks remain independent verification.
 
 ## Actual drawing paths and verification boundary
 
