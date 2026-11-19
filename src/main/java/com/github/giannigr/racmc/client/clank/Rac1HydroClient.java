@@ -63,8 +63,10 @@ public final class Rac1HydroClient {
         if(view==null||!view.state().access())return;
         if(epoch!=view.state().epoch()||world!=player.level())reset(view.state().epoch(),player.level());
         var keys=event.getInput();
-        frame=minecraft.screen==null?new Rac1HydroMotion.Input(minecraft.options.keySprint.isDown(),
-                minecraft.options.keyJump.isDown(),minecraft.options.keyShift.isDown(),
+        boolean active=minecraft.screen==null&&minecraft.isWindowActive();
+        frame=active?new Rac1HydroMotion.Input(Rac1HydroHeldKeys.down(minecraft.options.keySprint,active),
+                Rac1HydroHeldKeys.down(minecraft.options.keyJump,active),
+                Rac1HydroHeldKeys.down(minecraft.options.keyShift,active),
                 (keys.left?1:0)-(keys.right?1:0),(keys.up?1:0)-(keys.down?1:0),player.getYRot())
                 :Rac1HydroMotion.Input.RELEASED;
         long next=serial++;PENDING.addLast(new Pending(next,frame,Rac1HydroMotion.boundedLookPitch(player.getXRot())));

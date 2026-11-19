@@ -11,9 +11,11 @@ class Rac1HydroContractTest {
         var path=java.nio.file.Path.of(System.getProperty("racmc.projectDir"),
                 "src/main/java/com/github/giannigr/racmc/client/clank/Rac1HydroClient.java");
         String code=java.nio.file.Files.readString(path);
-        assertTrue(code.contains("options.keySprint.isDown()"));
-        assertTrue(code.contains("options.keyJump.isDown()"));
-        assertTrue(code.contains("options.keyShift.isDown()"));
+        assertTrue(code.contains("Rac1HydroHeldKeys.down(minecraft.options.keySprint,active)"));
+        assertTrue(code.contains("Rac1HydroHeldKeys.down(minecraft.options.keyJump,active)"));
+        assertTrue(code.contains("Rac1HydroHeldKeys.down(minecraft.options.keyShift,active)"));
+        assertTrue(code.contains("minecraft.isWindowActive()"));
+        assertFalse(code.contains("keySprint.isDown()"));assertFalse(code.contains("keyShift.isDown()"));
         assertFalse(code.contains("isSprinting()"));assertFalse(code.contains("GLFW_KEY"));
     }
     private static Rac1HydroMotion.Input input(boolean thrust,boolean rise,boolean dive,double left,double forward,double yaw) {

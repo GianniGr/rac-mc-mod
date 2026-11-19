@@ -342,6 +342,14 @@ travel, Jump/Sneak outside admitted propulsion and Steve pose remain vanilla.
 
 Configured **Sprint key held** requests thrust only while eye-submerged, never
 from native sprint/toggle state or a hardcoded Ctrl key. No direction key is needed.
+Hydro reads the physical state of the **current native binding**, not
+`ToggleKeyMapping.isDown()` (which remains latched after release in Toggle Sprint).
+The same physical-held path handles Hydro Jump/Sneak, including Toggle Sneak.
+Key symbols, mouse buttons and native scan-code bindings resolve without a fixed
+Ctrl dependency; native conflict/modifier context still applies. UI or lost window
+focus supplies released input. No global mapping/options/click state is modified;
+vanilla toggle behavior outside Hydro remains intact. Release may coast/drift,
+but no fresh powered-thrust sample is generated from a latched toggle alone.
 Configured Jump pitches up; Sneak pitches down; Jump wins both. Direction keys
 request yaw-relative heading (back turns, not reverse gear); normalized diagonals,
 positive facing speed and no added vertical impulse. During **held underwater
@@ -399,3 +407,10 @@ from179 JUnit suites/898 tests. All **25/25 native tests** passed (four Hydro
 cases plus all21 frozen aerial/Creative regressions). The normal JAR excludes
 opt-in Clank world fixtures and proprietary/cache payloads. This is implementation
 evidence, not independent T22 or owner acceptance.
+
+Later isolated corrections (automatic default, qualifying-surface continuity,
+bounded look steering and physical-held toggle-safe input) pass a fresh full
+build: **855 passed,51 skipped,0 failures/errors** from181 suites/906 tests;
+**28/28 native tests** pass, retaining all21 aerial/Creative regressions.
+Native hold/toggle mappings are regression-tested against detached device states;
+actual remapped physical release, focus/UI and two-client checks remain T22 work.
