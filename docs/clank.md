@@ -1,10 +1,25 @@
 # Wearable Clank foundations (#26 / #27)
 
-This is an **inactive foundation**, not completion of either feature. Native Steve
-remains the player. There is no Clank item, inventory/chest slot, grant command,
-NPC purchase, keyboard binding, jump boost, movement takeover or playable class 87.
+This is an **aerial moveset integration checkpoint**, not completion of either
+feature. Native Steve remains the player. The operator-only session setup below
+can equip the visible backpack. The independent source-step controller is tested,
+but player travel/network/fall hooks still require explicit integration review:
+normal gameplay motion is **not activated by this checkpoint**. There is no Clank
+item, inventory/chest slot, NPC purchase, generic jump boost or playable class87.
 No upgrade is automatically granted. The normal mandatory local disc/cache gate
 is unchanged.
+
+## Provisional operator playtest setup
+
+With server permission level2: `/clanktest <player> heli`, `thruster`, or `unequip`.
+The target must be a live player. This is an explicit per-player test fixture,
+not permanent acquisition/progression: Heli sets Heli ownership; Thruster sets
+Thruster plus its Heli prerequisite (source Thruster glide also checks Heli).
+Unequip clears the fixture. Death/respawn/logout/server stop clear test equipment.
+Dimension change invalidates the episode/serial namespace but retains selected
+test equipment. Reapply the command after death/reconnect as needed.
+Permission is checked by both Brigadier and the server mutation entry point;
+legacy client equip/action requests remain denied.
 
 ## Local original assets
 
@@ -21,8 +36,8 @@ The local `CLNK` envelope has independent format/importer versions (both 1) and
 required model encoding **1**. That encoding is P35's existing public
 `Rac1CacheCodec.encodeAnimatedModel` / `decodeAnimatedModel`; there is no second
 model serializer or RACM/schema bump. A synthetic payload digest pins compatibility.
-On integration with P35's forthcoming `MODEL_ENCODING_VERSION=1`, reference that
-shared constant rather than changing the payload. Unrelated shop/RACM catalogue
+The required encoding now references P35's shared `MODEL_ENCODING_VERSION=1`
+without changing the payload. Unrelated shop/RACM catalogue
 changes do not invalidate this envelope.
 
 The envelope bounds the aggregate to 96 MiB and each model to the shared 64 MiB
@@ -81,9 +96,10 @@ material API does not itself supply those missing systems.
 
 `Rac1ClankEquipment` separates acquired Clank, owned upgrades, worn state and selected
 module. Its strict seven-byte versioned save codec contains durable facts only.
-It does **not** select acquisition, player-storage, death/drop/clone or respawn
-policy; actual player save/load/clone hooks are deliberately not wired.
-Synthetic upgraded test fixtures are not grant authority.
+It does **not** select permanent acquisition, player-storage or death/drop policy;
+actual player save/load/clone hooks are deliberately not wired. The provisional
+operator fixture has the explicit session-only clearing behavior above.
+Synthetic upgraded test fixtures are not general grant authority.
 
 Per-action source predicates remain separate from complete start admission:
 
@@ -97,8 +113,8 @@ Per-action source predicates remain separate from complete start admission:
   rejects forged unowned Thruster selection.
 
 `Rac1ClankSession` owns epoch/serial replay checks. All equipment intents and action
-starts **always fail closed** while owner policies are undefined, even with
-synthetic upgraded saved data. Runtime server sessions start `EMPTY`. New common
+legacy client starts **fail closed**; the approved operator command alone mutates
+test equipment. Runtime server sessions start `EMPTY`. New common
 subscribers provide tracking+self and late-tracking full snapshots; dimension/
 respawn invalidate transient/replay epochs, logout/server stop forget sessions.
 These are foundations, not live dedicated/two-client certification.
@@ -112,7 +128,7 @@ invalid times and inconsistent equipment. Server-local visuals are not required.
 Per-observer views reject stale snapshots, isolate UUIDs and bound retained
 entries. No vanilla movement-network or anti-flight changes are made.
 
-## Pure source-time math, not activated motion
+## Source-step controller checkpoint, not yet hooked player motion
 
 The engineering baseline is original60, **three source steps per MC tick**.
 The client ISO never selects gameplay speed. Original50 timing data remains
@@ -130,13 +146,49 @@ deltaMovement: conversion to blocks/MC-tick multiplies by sourceHz/20.
 Glide release is strict `elapsed > ticks(30)` with **both** held-input views clear,
 not immediate release or an invented universal cooldown.
 
+`Rac1ClankInput` represents remap-independent native Jump/Sneak/digital direction;
+diagonals normalize to magnitude1, opposing keys cancel. Its connection-owned
+stream validates epoch/monotonic serial, bounds accepted samples and expires lost
+held state. `Rac1ClankMotion` consumes a jump edge once, preserves crouch>ticks6 /
+jump-within-ticks9 and projected forward speed>.9 (not a sprint flag), and returns
+one displacement per source step. Every controlled request must receive collision
+feedback before another step. Equipment changes cancel without replenishing the
+same controller's airborne jump budget. Glide is separately gated and can still
+use held input; it is not prohibited by an arbitrary once-per-flight cooldown.
+
+The controller retains different Heli/Thruster hop ramps, windup, gravity,
+horizontal targets, high-lift stages and jump-to-glide holdoffs. Thruster long
+slows toward3.5u/s from source tick55 and its gravity approaches25 after tick54.
+Heli long preserves its windup's forward push and no ordinary air steering.
+Native-voxel geometry tests cover floor/ceiling/wall/slab bounds, takeoff,
+lift-window goldens, landing, source50/60, ownership/readiness and cancellation.
+These tests are **not a real ServerLevel/player or two-client acceptance run**.
+Original eased turning, momentum/ice/slope, side/back flip, conditioned wall/
+ledge and airborne combo branches still need exact runtime coverage; do not claim
+bit-exact PS2 trajectories or complete original game feel from this checkpoint.
+
+`Rac1ClankFallEpisode` tests the proposed narrow distance ledger (pre-admission
+debt, controlled descent, one landing and conservative cancellation). It installs
+no damage event and grants no immunity. Actual travel replacement, packet
+authority/reconciliation and scoped fall integration remain uninstalled pending
+the exact hook review; no global movement/flight flag or native root hook changed.
+
 ## Pending owner choices and verification
 
-Three groups remain held:
+Permanent acquisition/death/drop policy remains future work. For this iteration
+the owner approved provisional operator test setup, remapped native Jump/Sneak
+and no aerial activation while swimming/riding/elytra/flying/spectating. The
+following integration still requires exact engineering review:
 
-1. Acquisition/equip UX and death/drop/persistence policy.
-2. Configurable keyboard bindings and digital direction adaptation.
-3. MC-only start exclusions/coexistence and episode-scoped fall-damage behavior.
+1. Native travel/packet hooks, bounded prediction/reconciliation and collision.
+2. Episode-scoped fall bookkeeping without clearing unrelated falls.
+3. Genuine runtime input/action animations and dedicated/two-client checks.
+
+Hydro609 is deferred until the aerial moveset is playable, independently checked
+and owner-playtested. Current aerial water gates are not a final “no Clank
+swimming” product policy. No Hydro research, bundle expansion or water boost is
+part of this checkpoint. The observed lower-cape overlap is owner-accepted;
+native cape/mesh/mount are not hidden or rescaled.
 
 Native collision substeps, movement admission, original high/long/glide full
 controllers, prediction/reconciliation, fall-distance/damage, controller

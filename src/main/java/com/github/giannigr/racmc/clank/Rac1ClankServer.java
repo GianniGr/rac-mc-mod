@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.commands.CommandSourceStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -35,6 +36,16 @@ public final class Rac1ClankServer {
     private static void broadcast(ServerPlayer player) {
         PacketDistributor.sendToPlayersTrackingEntityAndSelf(player, packet(player));
     }
+    /** Permission is checked here as well as in Brigadier; no client packet grants equipment. */
+    public static boolean configureTest(CommandSourceStack source, ServerPlayer target,
+            Rac1ClankEquipment.Module module) {
+        if (!source.hasPermission(2) || !target.isAlive() || target.isRemoved()) return false;
+        var state = session(target);
+        state.testEquipment(module);
+        state.invalidate(epoch());
+        broadcast(target);
+        return true;
+    }
     @SubscribeEvent public static void login(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             SESSIONS.put(player.getUUID(), new Rac1ClankSession(player.getUUID(), epoch(),
@@ -55,12 +66,14 @@ public final class Rac1ClankServer {
     }
     @SubscribeEvent public static void respawn(PlayerEvent.PlayerRespawnEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            session(player).testEquipment(Rac1ClankEquipment.Module.NONE);
             session(player).invalidate(epoch());
             broadcast(player);
         }
     }
     @SubscribeEvent public static void death(LivingDeathEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            session(player).testEquipment(Rac1ClankEquipment.Module.NONE);
             session(player).invalidate(epoch());
             broadcast(player);
         }

@@ -14,7 +14,7 @@ public final class Rac1ClankSidecarCodec {
     public static final int FORMAT = 1;
     public static final int IMPORTER = 1;
     // Pin P35 c9ab8fb's public encoding. Independent of unrelated RACM section/catalogue versions.
-    public static final int REQUIRED_MODEL_ENCODING = 1;
+    public static final int REQUIRED_MODEL_ENCODING = Rac1CacheCodec.MODEL_ENCODING_VERSION;
     private static final int MAGIC = 0x4b4e4c43; // CLNK, little endian
     private static final int HEADER = 32;
 
