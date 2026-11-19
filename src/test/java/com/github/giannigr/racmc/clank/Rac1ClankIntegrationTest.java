@@ -8,6 +8,26 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class Rac1ClankIntegrationTest {
+    @Test void releaseRepressReleaseRequiresOrderedFreshConsumptionAndNeverMotionGrace() {
+        var stream=new Rac1ClankInput.Stream(4);
+        var held=new Rac1ClankInput(true,true,false,0,0,0);
+        assertTrue(stream.offer(4,1,10,held));stream.consume(11);
+        assertTrue(stream.heldForStep(11));
+        assertTrue(stream.offer(4,2,11,Rac1ClankInput.RELEASED));
+        assertFalse(stream.heldForStep(11));
+        stream.consume(12);assertFalse(stream.heldForStep(12));
+        assertTrue(stream.offer(4,3,12,held));
+        assertFalse(stream.heldForStep(12)); // accepted re-press is not consumed yet
+        assertTrue(stream.consume(13).fresh());assertTrue(stream.heldForStep(13));
+        assertTrue(stream.offer(4,4,13,Rac1ClankInput.RELEASED));
+        assertFalse(stream.heldForStep(13));
+        assertFalse(stream.offer(4,3,13,held)); // old re-press cannot undo a newer release
+        stream.consume(14);assertFalse(stream.heldForStep(14));
+        assertTrue(stream.offer(4,5,14,held));stream.consume(15);
+        assertTrue(stream.heldForStep(15));
+        stream.consume(16);assertFalse(stream.heldForStep(16));
+        assertTrue(stream.at(16).jumpHeld());
+    }
     @Test void damageHoldBelongsToOneFreshAuthoritativeConsumptionNotReceiptTimeOrMotionGrace() {
         var stream=new Rac1ClankInput.Stream(4);
         var held=new Rac1ClankInput(true,true,false,0,0,0);

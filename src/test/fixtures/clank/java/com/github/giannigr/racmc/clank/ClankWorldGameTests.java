@@ -129,6 +129,106 @@ public final class ClankWorldGameTests {
         }
     }
 
+    @GameTest(template="empty",batch="clank_13_same_glide_repress",timeoutTicks=60)
+    public static void shortQueuedRepressRearmsHeliWithoutNewActionOrMotionAndFinalReleaseStillDamages(GameTestHelper h) {
+        Vec3 base=platform(h);
+        var held=player(h,base.add(0,.8,8));var repress=player(h,base.add(4,.8,8));
+        var releaseAgain=player(h,base.add(8,.8,8));var missing=player(h,base.add(12,.8,8));
+        var thruster=player(h,base.add(16,.8,8));
+        var players=new ServerPlayer[]{held,repress,releaseAgain,missing,thruster};
+        for(var p:players){equip(h,p,p==thruster?"thruster":"heli");p.fallDistance=12;}
+        var falls=new Falls(players);long[] actions=new long[players.length];
+        for(int tick=1;tick<=35;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                if(t>=2) {
+                    for(int i=0;i<players.length;i++) {
+                        tickWithoutInput(players[i]);
+                        var state=Rac1ClankServer.session(players[i]).snapshot(h.getLevel().getGameTime());
+                        if(t==2)actions[i]=state.actionSerial();
+                        if(t<=5)h.assertTrue(state.action()==Rac1ClankCapability.Action.GLIDE
+                                        &&state.actionSerial()==actions[i]&&state.phaseSourceSteps()==(t-1)*3,
+                                "Brief release/repress restarted/extended original action/animation clock");
+                    }
+                    if(t<=8)for(int i=1;i<4;i++)h.assertTrue(
+                            Math.abs(players[i].getY()-held.getY())<1e-8,
+                            "Damage-policy re-press altered original glide trajectory");
+                    if(t==3)for(int i=1;i<4;i++)h.assertTrue(
+                            Rac1ClankRuntime.inputDiagnostics(players[i]).released(),
+                            "Accepted short release failed to revoke protection");
+                    if(t==4)for(int i=1;i<4;i++) {
+                        var proof=Rac1ClankRuntime.inputDiagnostics(players[i]);
+                        h.assertTrue(!proof.released()&&proof.heldProof()
+                                        &&proof.consumedSerial()>proof.releaseSerial(),
+                                "Fresh consumed same-glide re-press did not re-arm: "+proof);
+                        System.out.println("CLANK_REPRESS_REARM "+proof);
+                    }
+                    if(t==6)h.assertTrue(Rac1ClankRuntime.inputDiagnostics(releaseAgain).released()
+                                    &&!Rac1ClankRuntime.inputDiagnostics(missing).heldProof(),
+                            "Final release or missing fresh input retained landing eligibility");
+                }
+                if(t<20)for(int i=0;i<players.length;i++) {
+                    boolean jump=i==0||t!=2;
+                    if(i==2&&t>=5)jump=false;
+                    queueInput(players[i],i==3&&t>=4?3:t,jump);
+                }
+                if(t==35) {
+                    for(int i=0;i<2;i++)h.assertTrue(falls.count[i]==1&&falls.distance[i]==0
+                                    &&players[i].getHealth()==20,
+                            "Final held Heli did not negate the full pre-activation fall");
+                    falls.damaged(h,2,12.79,12.81);falls.damaged(h,3,12.7,12.81);
+                    falls.damaged(h,4,12,12.01); // No same-glide Heli policy expansion to Thruster.
+                    for(int i=0;i<players.length;i++)h.assertTrue(Rac1ClankServer.session(players[i])
+                                    .snapshot(h.getLevel().getGameTime()).actionSerial()==actions[i],
+                            "Short re-press created a different action serial");
+                    System.out.println("CLANK_REPRESS_HEALTH held="+held.getHealth()+" repress="+repress.getHealth()
+                            +" released="+releaseAgain.getHealth()+" missing="+missing.getHealth()
+                            +" thruster="+thruster.getHealth());
+                    falls.close();done(h,players);
+                }
+            });
+        }
+    }
+
+    @GameTest(template="empty",batch="clank_14_distinct_glides",timeoutTicks=125)
+    public static void repeatedDistinctHeliGlidesKeepWholeNativeFallAndFinalHeldVersusReleasePolicy(GameTestHelper h) {
+        Vec3 base=platform(h);var held=player(h,base.add(0,8,8));
+        var released=player(h,base.add(8,8,8));var players=new ServerPlayer[]{held,released};
+        var falls=new Falls(players);int[] admissions={0,0};long[] serials={0,0};
+        boolean[] finalRelease={false,false};
+        for(var p:players)equip(h,p,"heli");
+        for(int tick=1;tick<=95;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                for(int i=0;i<players.length;i++) {
+                    var p=players[i];
+                    boolean jump=(t>=6&&t<=16)||(t>=20&&t<=30)||t>=34;
+                    if(i==1&&t>=34&&p.getY()<base.y+.9)finalRelease[i]=true;
+                    if(finalRelease[i])jump=false;
+                    fallFrame(p,t,jump);
+                    var state=Rac1ClankServer.session(p).snapshot(h.getLevel().getGameTime());
+                    if(state.action()==Rac1ClankCapability.Action.GLIDE&&state.actionSerial()!=serials[i]) {
+                        admissions[i]++;serials[i]=state.actionSerial();
+                        System.out.println("CLANK_DISTINCT_GLIDE player="+i+" admission="+admissions[i]
+                                +" tick="+t+" fall="+p.fallDistance+" "+state);
+                    }
+                    if(t==18||t==32)h.assertTrue(state.action()==Rac1ClankCapability.Action.IDLE,
+                            "Release beyond original minimum did not create a genuine freefall gap");
+                }
+                if(t==95) {
+                    h.assertTrue(admissions[0]==3&&admissions[1]==3&&finalRelease[1],
+                            "Did not exercise three distinct admitted glides and final accepted release");
+                    h.assertTrue(falls.count[0]==1&&falls.distance[0]==0&&held.getHealth()==20,
+                            "Distinct final held glide lost whole-fall protection");
+                    falls.damaged(h,1,7,8.01);
+                    System.out.println("CLANK_DISTINCT_HEALTH held="+held.getHealth()
+                            +" released="+released.getHealth()+" distance="+falls.distance[1]);
+                    falls.close();done(h,players);
+                }
+            });
+        }
+    }
+
     private static void queueInput(ServerPlayer p,long serial,boolean held) {
         var packet=new Rac1ClankMovementWire.Input(Rac1ClankServer.session(p).epoch(),serial,
                 Rac1ClankInput.digital(held,held,false,false,false,false,false,0));

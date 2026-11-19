@@ -33,6 +33,7 @@ public final class Rac1ClankRuntime {
         boolean controlled,stepping,proof,landed;
         boolean settling,heliGlide,heliReleased;
         long heliActionSerial=-1;
+        long heliReleaseSerial=-1;
         double actualY,requestedY;
         Vec3 lastPosition,expectedDelta;
         Control(ServerPlayer player,Rac1ClankSession session) {
@@ -64,7 +65,9 @@ public final class Rac1ClankRuntime {
         var c=control(player);
         if(eligible(c)&&c.input.offer(sample.epoch(),sample.serial(),
                 player.serverLevel().getGameTime(),sample.frame())
-                &&c.heliGlide&&!sample.frame().jumpHeld())c.heliReleased=true;
+                &&c.heliGlide&&!sample.frame().jumpHeld()) {
+            c.heliReleased=true;c.heliReleaseSerial=sample.serial();
+        }
     }
     @SubscribeEvent public static void before(PlayerTickEvent.Pre event) {
         if(event.getEntity() instanceof ServerPlayer player)stepTick(player);
@@ -87,6 +90,13 @@ public final class Rac1ClankRuntime {
         }
         var motion=c.session.motion();
         motion.input(c.input.consume(tick).frame());
+        // Re-press may restore damage protection for this still-active action, never its timers.
+        if(c.heliReleased&&c.heliGlide&&c.fall.active()
+                &&motion.action()==Action.GLIDE
+                &&c.session.equipment().selected()==Rac1ClankEquipment.Module.HELI
+                &&c.session.snapshot(tick).actionSerial()==c.heliActionSerial
+                &&c.input.heldForStep(tick)&&c.input.consumed().serial()>c.heliReleaseSerial)
+            c.heliReleased=false;
         if(c.input.takeJumpEdge(tick))motion.bufferJumpEdge();
         Vec3 nativeVelocity=player.position().subtract(c.lastPosition);
         if(motion.action()!=Action.IDLE)nativeVelocity=player.getDeltaMovement();
@@ -112,11 +122,11 @@ public final class Rac1ClankRuntime {
             if(step.started())c.session.actionStarted(tick);
             if(!c.fall.active()) {
                 c.fall.begin(Math.max(0,player.fallDistance));
-                c.heliGlide=false;c.heliReleased=false;c.heliActionSerial=-1;
+                c.heliGlide=false;c.heliReleased=false;c.heliActionSerial=-1;c.heliReleaseSerial=-1;
             }
             if(step.started()&&step.action()==Action.GLIDE
                     &&c.session.equipment().selected()==Rac1ClankEquipment.Module.HELI) {
-                c.heliGlide=true;c.heliReleased=false;
+                c.heliGlide=true;c.heliReleased=false;c.heliReleaseSerial=-1;
                 c.heliActionSerial=c.session.snapshot(tick).actionSerial();
             }
             c.controlled=true;
@@ -160,7 +170,7 @@ public final class Rac1ClankRuntime {
         if(c.fall.active())c.player.fallDistance=(float)c.fall.cancelDistance(
                 Math.max(0,c.player.fallDistance));
         c.session.motion().cancel();c.expectedDelta=null;c.proof=false;
-        c.heliGlide=false;c.heliReleased=false;c.heliActionSerial=-1;
+        c.heliGlide=false;c.heliReleased=false;c.heliActionSerial=-1;c.heliReleaseSerial=-1;
         c.session.motion().discardBufferedInput();
     }
     public static boolean ownsTravel(ServerPlayer player) {
@@ -236,13 +246,13 @@ public final class Rac1ClankRuntime {
     }
     public record InputDiagnostics(long receiptTick,long acceptedSerial,long controlTick,
                                    long consumedSerial,long consumedReceiptTick,boolean fresh,
-                                   boolean heldProof,boolean released,long actionSerial) {}
+                                   boolean heldProof,boolean released,long actionSerial,long releaseSerial) {}
     public static InputDiagnostics inputDiagnostics(ServerPlayer player) {
         var c=CONTROLS.get(player.getUUID());
-        return c==null?new InputDiagnostics(-1,-1,-1,-1,-1,false,false,false,-1)
+        return c==null?new InputDiagnostics(-1,-1,-1,-1,-1,false,false,false,-1,-1)
                 :new InputDiagnostics(c.input.receivedTick(),c.input.acknowledgedSerial(),c.tick,
                         c.input.consumed().serial(),c.input.consumed().receiptTick(),
                         c.input.consumed().fresh(),c.input.heldForStep(c.tick),
-                        c.heliReleased,c.heliActionSerial);
+                        c.heliReleased,c.heliActionSerial,c.heliReleaseSerial);
     }
 }
