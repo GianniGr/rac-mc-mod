@@ -36,8 +36,8 @@ public final class Rac1ClankTestCommands {
                 context.getSource().sendFailure(Component.literal("Hydro test access denied: permission2 and worn Clank required."));
                 return 0;
             }
-            context.getSource().sendSuccess(()->Component.literal("Session-only Hydro test access "
-                    +(on?"on":"off")+" for "+player.getGameProfile().getName()
+            context.getSource().sendSuccess(()->Component.literal("Automatic Hydro test availability "
+                    +(on?"restored":"suppressed for this worn-Clank session")+" for "+player.getGameProfile().getName()
                     +"; no permanent unlock or Creative entry."),true);
             return 1;
         }));

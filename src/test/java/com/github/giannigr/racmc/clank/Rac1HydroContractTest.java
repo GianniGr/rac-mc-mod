@@ -29,6 +29,8 @@ class Rac1HydroContractTest {
         assertEquals(Rac1HydroWater.Mode.WADING,Rac1HydroWater.classify(true,false,false,false,.3,4));
         assertEquals(Rac1HydroWater.Mode.SURFACE,Rac1HydroWater.classify(true,false,false,false,.9,4));
         assertEquals(Rac1HydroWater.Mode.SURFACE,Rac1HydroWater.classify(true,false,true,false,.3,4));
+        assertEquals(Rac1HydroWater.Mode.WADING,Rac1HydroWater.classify(true,false,true,true,.3,0));
+        assertEquals(Rac1HydroWater.Mode.WADING,Rac1HydroWater.classify(true,false,true,false,.3,.5));
         assertEquals(Rac1HydroWater.Mode.SUBMERGED,Rac1HydroWater.classify(true,true,false,true,2,0));
     }
     @Test void source60RampWithoutForwardAndLinearReleaseBraking() {

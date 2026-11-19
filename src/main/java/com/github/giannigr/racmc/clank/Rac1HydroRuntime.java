@@ -11,7 +11,7 @@ import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-/** Temporary test access + effective-pack override; never writes durable equipment or grants through water. */
+/** Worn-Clank test default + optional session suppression; never writes durable equipment/entitlement. */
 public final class Rac1HydroRuntime {
     private static final Map<UUID,Control> CONTROLS=new HashMap<>();
     private static long nextEpoch;
@@ -21,7 +21,7 @@ public final class Rac1HydroRuntime {
         final ServerPlayer player;
         Object world;
         long epoch,clankEpoch,tick=-1,steps;
-        boolean wet,controlled,handoff;
+        boolean wet,controlled,handoff,disabled;
         Rac1HydroWater.Mode water=Rac1HydroWater.Mode.DRY;
         Rac1HydroWire.Stream input;
         final Rac1HydroMotion motion=new Rac1HydroMotion();
@@ -34,22 +34,28 @@ public final class Rac1HydroRuntime {
             input=new Rac1HydroWire.Stream(epoch);motion.restore(new Rac1HydroMotion().state());visual.clear();
         }
     }
-    private static boolean accessValid(Control c) {
-        var p=c.player;
+    private static boolean wornSession(ServerPlayer p) {
         return p.isAlive()&&!p.isRemoved()&&p.connection.isAcceptingMessages()
                 &&Rac1ClankServer.session(p).equipment().worn();
+    }
+    private static boolean accessValid(Control c) {return !c.disabled&&wornSession(c.player);}
+    /** Both existing equip paths call equipmentChanged; tick fallback covers already-worn sessions. */
+    private static Control control(ServerPlayer player) {
+        if(!wornSession(player)){forget(player);return null;}
+        var c=CONTROLS.get(player.getUUID());
+        if(c==null||c.player!=player) {
+            c=new Control(player);CONTROLS.put(player.getUUID(),c);
+        }
+        return c;
     }
     private static boolean teleporting(ServerPlayer p) {
         return !(p.connection instanceof Rac1ClankConnectionAccess access)||access.racmc$clankAwaitingTeleport();
     }
     public static boolean configure(CommandSourceStack source,ServerPlayer player,boolean on) {
         if(!source.hasPermission(2)||!player.isAlive()||player.isRemoved())return false;
-        if(on) {
-            if(!Rac1ClankServer.session(player).equipment().worn())return false;
-            var old=CONTROLS.get(player.getUUID());
-            if(old==null||old.player!=player)CONTROLS.put(player.getUUID(),new Control(player));
-            broadcast(player);
-        }else forget(player);
+        var c=control(player);if(c==null)return false;
+        if(c.disabled==on){c.disabled=!on;c.reset();}
+        broadcast(player);
         return true;
     }
     /** Equipment/teleport/dimension cancels the transient episode, not session test access. */
@@ -59,7 +65,7 @@ public final class Rac1HydroRuntime {
     }
     public static void equipmentChanged(ServerPlayer player) {
         if(!Rac1ClankServer.session(player).equipment().worn())forget(player);
-        else invalidate(player);
+        else {var c=control(player);if(c!=null){c.reset();broadcast(player);}}
     }
     public static void forget(ServerPlayer player) {
         var removed=CONTROLS.remove(player.getUUID());
@@ -74,8 +80,7 @@ public final class Rac1HydroRuntime {
             c.input.offer(sample,player.serverLevel().getGameTime());
     }
     public static void stepTick(ServerPlayer player) {
-        var c=CONTROLS.get(player.getUUID());if(c==null)return;
-        if(c.player!=player||!accessValid(c)){forget(player);return;}
+        var c=control(player);if(c==null||c.disabled)return;
         if(c.world!=player.level()||c.clankEpoch!=Rac1ClankServer.session(player).epoch())c.reset();
         long now=player.serverLevel().getGameTime();if(c.tick==now)return;c.tick=now;c.controlled=false;c.handoff=false;
         var water=Rac1HydroWater.observe(player);
@@ -147,7 +152,7 @@ public final class Rac1HydroRuntime {
                 raw.getYRot(p.getYRot()),raw.getXRot(p.getXRot()),p.onGround());
     }
     public static Rac1HydroWire.Snapshot snapshot(ServerPlayer player) {
-        var c=CONTROLS.get(player.getUUID());if(c==null||c.player!=player)return off(player);
+        var c=CONTROLS.get(player.getUUID());if(c==null||c.player!=player||c.disabled)return off(player);
         return new Rac1HydroWire.Snapshot(player.getUUID(),c.epoch,c.clankEpoch,player.serverLevel().getGameTime(),
                 c.input.acknowledged(),true,c.wet,c.controlled,Rac1ClankServer.session(player).equipment().selected(),
                 c.water,c.visual.phase(),c.visual.time(),vector(player.position()),c.motion.state());

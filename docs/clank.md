@@ -298,16 +298,22 @@ implementation. No GPL dependency/code or proprietary game assets are included.
 
 ## Later Hydro test follow-on (not the frozen aerial review target)
 
-Permission2 `/clanktest <player> hydro on|off` controls **temporary session test
-access**, requiring an already-worn Clank for `on`. Repeating `on` is idempotent.
+**Already-worn Clank automatically supplies Hydro in this temporary test build**,
+whether equipped by either existing Creative fixture or the operator command.
+No separate Hydro command is required. Permission2 `/clanktest <player> hydro
+off` optionally suppresses Hydro for the current worn-Clank session; `hydro on`
+restores the automatic default. Both require worn Clank; repeated on is idempotent.
 This does not grant Clank/Heli/Thruster, consume an item, or add ownership/save data.
 There is **no Hydro Creative entry, item, recipe, purchase or persistence**.
 Existing Heli/Thruster Creative items are temporary test fixtures too, not production
 unlock semantics. The existing equipment codec/module enum remains unchanged.
 
-Access survives a dry-pack switch, dimension change and teleport; those events
-invalidate the wet action and input epoch. Off/unequip/death/respawn/logout/server
-stop clear it. The authoritative dry selection is never replaced by Hydro, so
+The automatic default and optional off suppression survive a dry-pack switch,
+dimension change and teleport; those events invalidate the wet action/input epoch.
+Unequip/death/respawn/logout/server stop clear the session override. A newly worn
+Clank starts automatically available again. Off does not immediately re-enable
+on the next tick, and it cannot pre-disable a future unworn session.
+The authoritative dry selection is never replaced by Hydro, so
 exit/off returns the exact prior Heli/Thruster selection; explicitly switching the
 dry fixture while wet changes that remembered selection rather than granting access.
 
@@ -321,7 +327,10 @@ and native collision support independently, without forcing Sprint or a swim pos
 - No body water-volume overlap: dry. Rain, water contact flags and lava do not count.
 - Eye point below actual native water surface: submerged, even on a deep pool floor.
 - Otherwise: surface only if unsupported (floor distance >.6 blocks) and body
-  immersion >=.8 blocks; an existing native swimming pose may use immersion >.2.
+  immersion >=.8 blocks; native swimming flag **or native low swimming body pose**
+  may use immersion >.2. The low pose can survive a Sprint release on surfacing:
+  qualifying submerged→surface keeps Hydro without another swap. Neither pose
+  alone nor grounded/shallow wading qualifies.
 - Other water overlap: wading, with no Hydro override or power.
 
 These are Minecraft thresholds, **not measured retail distances or a universal

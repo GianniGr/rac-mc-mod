@@ -41,7 +41,10 @@ public final class Rac1HydroWater {
         var down=new Vec3(0,-32,0);
         double floor=-Entity.collideBoundingBox(player,down,box,level,
                 level.getEntityCollisions(player,box.expandTowards(down))).y;
-        var mode=classify(water,eyes,player.isSwimming(),floor<1e-4,top-box.minY,floor);
+        // Native low swim pose can outlive the Sprint-dependent swim flag on surfacing.
+        // Pose alone never qualifies: actual immersion and unsupported deep water are still required.
+        boolean swimBody=player.isSwimming()||player.getPose()==net.minecraft.world.entity.Pose.SWIMMING;
+        var mode=classify(water,eyes,swimBody,floor<1e-4,top-box.minY,floor);
         boolean compatible=player.isAlive()&&!player.isRemoved()&&!player.isSpectator()&&!player.isPassenger()
                 &&!player.getAbilities().flying&&!player.isFallFlying()&&!player.isSleeping()
                 &&!player.isAutoSpinAttack()&&!player.onClimbable()&&!lava

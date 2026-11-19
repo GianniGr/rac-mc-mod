@@ -59,11 +59,14 @@ public final class ClankWorldGameTests {
         @Override public void disconnect(Component reason){open=false;disconnects++;}
     }
     private static Vec3 platform(GameTestHelper h) {
+        return platform(h,0);
+    }
+    private static Vec3 platform(GameTestHelper h,int offset) {
         h.getLevel().getGameRules().getRule(GameRules.RULE_NATURAL_REGENERATION)
                 .set(false,h.getLevel().getServer());
         h.getLevel().getGameRules().getRule(GameRules.RULE_FALL_DAMAGE)
                 .set(true,h.getLevel().getServer());
-        var base=h.absolutePos(new BlockPos(3,2,3));
+        var base=h.absolutePos(new BlockPos(3+offset,2,3+offset));
         for(int x=-2;x<=22;x++)for(int z=-2;z<=22;z++) {
             h.getLevel().setBlock(base.offset(x,-1,z),Blocks.STONE.defaultBlockState(),3);
             // Include capsule headroom above the highest spawn, not just its feet.
@@ -155,9 +158,13 @@ public final class ClankWorldGameTests {
     }
 
     private static Vec3 pool(GameTestHelper h) {
-        Vec3 base=platform(h);var origin=BlockPos.containing(base);
+        // Templates/batches reuse adjacent small structure footprints; wet fixtures extend beyond
+        // those bounds. Keep them away from aerial regions so later fluid ticks cannot wet a fall.
+        Vec3 base=platform(h,128);var origin=BlockPos.containing(base);
         for(int x=-2;x<=22;x++)for(int z=-2;z<=22;z++)for(int y=0;y<=6;y++)
-            h.getLevel().setBlock(origin.offset(x,y,z),Blocks.WATER.defaultBlockState(),3);
+            // Keep scheduled native fluid ticks from spilling into later aerial test batches.
+            h.getLevel().setBlock(origin.offset(x,y,z),(x==-2||x==22||z==-2||z==22?Blocks.STONE:Blocks.WATER)
+                    .defaultBlockState(),3);
         return base;
     }
     private static void hydro(GameTestHelper h,ServerPlayer p,boolean on) {
@@ -172,7 +179,7 @@ public final class ClankWorldGameTests {
     @GameTest(template="empty",batch="clank_20_hydro_gate",timeoutTicks=50)
     public static void hydroSurfaceSubmergedWadingAndRestoreDoNotRequireSprint(GameTestHelper h) {
         var base=pool(h);var p=player(h,base.add(5,9,5));
-        equip(h,p,"thruster");hydro(h,p,true);
+        equip(h,p,"thruster"); // No Hydro command: worn Clank supplies the temporary build default.
         p.setPos(base.add(5,5.9,5));p.setOnGround(false);p.setSprinting(false);
         h.runAtTickTime(1,()->{
             p.setDeltaMovement(Vec3.ZERO);hydroFrame(p,1,false,false,false);
@@ -333,6 +340,72 @@ public final class ClankWorldGameTests {
                 }
             });
         }
+    }
+    @GameTest(template="empty",batch="clank_24_hydro_automatic",timeoutTicks=50)
+    public static void bothCreativeFixturesAutomaticallyKeepHydroFromDiveToSurfaceAndRestoreDryPack(GameTestHelper h) {
+        var base=pool(h);var heli=player(h,base.add(3,9,3));var thruster=player(h,base.add(12,9,12));
+        var players=new ServerPlayer[]{heli,thruster};
+        for(var p:players) {
+            p.setGameMode(GameType.CREATIVE);
+            p.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,new net.minecraft.world.item.ItemStack(
+                    (p==heli?com.github.giannigr.racmc.item.RacMcItems.CLANK_HELI_PACK:
+                            com.github.giannigr.racmc.item.RacMcItems.CLANK_THRUSTER_PACK).get()));
+            h.assertTrue(p.gameMode.useItem(p,h.getLevel(),p.getMainHandItem(),
+                    net.minecraft.world.InteractionHand.MAIN_HAND).consumesAction(),"Native fixture use failed");
+            h.assertTrue(Rac1HydroRuntime.snapshot(p).access(),"Creative fixture requires separate Hydro opt-in");
+            p.setGameMode(GameType.SURVIVAL);p.setOnGround(false);
+        }
+        for(int tick=1;tick<=15;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                for(var p:players) {
+                    double offset=p==heli?3:12;
+                    p.setSprinting(false);p.setDeltaMovement(Vec3.ZERO);
+                    p.setPose(t>=7&&t<=9?net.minecraft.world.entity.Pose.SWIMMING:net.minecraft.world.entity.Pose.STANDING);
+                    p.setPos(base.add(offset,t<=6?2:t<=9?6.65:t<=12?5.9:9,offset));
+                    // No held thrust, no Hydro on command, no Sprint-dependent native swimming flag.
+                    hydroFrame(p,t,false,false,false);
+                    var s=Rac1HydroRuntime.snapshot(p);
+                    var prior=p==heli?Rac1ClankEquipment.Module.HELI:Rac1ClankEquipment.Module.THRUSTER;
+                    h.assertTrue(s.dry()==prior&&!s.controlled(),"Surface altered prior pack or admitted power");
+                    if(t<=12) {
+                        h.assertTrue(s.wet()&&s.water()==(t<=6?Rac1HydroWater.Mode.SUBMERGED:Rac1HydroWater.Mode.SURFACE),
+                                "Dive->qualifying surface lost Hydro without Sprint: "+s);
+                        if(t>=6)h.assertTrue(s.visual()==Rac1HydroVisual.Phase.WET,"Surface restarted/folded Hydro");
+                    }else h.assertTrue(!s.wet(),"Dry exit retained wet override");
+                    if(t==15)h.assertTrue(s.visual()==Rac1HydroVisual.Phase.DRY,"Prior dry pack was not visually restored");
+                }
+                if(t==12) {
+                    Rac1HydroRuntime.tracking(thruster,heli);
+                    h.assertTrue(((Sink)thruster.connection).lastHydro.water()==Rac1HydroWater.Mode.SURFACE
+                            &&((Sink)thruster.connection).lastHydro.wet(),"Remote surface lost Hydro");
+                }
+                if(t==15){System.out.println("HYDRO_AUTOMATIC bothCreative/noCommand/diveSurface/restore PASS");done(h,players);}
+            });
+        }
+    }
+    @GameTest(template="empty",batch="clank_25_hydro_override",timeoutTicks=30)
+    public static void optionalHydroSuppressionSurvivesSwitchAndDimensionButClearsWithWornSession(GameTestHelper h) {
+        var base=pool(h);var p=player(h,base.add(4,9,4));equip(h,p,"heli");
+        h.assertTrue(Rac1HydroRuntime.snapshot(p).access(),"Command-equipped default unavailable");
+        hydro(h,p,false);equip(h,p,"thruster");Rac1ClankRuntime.teleport(p);
+        Rac1ClankServer.dimension(new net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent(
+                p,h.getLevel().dimension(),net.minecraft.world.level.Level.NETHER));
+        p.setPos(base.add(4,2,4));p.setOnGround(false);
+        h.runAtTickTime(1,()->{
+            hydroFrame(p,1,true,false,false);
+            h.assertTrue(!Rac1HydroRuntime.snapshot(p).access()&&!Rac1HydroRuntime.ownsTravel(p),
+                    "Default tick/switch/dimension/teleport defeated explicit off");
+            hydro(h,p,true);long epoch=Rac1HydroRuntime.snapshot(p).epoch();hydro(h,p,true);
+            h.assertTrue(Rac1HydroRuntime.snapshot(p).epoch()==epoch,"Repeated on was not idempotent");
+            hydro(h,p,false);equip(h,p,"unequip");equip(h,p,"heli");
+            h.assertTrue(Rac1HydroRuntime.snapshot(p).access(),"Suppression leaked into a newly worn session");
+            hydro(h,p,false);
+            Rac1ClankServer.logout(new net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent(p));
+            equip(h,p,"thruster");
+            h.assertTrue(Rac1HydroRuntime.snapshot(p).access(),"Logout suppression leaked into new session");
+            System.out.println("HYDRO_OVERRIDE optionalOff/on/switch/dimension/unequip/logout PASS");done(h,p);
+        });
     }
 
     @GameTest(template="empty",batch="clank_13_same_glide_repress",timeoutTicks=60)
@@ -1092,6 +1165,8 @@ public final class ClankWorldGameTests {
         h.getLevel().setBlock(slabAt,Blocks.STONE_SLAB.defaultBlockState(),3);
         var slab=player(h,Vec3.atBottomCenterOf(slabAt).add(0,.5,0));equip(h,slab,"thruster");
         var debt=player(h,base.add(16,2,0));equip(h,debt,"heli");
+        proof("geometry-initial",debt);
+        System.out.println("GEOMETRY_WATER_INITIAL "+Rac1HydroWater.observe(debt)+" base="+base);
         debt.fallDistance=12;
         double[] distance={-1};int[] landings={0};
         java.util.function.Consumer<net.neoforged.neoforge.event.entity.living.LivingFallEvent> watch=event->{
@@ -1104,6 +1179,10 @@ public final class ClankWorldGameTests {
                 for(var p:new ServerPlayer[]{low,slab})
                     frame(p,t,t==4||t==5,t<=5,false);
                 frame(debt,t,true,false,false);
+                if(t==1||t==65) {
+                    proof("geometry-t"+t,debt);
+                    System.out.println("GEOMETRY_WATER "+Rac1HydroWater.observe(debt));
+                }
                 h.assertTrue(low.getBoundingBox().maxY<=ceiling.getY()+1e-5,"Low ceiling penetrated");
                 var proof=Rac1ClankRuntime.diagnostics(low);
                 if(proof.actualY()>=0||low.onGround())h.assertTrue(
@@ -1112,7 +1191,9 @@ public final class ClankWorldGameTests {
                     h.assertTrue(Math.abs(slab.getY()-(base.y+.5))<.01,"Slab used block-center ground");
                     h.assertTrue(debt.getHealth()==20,"Held Heli landing failed to negate the entire fall");
                     h.assertTrue(landings[0]==1&&distance[0]==0,
-                            "Held Heli native fall event was not adjusted exactly once to zero");
+                            "Held Heli native fall event was not adjusted exactly once to zero: count="
+                                    +landings[0]+" distance="+distance[0]+" pos="+debt.position()
+                                    +" diag="+Rac1ClankRuntime.diagnostics(debt));
                     net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(watch);
                     done(h,low,slab,debt);
                 }
