@@ -80,6 +80,22 @@ class RacMcCreativeTabTest {
     void tabIsRegistered() {
         assertNotNull(tab, "The mod must have a tab of the creative mode of its own");
     }
+    @Test void creativeTabContainsBothDistinctClankPacksExactlyOnce() {
+        assertTrue(RacMcItems.CLANK_HELI_PACK.get()!=RacMcItems.CLANK_THRUSTER_PACK.get());
+        assertEquals(1,tab.getDisplayItems().stream().filter(s->s.is(RacMcItems.CLANK_HELI_PACK.get())).count());
+        assertEquals(1,tab.getDisplayItems().stream().filter(s->s.is(RacMcItems.CLANK_THRUSTER_PACK.get())).count());
+        assertEquals("racmc:clank_heli_pack",BuiltInRegistries.ITEM.getKey(RacMcItems.CLANK_HELI_PACK.get()).toString());
+        assertEquals("racmc:clank_thruster_pack",BuiltInRegistries.ITEM.getKey(RacMcItems.CLANK_THRUSTER_PACK.get()).toString());
+    }
+    @Test void creativePackEntriesDoNotRequireOperatorTabVisibility() {
+        tab.buildContents(new CreativeModeTab.ItemDisplayParameters(FeatureFlags.DEFAULT_FLAGS,false,NO_HOLDERS));
+        assertTrue(tab.getDisplayItems().stream().anyMatch(s->s.is(RacMcItems.CLANK_HELI_PACK.get())));
+        assertTrue(tab.getDisplayItems().stream().anyMatch(s->s.is(RacMcItems.CLANK_THRUSTER_PACK.get())));
+    }
+    @Test void clankPacksAreNotAddedToNativeCombatTab() {
+        assertTrue(combat.getDisplayItems().stream().noneMatch(s->
+                s.is(RacMcItems.CLANK_HELI_PACK.get())||s.is(RacMcItems.CLANK_THRUSTER_PACK.get())));
+    }
 
     @Test
     @DisplayName("The tab is named after the mod")

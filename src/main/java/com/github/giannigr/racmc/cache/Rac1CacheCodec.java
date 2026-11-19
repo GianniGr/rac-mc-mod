@@ -76,6 +76,12 @@ import java.util.zip.CRC32;
  * version that was found, and the manager of the cache builds the file again instead of using it.
  */
 public final class Rac1CacheCodec {
+    /**
+     * Wire layout of complete static/animated model payloads exposed by this codec.
+     * Independent of RACM catalog, converter and typed sidecar envelope versions.
+     * Metadata-only source APIs and validation tightening do not change this identifier.
+     */
+    public static final int MODEL_ENCODING_VERSION = 1;
 
     /** The magic that every cache file starts with. */
     public static final byte[] MAGIC = { 'R', 'A', 'C', 'M' };
@@ -353,8 +359,11 @@ public final class Rac1CacheCodec {
     }
 
     private static byte[] writeStatic(Rac1CacheContent content) throws IOException {
+        return writeStaticAsset(content.staticAsset());
+    }
+
+    private static byte[] writeStaticAsset(Rac1StaticAsset asset) throws IOException {
         Rac1Bytes.Writer out = new Rac1Bytes.Writer();
-        Rac1StaticAsset asset = content.staticAsset();
         Rac1Mesh mesh = asset.mesh();
         byte[] name = asset.name().getBytes(StandardCharsets.UTF_8);
         out.putInt(asset.classNumber());
@@ -394,6 +403,7 @@ public final class Rac1CacheCodec {
         int[] indices = getInts(in, triangleCount * 3);
         int[] materials = getInts(in, triangleCount);
         Rac1Texture[] textures = getTextures(in, textureCount);
+        if (in.remaining() != 0) throw new IOException("Trailing static model data.");
         Rac1Mesh mesh = new Rac1Mesh(positions, normals, uvs, indices, materials);
         return new Rac1StaticAsset(classNumber, new String(name, StandardCharsets.UTF_8), mesh,
                 textures);
@@ -595,6 +605,121 @@ public final class Rac1CacheCodec {
         return out.toByteArray();
     }
 
+    /** Reusable section payloads, not RACM containers. No format/version or valid byte-layout change. */
+    public static final int MAX_MODEL_BYTES = 64 * 1024 * 1024;
+
+    public static byte[] encodeStaticModel(Rac1StaticAsset asset) throws IOException {
+        modelName(asset.classNumber(), asset.name());
+        var m = asset.mesh();
+        long size = validateMesh(m.positions(), m.normals(), m.uvs(), m.indices(), m.materials(), asset.textures());
+        modelSize(size + 1056);
+        return boundedModel(writeStaticAsset(asset));
+    }
+    public static Rac1StaticAsset decodeStaticModel(byte[] payload) throws IOException {
+        boundedModel(payload);
+        var asset = readStatic(payload);
+        // Validate without reserializing or allocating another model payload.
+        modelName(asset.classNumber(), asset.name());
+        var m = asset.mesh();
+        validateMesh(m.positions(), m.normals(), m.uvs(), m.indices(), m.materials(), asset.textures());
+        return asset;
+    }
+    public static byte[] encodeAnimatedModel(Rac1AnimatedAsset asset) throws IOException {
+        validateAnimatedModel(asset);
+        return boundedModel(writeAnimatedAsset(asset));
+    }
+    public static Rac1AnimatedAsset decodeAnimatedModel(byte[] payload) throws IOException {
+        boundedModel(payload);
+        var asset = readAnimatedAsset(payload);
+        validateAnimatedModel(asset);
+        return asset;
+    }
+
+    private static byte[] boundedModel(byte[] bytes) throws IOException {
+        if (bytes == null || bytes.length == 0 || bytes.length > MAX_MODEL_BYTES)
+            throw new IOException("Invalid bounded model payload size.");
+        return bytes;
+    }
+    private static void modelSize(long bytes) throws IOException {
+        if (bytes > MAX_MODEL_BYTES) throw new IOException("Model exceeds bounded payload size.");
+    }
+    private static void modelName(int id, String name) throws IOException {
+        if (id < 0 || id > 65535 || name == null || name.getBytes(StandardCharsets.UTF_8).length > 1024)
+            throw new IOException("Invalid model identity/name.");
+    }
+    private static void finite(float[] values) throws IOException {
+        for (float v : values) if (!Float.isFinite(v)) throw new IOException("Nonfinite model value.");
+    }
+    private static long validateMesh(float[] positions, float[] normals, float[] uvs,
+                                     int[] indices, int[] materials, Rac1Texture[] textures) throws IOException {
+        int vertices = positions.length / 3, triangles = indices.length / 3;
+        if (positions.length % 3 != 0 || indices.length % 3 != 0 || vertices > 1 << 20
+                || triangles > 1 << 20 || normals.length != positions.length || uvs.length != vertices * 2
+                || materials.length != triangles || textures.length > 64)
+            throw new IOException("Invalid model mesh array/count bounds.");
+        finite(positions); finite(normals); finite(uvs);
+        for (int index : indices) if (index < 0 || index >= vertices) throw new IOException("Invalid model vertex index.");
+        for (int material : materials) if (material < -1 || material >= textures.length)
+            throw new IOException("Invalid model material reference.");
+        long size = ((long) positions.length + normals.length + uvs.length + indices.length + materials.length) * 4;
+        for (var texture : textures) {
+            if (texture.width() < 1 || texture.height() < 1 || texture.width() > 4096 || texture.height() > 4096
+                    || texture.pixels().length != (long) texture.width() * texture.height() * 4)
+                throw new IOException("Invalid model texture extent.");
+            size += 8L + texture.pixels().length;
+        }
+        modelSize(size);
+        return size;
+    }
+    private static void validateAnimatedModel(Rac1AnimatedAsset asset) throws IOException {
+        modelName(asset.classNumber(), asset.name());
+        var mesh = asset.mesh(); var skeleton = asset.skeleton();
+        int joints = skeleton.jointCount();
+        long size = validateMesh(mesh.positions(), mesh.normals(), mesh.uvs(), mesh.indices(), mesh.materials(), asset.textures()) + 1056;
+        if (joints < 1 || joints > 4096 || skeleton.inverseBind().length != joints * 16
+                || skeleton.restTranslations().length != joints * 3 || mesh.joints().length != mesh.vertexCount() * 3
+                || mesh.weights().length != mesh.joints().length || asset.animations().length > 4096
+                || asset.attachmentChainCount() > 1024)
+            throw new IOException("Invalid model skeleton/skinning bounds.");
+        finite(skeleton.inverseBind()); finite(skeleton.restTranslations()); finite(mesh.weights());
+        for (int i = 0; i < joints; i++) if (skeleton.parents()[i] < -1 || skeleton.parents()[i] >= i)
+            throw new IOException("Invalid model skeleton parent order.");
+        for (int i = 0; i < mesh.weights().length; i++)
+            if (mesh.weights()[i] < 0 || (mesh.weights()[i] != 0 && (mesh.joints()[i] < 0 || mesh.joints()[i] >= joints)))
+                throw new IOException("Invalid model skin influence.");
+        size += ((long) mesh.joints().length + mesh.weights().length + joints * 20L) * 4;
+        for (int i = 0; i < asset.attachmentChainCount(); i++) {
+            int[] chain = asset.attachmentChain(i);
+            if (chain.length > 256) throw new IOException("Invalid model attachment count.");
+            for (int joint : chain) if (joint < 0 || joint >= joints) throw new IOException("Invalid model attachment.");
+            size += 4L + chain.length * 4L;
+        }
+        for (var a : asset.animations()) {
+            modelName(0, a.name());
+            int keys = a.keyCount(), translations = a.translationKeys().length, scales = a.scaleKeys().length;
+            if (keys < 1 || keys > 1 << 16 || a.rotations().length != (long) keys * joints * 4
+                    || translations > 1 << 20 || scales > 1 << 20
+                    || a.translationJoints().length != translations || a.translationValues().length != translations * 3
+                    || a.scaleJoints().length != scales || a.scaleValues().length != scales * 3
+                    || a.scaleInherited().length != scales)
+                throw new IOException("Invalid model animation array/count bounds.");
+            finite(a.times()); finite(a.rotations()); finite(a.translationValues()); finite(a.scaleValues());
+            for (int i = 0; i < keys; i++) if (a.times()[i] < 0 || (i > 0 && a.times()[i] < a.times()[i - 1]))
+                throw new IOException("Invalid model animation time order.");
+            validateChannels(a.translationKeys(), a.translationJoints(), keys, joints);
+            validateChannels(a.scaleKeys(), a.scaleJoints(), keys, joints);
+            size += 1100L + keys * 4L + a.rotations().length * 4L + translations * 20L + scales * 21L
+                    + a.sourceTiming().headerTimes16().length * 12L + a.sourceTiming().sampledSourceKeys().length * 4L;
+            modelSize(size);
+        }
+        modelSize(size);
+    }
+    private static void validateChannels(int[] keys, int[] joints, int keyCount, int jointCount) throws IOException {
+        for (int i = 0; i < keys.length; i++)
+            if (keys[i] < 0 || keys[i] >= keyCount || joints[i] < 0 || joints[i] >= jointCount)
+                throw new IOException("Invalid model animation channel reference.");
+    }
+
     private static Rac1AnimatedAsset readBlaster(byte[] section) throws IOException {
         if (section.length < 4) {
             throw new IOException("The weapon of the cache file is damaged.");
@@ -734,6 +859,7 @@ public final class Rac1CacheCodec {
                     scaleKeys, scaleJoints, scaleValues, scaleInherited, sourceTiming);
         }
         Rac1Texture[] textures = getTextures(in, textureCount);
+        if (in.remaining() != 0) throw new IOException("Trailing animated model data.");
         Rac1SkinnedMesh mesh = new Rac1SkinnedMesh(positions, normals, uvs, indices, materials,
                 joints, weights);
         Rac1Skeleton skeleton = new Rac1Skeleton(inverseBind, parents, restTranslations);
@@ -757,10 +883,10 @@ public final class Rac1CacheCodec {
             if (width <= 0 || height <= 0 || width > 4096 || height > 4096) {
                 throw new IOException("A texture of the cache file has an implausible size.");
             }
-            byte[] pixels = new byte[width * height * 4];
-            if (pixels.length > in.remaining()) {
+            if ((long) width * height * 4 > in.remaining()) {
                 throw new IOException("A texture of the cache file does not fit into the file.");
             }
+            byte[] pixels = new byte[width * height * 4];
             in.getBytes(pixels);
             textures[index] = new Rac1Texture(width, height, pixels);
         }

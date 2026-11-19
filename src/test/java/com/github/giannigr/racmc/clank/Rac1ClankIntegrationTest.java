@@ -1,0 +1,164 @@
+package com.github.giannigr.racmc.clank;
+
+import static org.junit.jupiter.api.Assertions.*;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+
+class Rac1ClankIntegrationTest {
+    @Test void idleLandingCheckpointWireAndPredictionRestoreKeepAuthoritativeNativeVelocity()throws Exception {
+        var motion=new Rac1ClankMotion(Rac1ClankClock.Profile.ORIGINAL_60);
+        var delta=new net.minecraft.world.phys.Vec3(.12,0,.24);
+        motion.nativeIdleVelocity(Rac1ClankNativeCollision.sourceVelocity(delta));
+        var packet=new Rac1ClankMovementWire.Correction(UUID.randomUUID(),4,8,10,
+                Rac1ClankMotion.Vector.ZERO,motion.state());
+        var decoded=Rac1ClankMovementWire.correction(Rac1ClankMovementWire.encode(packet));
+        var predicted=new Rac1ClankMotion(Rac1ClankClock.Profile.ORIGINAL_60);
+        predicted.restore(decoded.state());
+        assertEquals(delta,Rac1ClankNativeCollision.minecraftDelta(predicted.velocity()));
+        assertEquals(Rac1ClankCapability.Action.IDLE,predicted.action());
+    }
+    @Test void releaseRepressReleaseRequiresOrderedFreshConsumptionAndNeverMotionGrace() {
+        var stream=new Rac1ClankInput.Stream(4);
+        var held=new Rac1ClankInput(true,true,false,0,0,0);
+        assertTrue(stream.offer(4,1,10,held));stream.consume(11);
+        assertTrue(stream.heldForStep(11));
+        assertTrue(stream.offer(4,2,11,Rac1ClankInput.RELEASED));
+        assertFalse(stream.heldForStep(11));
+        stream.consume(12);assertFalse(stream.heldForStep(12));
+        assertTrue(stream.offer(4,3,12,held));
+        assertFalse(stream.heldForStep(12)); // accepted re-press is not consumed yet
+        assertTrue(stream.consume(13).fresh());assertTrue(stream.heldForStep(13));
+        assertTrue(stream.offer(4,4,13,Rac1ClankInput.RELEASED));
+        assertFalse(stream.heldForStep(13));
+        assertFalse(stream.offer(4,3,13,held)); // old re-press cannot undo a newer release
+        stream.consume(14);assertFalse(stream.heldForStep(14));
+        assertTrue(stream.offer(4,5,14,held));stream.consume(15);
+        assertTrue(stream.heldForStep(15));
+        stream.consume(16);assertFalse(stream.heldForStep(16));
+        assertTrue(stream.at(16).jumpHeld());
+    }
+    @Test void damageHoldBelongsToOneFreshAuthoritativeConsumptionNotReceiptTimeOrMotionGrace() {
+        var stream=new Rac1ClankInput.Stream(4);
+        var held=new Rac1ClankInput(true,true,false,0,0,0);
+        assertTrue(stream.offer(4,1,10,held));
+        assertFalse(stream.heldForStep(10)); // receipt alone cannot prove motion consumption
+        assertTrue(stream.consume(10).fresh());
+        assertTrue(stream.heldForStep(10));
+        assertTrue(stream.at(11).jumpHeld()); // motion grace is unchanged
+        assertFalse(stream.consume(11).fresh());
+        assertFalse(stream.heldForStep(11));
+        assertFalse(stream.offer(4,1,11,held));
+        assertFalse(stream.offer(3,2,11,held));
+        assertFalse(stream.heldForStep(11));
+        assertTrue(stream.offer(4,2,11,Rac1ClankInput.RELEASED));
+        assertFalse(stream.heldForStep(11));
+    }
+    @Test void queuedPreviousWorldTickSerialCanProveExactlyItsNextConsumedStep() {
+        var stream=new Rac1ClankInput.Stream(4);
+        var held=new Rac1ClankInput(true,false,false,0,0,0);
+        assertTrue(stream.offer(4,8,65,held));
+        var consumed=stream.consume(66);
+        assertEquals(8,consumed.serial());assertEquals(65,consumed.receiptTick());
+        assertEquals(66,consumed.controlTick());assertTrue(consumed.fresh());
+        assertTrue(stream.heldForStep(66));
+        assertSame(consumed,stream.consume(66));
+        assertFalse(stream.consume(67).fresh());assertFalse(stream.heldForStep(67));
+        assertTrue(stream.at(67).jumpHeld()); // original grace unchanged
+        assertFalse(stream.offer(4,8,67,held));assertFalse(stream.heldForStep(67));
+        assertTrue(stream.offer(4,9,67,held));
+        assertFalse(stream.heldForStep(67)); // a second consume cannot re-own this tick
+        assertTrue(stream.consume(68).fresh());assertTrue(stream.heldForStep(68));
+    }
+    @Test void acceptedReleaseAfterConsumptionRevokesImmediatelyAndStaleUnconsumedSamplesFailClosed() {
+        var stream=new Rac1ClankInput.Stream(4);
+        var held=new Rac1ClankInput(true,true,false,0,0,0);
+        assertTrue(stream.offer(4,1,10,held));stream.consume(11);
+        assertTrue(stream.heldForStep(11));
+        assertTrue(stream.offer(4,2,11,Rac1ClankInput.RELEASED));
+        assertFalse(stream.heldForStep(11));
+        assertTrue(stream.offer(4,3,11,held));
+        assertFalse(stream.heldForStep(11)); // newer held is not the consumed input
+        var delayed=new Rac1ClankInput.Stream(4);
+        assertTrue(delayed.offer(4,1,10,held));
+        assertFalse(delayed.consume(12).fresh()); // not normal single-boundary delivery
+        assertTrue(delayed.at(12).jumpHeld());assertFalse(delayed.heldForStep(12));
+    }
+    @Test void coalescedPressReleaseRetainsOneServerDerivedEdgeWithoutReapplyingIt() {
+        var stream=new Rac1ClankInput.Stream(4);
+        assertTrue(stream.offer(4,1,10,new Rac1ClankInput(true,true,true,0,0,0)));
+        assertTrue(stream.offer(4,2,10,new Rac1ClankInput(false,false,true,0,0,0)));
+        assertFalse(stream.at(10).jumpHeld());
+        assertTrue(stream.takeJumpEdge(10));
+        assertFalse(stream.takeJumpEdge(10));
+        assertFalse(stream.offer(4,1,11,new Rac1ClankInput(true,true,true,0,0,0)));
+        assertFalse(stream.takeJumpEdge(11));
+    }
+    @Test void actualDescentCreditHasNoRequestedOrStaleOrUpwardShortcut() {
+        for(int flags=0;flags<32;flags++)for(double actual:new double[]{
+                0,-.001,-.03124,-.03125,-.108,.1,Double.NaN,Double.NEGATIVE_INFINITY}) {
+            boolean tick=(flags&1)!=0,eligible=(flags&2)!=0,proof=(flags&4)!=0;
+            boolean controlled=(flags&8)!=0,ground=(flags&16)!=0;
+            boolean expected=tick&&eligible&&proof&&controlled&&!ground
+                    &&Double.isFinite(actual)&&actual<=-.03125;
+            assertEquals(expected,Rac1ClankRuntime.descentCredit(tick,eligible,proof,
+                    controlled,ground,actual));
+        }
+    }
+    @Test void semanticMovementWireIsBoundedAndNeverAcceptsNonfiniteOrTrailingInput()throws Exception {
+        var sample=new Rac1ClankMovementWire.Input(8,12,new Rac1ClankInput(true,false,true,0,1,25));
+        byte[] bytes=Rac1ClankMovementWire.encode(sample);
+        assertEquals(41,bytes.length);
+        assertEquals(sample,Rac1ClankMovementWire.input(bytes));
+        for(int length:new int[]{0,1,40,42,257})
+            assertThrows(IOException.class,()->Rac1ClankMovementWire.input(Arrays.copyOf(bytes,length)));
+        byte[] flags=bytes.clone();flags[16]=(byte)8;
+        assertThrows(IOException.class,()->Rac1ClankMovementWire.input(flags));
+        for(int offset:new int[]{17,25,33})for(double invalid:new double[]{Double.NaN,Double.POSITIVE_INFINITY}) {
+            byte[] bad=bytes.clone();ByteBuffer.wrap(bad).putDouble(offset,invalid);
+            assertThrows(IOException.class,()->Rac1ClankMovementWire.input(bad));
+        }
+    }
+    @Test void authoritativeCheckpointRoundTripPreservesCurveBudgetAndNextStep()throws Exception {
+        var equipment=new Rac1ClankEquipment(true,true,true,true,Rac1ClankEquipment.Module.THRUSTER);
+        var motion=new Rac1ClankMotion(Rac1ClankClock.Profile.ORIGINAL_60);
+        var ground=new Rac1ClankMotion.Observation(true,0,false,true,false,2,Rac1ClankMotion.Vector.ZERO);
+        motion.input(new Rac1ClankInput(false,false,true,0,0,0));
+        for(int i=0;i<9;i++)motion.step(equipment,ground);
+        motion.input(new Rac1ClankInput(true,true,true,0,0,0));
+        for(int i=0;i<20;i++) {
+            var step=motion.step(equipment,i<9?ground:new Rac1ClankMotion.Observation(
+                    false,4,false,true,false,2,motion.velocity()));
+            motion.resolved(step.displacement(),false);
+        }
+        var correction=new Rac1ClankMovementWire.Correction(UUID.randomUUID(),8,12,100,
+                new Rac1ClankMotion.Vector(1,80,2),motion.state());
+        byte[] bytes=Rac1ClankMovementWire.encode(correction);
+        assertTrue(bytes.length<=Rac1ClankMovementWire.MAX_BYTES);
+        var copy=Rac1ClankMovementWire.correction(bytes);
+        assertEquals(correction,copy);
+        var restored=new Rac1ClankMotion(Rac1ClankClock.Profile.ORIGINAL_60);
+        restored.restore(copy.state());
+        var air=new Rac1ClankMotion.Observation(false,4,false,true,false,2,motion.velocity());
+        for(int i=0;i<20;i++) {
+            var a=motion.step(equipment,air);var b=restored.step(equipment,air);
+            assertEquals(a,b);
+            motion.resolved(a.displacement(),false);restored.resolved(b.displacement(),false);
+        }
+        assertTrue(restored.spentAirJump());
+    }
+    @Test void lifecycleInvalidationDropsBufferedEdgeButDoesNotRefillAirJump() {
+        var equipment=new Rac1ClankEquipment(true,true,false,true,Rac1ClankEquipment.Module.HELI);
+        var motion=new Rac1ClankMotion(Rac1ClankClock.Profile.ORIGINAL_60);
+        var ground=new Rac1ClankMotion.Observation(true,0,false,true,false,2,Rac1ClankMotion.Vector.ZERO);
+        motion.input(new Rac1ClankInput(true,true,true,0,0,0));
+        for(int i=0;i<6;i++)motion.step(equipment,ground);
+        var accepted=motion.step(equipment,ground);motion.resolved(accepted.displacement(),false);
+        motion.cancel();motion.discardBufferedInput();
+        assertTrue(motion.spentAirJump());
+        assertFalse(motion.step(equipment,new Rac1ClankMotion.Observation(false,4,false,true,false,2,
+                new Rac1ClankMotion.Vector(0,.05,0))).controlled());
+    }
+}

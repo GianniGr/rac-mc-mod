@@ -142,7 +142,7 @@ public final class Rac1AssetExtractor {
         }
 
         Rac1Skeleton converted = convert(skeleton, classScale * UNIT_SCALE);
-        List<Rac1Animation> animations = animations(assets, reader, classScale * UNIT_SCALE);
+        List<Rac1Animation> animations = animations(assets, reader, classNumber, classScale * UNIT_SCALE);
         Rac1Texture[] textures = textures(assets, entry, index.mobyTextures(),
                 entry.textureCount());
         Rac1SkinnedMesh skinned = new Rac1SkinnedMesh(positions, normals, uvs, mesh.indices(),
@@ -321,7 +321,7 @@ public final class Rac1AssetExtractor {
      * them.
      */
     private static List<Rac1Animation> animations(Rac1LevelAssets assets, MobyClassReader reader,
-                                                   float scale) throws AssetFormatException {
+                                                   int classNumber, float scale) throws AssetFormatException {
         List<Rac1Animation> animations = new ArrayList<>();
         boolean own = false;
         for (int slot = 0; slot < reader.sequenceCount(); slot++) {
@@ -333,7 +333,7 @@ public final class Rac1AssetExtractor {
             MobySequenceReader.Keys keys = reader.readSequence(offset);
             animations.add(convert("sequence_" + slot, keys, reader.jointCount(), scale));
         }
-        if (own) {
+        if (own || classNumber != ANIMATED_CLASS) {
             return animations;
         }
         int[] offsets = assets.coreIndex().ratchetSequences();
