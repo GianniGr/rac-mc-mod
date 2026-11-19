@@ -8,18 +8,51 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class Rac1ClankIntegrationTest {
-    @Test void damageHoldRequiresAcceptedCurrentTickAndCannotBeRefreshedByReplay() {
+    @Test void damageHoldBelongsToOneFreshAuthoritativeConsumptionNotReceiptTimeOrMotionGrace() {
         var stream=new Rac1ClankInput.Stream(4);
         var held=new Rac1ClankInput(true,true,false,0,0,0);
         assertTrue(stream.offer(4,1,10,held));
-        assertTrue(stream.heldThisTick(10));
+        assertFalse(stream.heldForStep(10)); // receipt alone cannot prove motion consumption
+        assertTrue(stream.consume(10).fresh());
+        assertTrue(stream.heldForStep(10));
         assertTrue(stream.at(11).jumpHeld()); // motion grace is unchanged
-        assertFalse(stream.heldThisTick(11));
+        assertFalse(stream.consume(11).fresh());
+        assertFalse(stream.heldForStep(11));
         assertFalse(stream.offer(4,1,11,held));
         assertFalse(stream.offer(3,2,11,held));
-        assertFalse(stream.heldThisTick(11));
+        assertFalse(stream.heldForStep(11));
         assertTrue(stream.offer(4,2,11,Rac1ClankInput.RELEASED));
-        assertFalse(stream.heldThisTick(11));
+        assertFalse(stream.heldForStep(11));
+    }
+    @Test void queuedPreviousWorldTickSerialCanProveExactlyItsNextConsumedStep() {
+        var stream=new Rac1ClankInput.Stream(4);
+        var held=new Rac1ClankInput(true,false,false,0,0,0);
+        assertTrue(stream.offer(4,8,65,held));
+        var consumed=stream.consume(66);
+        assertEquals(8,consumed.serial());assertEquals(65,consumed.receiptTick());
+        assertEquals(66,consumed.controlTick());assertTrue(consumed.fresh());
+        assertTrue(stream.heldForStep(66));
+        assertSame(consumed,stream.consume(66));
+        assertFalse(stream.consume(67).fresh());assertFalse(stream.heldForStep(67));
+        assertTrue(stream.at(67).jumpHeld()); // original grace unchanged
+        assertFalse(stream.offer(4,8,67,held));assertFalse(stream.heldForStep(67));
+        assertTrue(stream.offer(4,9,67,held));
+        assertFalse(stream.heldForStep(67)); // a second consume cannot re-own this tick
+        assertTrue(stream.consume(68).fresh());assertTrue(stream.heldForStep(68));
+    }
+    @Test void acceptedReleaseAfterConsumptionRevokesImmediatelyAndStaleUnconsumedSamplesFailClosed() {
+        var stream=new Rac1ClankInput.Stream(4);
+        var held=new Rac1ClankInput(true,true,false,0,0,0);
+        assertTrue(stream.offer(4,1,10,held));stream.consume(11);
+        assertTrue(stream.heldForStep(11));
+        assertTrue(stream.offer(4,2,11,Rac1ClankInput.RELEASED));
+        assertFalse(stream.heldForStep(11));
+        assertTrue(stream.offer(4,3,11,held));
+        assertFalse(stream.heldForStep(11)); // newer held is not the consumed input
+        var delayed=new Rac1ClankInput.Stream(4);
+        assertTrue(delayed.offer(4,1,10,held));
+        assertFalse(delayed.consume(12).fresh()); // not normal single-boundary delivery
+        assertTrue(delayed.at(12).jumpHeld());assertFalse(delayed.heldForStep(12));
     }
     @Test void coalescedPressReleaseRetainsOneServerDerivedEdgeWithoutReapplyingIt() {
         var stream=new Rac1ClankInput.Stream(4);

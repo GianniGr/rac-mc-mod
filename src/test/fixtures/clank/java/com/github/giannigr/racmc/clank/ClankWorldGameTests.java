@@ -10,6 +10,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.server.level.*;
+import net.minecraft.server.TickTask;
 import net.minecraft.server.network.*;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.level.GameType;
@@ -112,6 +113,7 @@ public final class ClankWorldGameTests {
                 for(int i=0;i<players.length;i++)if(event.getEntity()==players[i]) {
                     count[i]++;distance[i]=event.getDistance();
                     System.out.println("CLANK_FALL index="+i+" distance="+distance[i]+" count="+count[i]);
+                    System.out.println("CLANK_FALL_INPUT "+Rac1ClankRuntime.inputDiagnostics(players[i]));
                 }
             };
             net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
@@ -124,6 +126,100 @@ public final class ClankWorldGameTests {
             h.assertTrue(players[i].getHealth()==20-(float)Math.ceil(distance[i]-3)
                     &&players[i].getHealth()<20,"Native health disagrees with fall event index="+i
                     +" health="+players[i].getHealth()+" distance="+distance[i]);
+        }
+    }
+
+    private static void queueInput(ServerPlayer p,long serial,boolean held) {
+        var packet=new Rac1ClankMovementWire.Input(Rac1ClankServer.session(p).epoch(),serial,
+                Rac1ClankInput.digital(held,held,false,false,false,false,false,0));
+        p.server.tell(new TickTask(p.server.getTickCount(),()->{
+            Rac1ClankRuntime.input(p,packet);
+            System.out.println("CLANK_QUEUE_RECEIPT player="+p.getUUID()+" offered="+serial
+                    +" held="+held+" "+Rac1ClankRuntime.inputDiagnostics(p));
+        }));
+    }
+    private static void tickWithoutInput(ServerPlayer p) {
+        Vec3 before=p.position();p.doTick();
+        if(!Rac1ClankRuntime.diagnostics(p).controlled()) {
+            Vec3 actual=p.position().subtract(before);
+            p.doCheckFallDamage(actual.x,actual.y,actual.z,p.onGround());
+        }
+    }
+    @GameTest(template="empty",batch="clank_11_queued_boundary",timeoutTicks=60)
+    public static void queuedPriorWorldTickInputMustBelongToExactlyOneAuthoritativeLandingStep(GameTestHelper h) {
+        Vec3 base=platform(h);
+        var held=player(h,base.add(0,.8,8));var released=player(h,base.add(8,.8,8));
+        var stale=player(h,base.add(16,.8,8));
+        var players=new ServerPlayer[]{held,released,stale};
+        for(var p:players){equip(h,p,"heli");p.fallDistance=12;}
+        var falls=new Falls(players);
+        for(int tick=1;tick<=35;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                if(t==1)for(var p:players)queueInput(p,1,true);
+                else {
+                    if(t==2)for(var p:players) {
+                        var input=Rac1ClankRuntime.inputDiagnostics(p);
+                        h.assertTrue(input.acceptedSerial()==1&&input.receiptTick()
+                                        ==h.getLevel().getGameTime()-1,
+                                "Native task queue did not exercise the prior-world-tick receipt boundary: "+input);
+                    }
+                    for(var p:players) {
+                        System.out.println("CLANK_QUEUE_CONSUME_BEFORE world="+h.getLevel().getGameTime()
+                                +" player="+p.getUUID()+" "+Rac1ClankRuntime.inputDiagnostics(p));
+                        tickWithoutInput(p);
+                        System.out.println("CLANK_QUEUE_CONSUME_AFTER "+Rac1ClankRuntime.inputDiagnostics(p));
+                    }
+                    if(t==5)h.assertTrue(Rac1ClankServer.session(released).motion().action()
+                            ==Rac1ClankCapability.Action.GLIDE,"Accepted release changed minimum motion timer");
+                    if(t<20) {
+                        queueInput(held,t,true);
+                        queueInput(released,t,t<3);
+                        queueInput(stale,1,true); // replay never owns another consumed step
+                    }
+                }
+                if(t==35) {
+                    h.assertTrue(falls.count[0]==1&&falls.distance[0]==0&&held.getHealth()==20,
+                            "Queued fresh held Heli landing lost temporal proof");
+                    falls.damaged(h,1,12.79,12.81);
+                    falls.damaged(h,2,12.7,12.81);
+                    falls.close();done(h,players);
+                }
+            });
+        }
+    }
+    @GameTest(template="empty",batch="clank_12_release_at_landing",timeoutTicks=60)
+    public static void acceptedReleaseAfterConsumptionRevokesLandingEvenIfNewerHeldArrives(GameTestHelper h) {
+        Vec3 base=platform(h);var p=player(h,base.add(0,.8,8));equip(h,p,"heli");
+        p.fallDistance=12;var falls=new Falls(p);boolean[] revoked={false};
+        java.util.function.Consumer<net.neoforged.neoforge.event.entity.living.LivingFallEvent> release=event->{
+            if(event.getEntity()!=p)return;
+            h.assertTrue(Rac1ClankRuntime.inputDiagnostics(p).heldProof(),
+                    "No consumed held proof to revoke at landing");
+            long epoch=Rac1ClankServer.session(p).epoch();
+            Rac1ClankRuntime.input(p,new Rac1ClankMovementWire.Input(epoch,10000,Rac1ClankInput.RELEASED));
+            Rac1ClankRuntime.input(p,new Rac1ClankMovementWire.Input(epoch,10001,
+                    Rac1ClankInput.digital(true,true,false,false,false,false,false,0)));
+            var proof=Rac1ClankRuntime.inputDiagnostics(p);
+            h.assertTrue(proof.acceptedSerial()==10001&&proof.released()&&!proof.heldProof(),
+                    "Accepted release was overwritten by a later unconsumed held sample: "+proof);
+            revoked[0]=true;
+            System.out.println("CLANK_LATE_RELEASE "+proof);
+        };
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+                net.neoforged.bus.api.EventPriority.HIGH,release);
+        for(int tick=1;tick<=35;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                if(t==1)queueInput(p,1,true);
+                else {tickWithoutInput(p);if(t<20)queueInput(p,t,true);}
+                if(t==35) {
+                    h.assertTrue(revoked[0],"Release did not run inside the native landing boundary");
+                    falls.damaged(h,0,12.79,12.81);falls.close();
+                    net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(release);
+                    done(h,p);
+                }
+            });
         }
     }
 

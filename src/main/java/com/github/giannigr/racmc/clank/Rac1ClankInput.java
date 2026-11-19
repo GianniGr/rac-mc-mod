@@ -37,6 +37,7 @@ public record Rac1ClankInput(boolean jumpA, boolean jumpB, boolean crouch,
         private int receivedThisTick;
         private boolean acceptedHeld,pressed;
         private Rac1ClankInput sample = RELEASED;
+        private Consumed consumed=new Consumed(-1,-1,-1,false,RELEASED);
         public Stream(long epoch) {
             if (epoch < 0) throw new IllegalArgumentException("Invalid epoch");
             this.epoch = epoch;
@@ -61,9 +62,27 @@ public record Rac1ClankInput(boolean jumpA, boolean jumpB, boolean crouch,
                     ? RELEASED : sample;
         }
         public long acknowledgedSerial() { return acceptedSerial; }
-        /** Damage policy must not infer a same-tick hold from the motion grace period. */
-        public boolean heldThisTick(long tick) {
-            return receivedTick==tick&&sample.jumpHeld();
+        public long receivedTick() { return receivedTick; }
+        public record Consumed(long serial,long receiptTick,long controlTick,
+                               boolean fresh,Rac1ClankInput frame) {}
+        /**
+         * Once per authoritative tick. Main-thread network tasks may run before the next
+         * world-time increment; a new serial from that boundary belongs to this step.
+         * Reusing a sample for motion's four-tick grace never renews damage eligibility.
+         */
+        public Consumed consume(long tick) {
+            if(tick<0||tick<consumed.controlTick())throw new IllegalArgumentException("Invalid consume tick");
+            if(tick==consumed.controlTick())return consumed;
+            boolean fresh=acceptedSerial>consumed.serial()&&receivedTick>=0
+                    &&receivedTick<=tick&&tick-receivedTick<=1;
+            consumed=new Consumed(acceptedSerial,receivedTick,tick,fresh,at(tick));
+            return consumed;
+        }
+        public Consumed consumed() { return consumed; }
+        /** An unconsumed newer sample cannot supply proof for an already-running step. */
+        public boolean heldForStep(long tick) {
+            return consumed.controlTick()==tick&&consumed.fresh()&&consumed.frame().jumpHeld()
+                    &&consumed.serial()==acceptedSerial&&sample.jumpHeld();
         }
         public boolean takeJumpEdge(long tick) {
             boolean result=pressed&&receivedTick>=0&&tick>=receivedTick&&tick-receivedTick<=4;

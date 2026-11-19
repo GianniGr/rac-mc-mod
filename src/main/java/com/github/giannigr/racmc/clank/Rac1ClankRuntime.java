@@ -86,7 +86,7 @@ public final class Rac1ClankRuntime {
             cancel(c);c.lastPosition=player.position();correct(player);return;
         }
         var motion=c.session.motion();
-        motion.input(c.input.at(tick));
+        motion.input(c.input.consume(tick).frame());
         if(c.input.takeJumpEdge(tick))motion.bufferJumpEdge();
         Vec3 nativeVelocity=player.position().subtract(c.lastPosition);
         if(motion.action()!=Action.IDLE)nativeVelocity=player.getDeltaMovement();
@@ -199,7 +199,7 @@ public final class Rac1ClankRuntime {
                 ||c.requestedY>0||!c.session.motion().airborne()||!c.fall.active())return;
         double distance=Math.max(0,event.getDistance());
         if(c.heliGlide) {
-            boolean held=!c.heliReleased&&c.input.heldThisTick(c.tick)
+            boolean held=!c.heliReleased&&c.input.heldForStep(c.tick)
                     &&c.session.equipment().selected()==Rac1ClankEquipment.Module.HELI
                     &&c.session.motion().action()==Action.GLIDE
                     &&c.session.snapshot(c.tick).actionSerial()==c.heliActionSerial;
@@ -232,6 +232,17 @@ public final class Rac1ClankRuntime {
     public static Diagnostics diagnostics(ServerPlayer player) {
         var c=CONTROLS.get(player.getUUID());
         return c==null?new Diagnostics(-1,0,0,false,false,0,false)
-                :new Diagnostics(c.tick,c.steps,c.actualY,c.controlled,c.proof,c.creditCount,c.fall.active());
+                 :new Diagnostics(c.tick,c.steps,c.actualY,c.controlled,c.proof,c.creditCount,c.fall.active());
+    }
+    public record InputDiagnostics(long receiptTick,long acceptedSerial,long controlTick,
+                                   long consumedSerial,long consumedReceiptTick,boolean fresh,
+                                   boolean heldProof,boolean released,long actionSerial) {}
+    public static InputDiagnostics inputDiagnostics(ServerPlayer player) {
+        var c=CONTROLS.get(player.getUUID());
+        return c==null?new InputDiagnostics(-1,-1,-1,-1,-1,false,false,false,-1)
+                :new InputDiagnostics(c.input.receivedTick(),c.input.acknowledgedSerial(),c.tick,
+                        c.input.consumed().serial(),c.input.consumed().receiptTick(),
+                        c.input.consumed().fresh(),c.input.heldForStep(c.tick),
+                        c.heliReleased,c.heliActionSerial);
     }
 }
