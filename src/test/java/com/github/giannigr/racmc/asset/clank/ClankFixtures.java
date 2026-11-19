@@ -14,8 +14,8 @@ public final class ClankFixtures {
         return Rac1DiscIdentity.key(p.revision(), p);
     }
     public static Rac1AnimatedAsset model(int id) {
-        int count = switch (id) { case 601 -> 33; case 607 -> 36; default -> 15; };
-        int clips = id == 601 ? 18 : 9;
+        int count = switch (id) { case 601 -> 33; case 607 -> 36; case 609 -> 10; default -> 15; };
+        int clips = id == 601 ? 18 : id == 609 ? 5 : 9;
         float[] inverse = new float[count * 16], rotations = new float[count * 4];
         int[] parents = new int[count];
         Arrays.fill(parents, -1);

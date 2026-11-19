@@ -90,7 +90,10 @@ public final class Rac1ClankRuntime {
         }
     }
     @SubscribeEvent public static void before(PlayerTickEvent.Pre event) {
-        if(event.getEntity() instanceof ServerPlayer player)stepTick(player);
+        if(event.getEntity() instanceof ServerPlayer player) {
+            stepTick(player);
+            Rac1HydroRuntime.stepTick(player); // Aerial water cancellation runs first; exactly one travel owner.
+        }
     }
     /** Public for exact real-ServerLevel testing; duplicate invocations in a tick are inert. */
     public static void stepTick(ServerPlayer player) {
@@ -217,6 +220,7 @@ public final class Rac1ClankRuntime {
         }
     }
     public static boolean ownsTravel(ServerPlayer player) {
+        if(Rac1HydroRuntime.ownsTravel(player))return true;
         var c=CONTROLS.get(player.getUUID());
         return c!=null&&c.player==player&&c.tick==player.serverLevel().getGameTime()
                 &&c.controlled&&(eligible(c)||(c.landed&&c.world==player.level()
@@ -225,6 +229,7 @@ public final class Rac1ClankRuntime {
     }
     public static ServerboundMovePlayerPacket authoritativePacket(ServerPlayer player,
             ServerboundMovePlayerPacket packet) {
+        if(Rac1HydroRuntime.ownsTravel(player))return Rac1HydroRuntime.authoritativePacket(player,packet);
         var c=CONTROLS.get(player.getUUID());
         if(!ownsTravel(player)||c==null||!eligible(c))return packet;
         return new ServerboundMovePlayerPacket.PosRot(player.getX(),player.getY(),player.getZ(),
@@ -272,17 +277,20 @@ public final class Rac1ClankRuntime {
     }
     @SubscribeEvent public static void knockback(LivingKnockBackEvent event) {
         if(event.getEntity() instanceof ServerPlayer player) {
+            Rac1HydroRuntime.invalidate(player);
             var c=CONTROLS.get(player.getUUID());
             if(c!=null&&(c.grace.active()||c.fall.active()||c.session.motion().action()!=Action.IDLE))
                 Rac1ClankServer.cancelEpisode(player);
         }
     }
     public static void invalidate(ServerPlayer player) {
+        Rac1HydroRuntime.invalidate(player);
         var c=CONTROLS.remove(player.getUUID());
         if(c!=null)cancel(c);
     }
     /** Called on the native connection teleport path, including same-world teleports and corrections. */
     public static void teleport(ServerPlayer player) {
+        Rac1HydroRuntime.invalidate(player);
         var c=CONTROLS.get(player.getUUID());
         if(c!=null&&(c.grace.active()||c.fall.active()||c.session.motion().action()!=Action.IDLE))
             Rac1ClankServer.cancelEpisode(player);

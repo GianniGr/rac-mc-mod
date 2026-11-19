@@ -32,6 +32,7 @@ public final class ClankWorldGameTests {
         int disconnects;
         Rac1ClankMovementWire.Correction lastCorrection;
         Rac1ClankSession.Snapshot lastSnapshot;
+        Rac1HydroWire.Snapshot lastHydro;
         private static Connection fixtureConnection() {
             return new Connection(PacketFlow.SERVERBOUND) {
                 private final io.netty.channel.embedded.EmbeddedChannel fixtureChannel=
@@ -44,6 +45,9 @@ public final class ClankWorldGameTests {
                     CommonListenerCookie.createInitial(profile,false));
         }
         @Override public void send(Packet<?> packet) {
+            if(packet instanceof net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket custom
+                    &&custom.payload() instanceof Rac1HydroNetwork.Snapshot hydro)
+                lastHydro=hydro.value();
             if(packet instanceof net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket custom
                     &&custom.payload() instanceof Rac1ClankNetwork.Correction correction)
                 lastCorrection=correction.value();
@@ -99,7 +103,7 @@ public final class ClankWorldGameTests {
         p.doTick(); // real Player.tick -> PlayerTickEvent.Pre -> native travel mixin
     }
     private static void done(GameTestHelper h,ServerPlayer... players) {
-        for(var p:players){Rac1ClankRuntime.invalidate(p);p.discard();}
+        for(var p:players){Rac1HydroRuntime.forget(p);Rac1ClankRuntime.invalidate(p);p.discard();}
         h.succeed();
     }
     /** Native packet-side fall processing for fixture-owned ordinary travel only. */
@@ -147,6 +151,187 @@ public final class ClankWorldGameTests {
             h.assertTrue(players[i].getHealth()==20-(float)Math.ceil(distance[i]-3)
                     &&players[i].getHealth()<20,"Native health disagrees with fall event index="+i
                     +" health="+players[i].getHealth()+" distance="+distance[i]);
+        }
+    }
+
+    private static Vec3 pool(GameTestHelper h) {
+        Vec3 base=platform(h);var origin=BlockPos.containing(base);
+        for(int x=-2;x<=22;x++)for(int z=-2;z<=22;z++)for(int y=0;y<=6;y++)
+            h.getLevel().setBlock(origin.offset(x,y,z),Blocks.WATER.defaultBlockState(),3);
+        return base;
+    }
+    private static void hydro(GameTestHelper h,ServerPlayer p,boolean on) {
+        equip(h,p,"hydro "+(on?"on":"off"));
+    }
+    private static void hydroFrame(ServerPlayer p,long serial,boolean thrust,boolean rise,boolean dive) {
+        var s=Rac1HydroRuntime.snapshot(p);
+        Rac1HydroRuntime.input(p,new Rac1HydroWire.Input(s.epoch(),serial,
+                new Rac1HydroMotion.Input(thrust,rise,dive,0,0,0)));
+        p.doTick();
+    }
+    @GameTest(template="empty",batch="clank_20_hydro_gate",timeoutTicks=50)
+    public static void hydroSurfaceSubmergedWadingAndRestoreDoNotRequireSprint(GameTestHelper h) {
+        var base=pool(h);var p=player(h,base.add(5,9,5));
+        equip(h,p,"thruster");hydro(h,p,true);
+        p.setPos(base.add(5,5.9,5));p.setOnGround(false);p.setSprinting(false);
+        h.runAtTickTime(1,()->{
+            p.setDeltaMovement(Vec3.ZERO);hydroFrame(p,1,false,false,false);
+            var s=Rac1HydroRuntime.snapshot(p);
+            h.assertTrue(s.wet()&&s.water()==Rac1HydroWater.Mode.SURFACE&&!s.controlled(),
+                    "No-Sprint surface failed automatic nonthrust override: "+s);
+            h.assertTrue(s.dry()==Rac1ClankEquipment.Module.THRUSTER,"Dry Thruster overwritten");
+            p.setPos(base.add(5,2,5));p.setDeltaMovement(Vec3.ZERO);
+        });
+        h.runAtTickTime(2,()->{
+            hydroFrame(p,2,false,false,false);var s=Rac1HydroRuntime.snapshot(p);
+            h.assertTrue(s.wet()&&s.water()==Rac1HydroWater.Mode.SUBMERGED&&!s.controlled(),
+                    "Submerged model swap required thrust");
+            p.setPos(base.add(5,6.1,5));p.setDeltaMovement(Vec3.ZERO);
+            var floor=BlockPos.containing(base.add(5,5,5));
+            for(int x=-1;x<=1;x++)for(int z=-1;z<=1;z++)
+                h.getLevel().setBlock(floor.offset(x,0,z),Blocks.STONE.defaultBlockState(),3);
+        });
+        h.runAtTickTime(3,()->{
+            hydroFrame(p,3,true,false,false);var s=Rac1HydroRuntime.snapshot(p);
+            h.assertTrue(!s.wet()&&!s.controlled()&&s.water()==Rac1HydroWater.Mode.WADING,
+                    "Wading admitted Hydro: "+s);
+            p.setPos(base.add(5,9,5));p.setDeltaMovement(Vec3.ZERO);
+        });
+        h.runAtTickTime(7,()->{
+            hydroFrame(p,7,false,false,false);var s=Rac1HydroRuntime.snapshot(p);
+            h.assertTrue(!s.wet()&&s.dry()==Rac1ClankEquipment.Module.THRUSTER,
+                    "Exit did not preserve selected dry module");
+            for(int i=0;i<3;i++)s=Rac1HydroRuntime.snapshot(p);
+            hydro(h,p,false);
+            h.assertTrue(!Rac1HydroRuntime.snapshot(p).access()
+                    &&Rac1ClankServer.session(p).equipment().selected()==Rac1ClankEquipment.Module.THRUSTER,
+                    "Off cleared dry selection");
+            System.out.println("HYDRO_GATE surface/submerged/wading/restore PASS");done(h,p);
+        });
+    }
+    @GameTest(template="empty",batch="clank_21_hydro_permission",timeoutTicks=30)
+    public static void hydroPermissionRemoteSnapshotAndSessionCleanup(GameTestHelper h) {
+        var base=pool(h);var p=player(h,base.add(2,9,2));var observer=player(h,base.add(12,9,12));
+        h.assertTrue(!Rac1HydroRuntime.configure(p.createCommandSourceStack().withPermission(2),p,true),
+                "Unworn Clank granted Hydro");
+        equip(h,p,"heli");
+        h.assertTrue(!Rac1HydroRuntime.configure(p.createCommandSourceStack().withPermission(0),p,true),
+                "Nonoperator granted Hydro");
+        hydro(h,p,true);long granted=Rac1HydroRuntime.snapshot(p).epoch();
+        hydro(h,p,true);h.assertTrue(granted==Rac1HydroRuntime.snapshot(p).epoch(),"Repeated on renewed epoch");
+        p.setPos(base.add(2,2,2));
+        h.runAtTickTime(1,()->{
+            hydroFrame(p,1,false,false,false);
+            Rac1HydroRuntime.tracking(observer,p);
+            var remote=((Sink)observer.connection).lastHydro;
+            h.assertTrue(remote!=null&&remote.equals(Rac1HydroRuntime.snapshot(p))&&remote.wet(),
+                    "Late observer lacks actual authoritative override");
+            Rac1ClankRuntime.teleport(p);
+            var reset=Rac1HydroRuntime.snapshot(p);
+            h.assertTrue(reset.access()&&!reset.controlled()&&!reset.wet()&&reset.epoch()>granted,
+                    "Teleport did not invalidate transient Hydro episode");
+            Rac1HydroRuntime.input(p,new Rac1HydroWire.Input(granted,999,
+                    new Rac1HydroMotion.Input(true,false,false,0,0,0)));
+            equip(h,p,"thruster");
+            h.assertTrue(Rac1HydroRuntime.snapshot(p).access(),"Wet dry-selection change lost session access");
+            hydro(h,p,false);h.assertTrue(!Rac1HydroRuntime.snapshot(p).access(),"Off failed");
+            Rac1HydroRuntime.tracking(observer,p);
+            h.assertTrue(!((Sink)observer.connection).lastHydro.access()
+                    &&!((Sink)observer.connection).lastHydro.wet(),
+                    "Late re-tracker retained stale Hydro after off");
+            hydro(h,p,true);equip(h,p,"unequip");
+            h.assertTrue(!Rac1HydroRuntime.snapshot(p).access(),"Unequip retained Hydro access");
+            equip(h,p,"heli");hydro(h,p,true);
+            p.kill();
+            h.assertTrue(!Rac1HydroRuntime.snapshot(p).access(),"Actual death retained Hydro test access");
+            System.out.println("HYDRO_PERMISSION remote/teleport/off/unequip/death PASS");done(h,p,observer);
+        });
+    }
+    @GameTest(template="empty",batch="clank_22_hydro_thrust",timeoutTicks=60)
+    public static void hydroUnderwaterPitchNativeAirCollisionAndStaleInput(GameTestHelper h) {
+        var base=pool(h);var up=player(h,base.add(3,9,3));var down=player(h,base.add(10,9,10));
+        var players=new ServerPlayer[]{up,down};
+        for(var p:players){equip(h,p,"heli");hydro(h,p,true);p.setPos(base.add(p==up?3:10,2,p==up?3:10));
+            p.setDeltaMovement(Vec3.ZERO);p.setOnGround(false);p.setAirSupply(200);}
+        for(int tick=1;tick<=12;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                for(var p:players) {
+                    hydroFrame(p,t,true,p==up,p==down);
+                    h.assertTrue(Rac1HydroRuntime.sourceSteps(p)==t*3,"Hydro not exactly three source60 steps/tick");
+                    h.assertTrue(h.getLevel().noCollision(p,p.getBoundingBox().deflate(1e-6)),"Hydro penetrated blocks");
+                    long count=Rac1HydroRuntime.sourceSteps(p);Rac1HydroRuntime.stepTick(p);
+                    h.assertTrue(count==Rac1HydroRuntime.sourceSteps(p),"Duplicate tick advanced Hydro");
+                    h.assertTrue(Rac1ClankRuntime.ownsTravel(p),"Native travel owner missing during thrust");
+                }
+                if(t==12) {
+                    h.assertTrue(up.getY()>base.y+2&&down.getY()<base.y+2,"Jump/Sneak did not pitch up/down");
+                    h.assertTrue(up.getAirSupply()<200&&down.getAirSupply()<200,"Hydro prevented native air drain");
+                }
+            });
+        }
+        h.runAtTickTime(13,()->{
+            up.doTick();var s=Rac1HydroRuntime.snapshot(up);
+            h.assertTrue(s.motion().stage()!=Rac1HydroMotion.Stage.THRUST,"Stale thrust sustained power");
+            up.setPos(base.add(3,9,3));up.setDeltaMovement(Vec3.ZERO);
+            down.setPos(base.add(10,9,10));down.setDeltaMovement(Vec3.ZERO);
+        });
+        h.runAtTickTime(14,()->{
+            for(var p:players){hydroFrame(p,14,true,true,false);
+                h.assertTrue(!Rac1HydroRuntime.snapshot(p).controlled(),"Sprint powered dry movement");}
+            System.out.println("HYDRO_THRUST pitch/air/collision/freshness/dry PASS");done(h,players);
+        });
+    }
+    @GameTest(template="empty",batch="clank_23_hydro_coexist",timeoutTicks=60)
+    public static void hydroYieldsToNativeWaterModifiersAndStopsAtWall(GameTestHelper h) {
+        var base=pool(h);var p=player(h,base.add(5,9,5));
+        equip(h,p,"heli");hydro(h,p,true);p.setPos(base.add(5,2,5));p.setOnGround(false);
+        h.assertTrue(Rac1HydroWater.observe(p).propulsion(),"Still deep source water must permit propulsion");
+        p.getAbilities().flying=true;
+        h.assertTrue(!Rac1HydroWater.observe(p).compatible(),"Flight must yield");p.getAbilities().flying=false;
+        p.hurtTime=5;h.assertTrue(!Rac1HydroWater.observe(p).propulsion(),"Hurt must yield");p.hurtTime=0;
+        p.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                net.minecraft.world.effect.MobEffects.DOLPHINS_GRACE,100));
+        h.assertTrue(!Rac1HydroWater.observe(p).propulsion(),"Dolphin's Grace must yield");
+        p.removeAllEffects();
+        var attribute=p.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.WATER_MOVEMENT_EFFICIENCY);
+        double original=attribute.getBaseValue();attribute.setBaseValue(.5);
+        h.assertTrue(!Rac1HydroWater.observe(p).propulsion(),"Depth Strider attribute must yield");
+        attribute.setBaseValue(original);
+        var feet=BlockPos.containing(p.position());
+        h.getLevel().setBlock(feet,Blocks.BUBBLE_COLUMN.defaultBlockState(),3);
+        h.assertTrue(!Rac1HydroWater.observe(p).propulsion(),"Bubble column must yield");
+        h.getLevel().setBlock(feet,Blocks.WATER.defaultBlockState(),3);
+        h.getLevel().setBlock(feet.east(),Blocks.AIR.defaultBlockState(),3);
+        h.getLevel().setBlock(feet,Blocks.WATER.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.LiquidBlock.LEVEL,1),3);
+        h.assertTrue(h.getLevel().getFluidState(feet).getFlow(h.getLevel(),feet).lengthSqr()>0,
+                "Flow fixture did not create a native current");
+        h.assertTrue(!Rac1HydroWater.observe(p).propulsion(),"Native current must yield");
+        h.getLevel().setBlock(feet.east(),Blocks.WATER.defaultBlockState(),3);
+        h.getLevel().setBlock(feet,Blocks.WATER.defaultBlockState(),3);
+        p.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                net.minecraft.world.effect.MobEffects.WATER_BREATHING,100));
+        h.assertTrue(Rac1HydroWater.observe(p).propulsion(),"Native breathing effect need not disable Hydro");
+        p.removeAllEffects();
+        var origin=BlockPos.containing(base);
+        for(int x=3;x<=7;x++)for(int y=0;y<=6;y++)
+            h.getLevel().setBlock(origin.offset(x,y,7),Blocks.STONE.defaultBlockState(),3);
+        for(int tick=1;tick<=22;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                hydroFrame(p,t,true,false,false);
+                h.assertTrue(p.getZ()<=base.z+7-.8+1e-5,
+                        "Controlled Hydro crossed native wall: "+p.position());
+                if(t==22) {
+                    h.assertTrue(p.horizontalCollision,"Hydro never reached wall");
+                    var state=Rac1HydroRuntime.snapshot(p);
+                    h.assertTrue(Math.abs(state.motion().effective().z())<1e-6,"Collision retained requested velocity");
+                    Rac1ClankServer.logout(new net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent(p));
+                    h.assertTrue(!Rac1HydroRuntime.snapshot(p).access(),"Logout retained Hydro");
+                    System.out.println("HYDRO_COEXIST modifiers/bubbles/native-wall/logout PASS");done(h,p);
+                }
+            });
         }
     }
 

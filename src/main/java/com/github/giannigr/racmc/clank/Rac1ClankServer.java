@@ -70,11 +70,13 @@ public final class Rac1ClankServer {
         var state = session(target);
         state.testEquipment(module);
         state.invalidate(epoch());
+        Rac1HydroRuntime.equipmentChanged(target);
         broadcast(target);
         Rac1ClankRuntime.correct(target);
     }
     @SubscribeEvent public static void login(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            Rac1HydroRuntime.forget(player);
             SESSIONS.put(player.getUUID(), new Rac1ClankSession(player.getUUID(), epoch(),
                     Rac1ClankEquipment.EMPTY));
             broadcast(player);
@@ -82,8 +84,10 @@ public final class Rac1ClankServer {
     }
     @SubscribeEvent public static void tracking(PlayerEvent.StartTracking event) {
         if (event.getEntity() instanceof ServerPlayer observer
-                && event.getTarget() instanceof ServerPlayer target)
+                && event.getTarget() instanceof ServerPlayer target) {
             PacketDistributor.sendToPlayer(observer, packet(target));
+            Rac1HydroRuntime.tracking(observer,target);
+        }
     }
     @SubscribeEvent public static void dimension(PlayerEvent.PlayerChangedDimensionEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
@@ -94,6 +98,7 @@ public final class Rac1ClankServer {
     }
     @SubscribeEvent public static void respawn(PlayerEvent.PlayerRespawnEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            Rac1HydroRuntime.forget(player);
             Rac1ClankRuntime.invalidate(player);
             session(player).testEquipment(Rac1ClankEquipment.Module.NONE);
             session(player).invalidate(epoch());
@@ -102,6 +107,7 @@ public final class Rac1ClankServer {
     }
     @SubscribeEvent public static void death(LivingDeathEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            Rac1HydroRuntime.forget(player);
             Rac1ClankRuntime.invalidate(player);
             session(player).testEquipment(Rac1ClankEquipment.Module.NONE);
             session(player).invalidate(epoch());
@@ -109,10 +115,12 @@ public final class Rac1ClankServer {
         }
     }
     @SubscribeEvent public static void logout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if(event.getEntity() instanceof ServerPlayer player)Rac1HydroRuntime.forget(player);
         if(event.getEntity() instanceof ServerPlayer player)Rac1ClankRuntime.invalidate(player);
         SESSIONS.remove(event.getEntity().getUUID());
     }
     @SubscribeEvent public static void stopped(ServerStoppedEvent event) {
+        Rac1HydroRuntime.clear();
         Rac1ClankRuntime.clear(); SESSIONS.clear();
     }
 }

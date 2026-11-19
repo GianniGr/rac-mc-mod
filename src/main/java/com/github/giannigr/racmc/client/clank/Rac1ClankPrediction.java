@@ -65,6 +65,7 @@ public final class Rac1ClankPrediction {
     private static boolean travel(Player entity) {
         var player=Minecraft.getInstance().player;
         if(entity!=player||player==null)return false;
+        if(Rac1HydroClient.travel(player))return true;
         var view=Rac1ClankClient.VIEWS.get(player.getUUID());
         if(view==null||!view.equipment().worn()||epoch!=view.epoch()
                 ||world!=player.level()||!Rac1ClankNativeCollision.compatible(player)){

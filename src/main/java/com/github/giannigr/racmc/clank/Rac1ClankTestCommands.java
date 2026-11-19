@@ -29,6 +29,19 @@ public final class Rac1ClankTestCommands {
                 return 1;
             }));
         }
+        var hydro=Commands.literal("hydro");
+        for(boolean on:new boolean[]{true,false})hydro.then(Commands.literal(on?"on":"off").executes(context->{
+            var player=EntityArgument.getPlayer(context,"player");
+            if(!Rac1HydroRuntime.configure(context.getSource(),player,on)) {
+                context.getSource().sendFailure(Component.literal("Hydro test access denied: permission2 and worn Clank required."));
+                return 0;
+            }
+            context.getSource().sendSuccess(()->Component.literal("Session-only Hydro test access "
+                    +(on?"on":"off")+" for "+player.getGameProfile().getName()
+                    +"; no permanent unlock or Creative entry."),true);
+            return 1;
+        }));
+        target.then(hydro);
         event.getDispatcher().register(Commands.literal("clanktest")
                 .requires(source -> source.hasPermission(2)).then(target));
     }

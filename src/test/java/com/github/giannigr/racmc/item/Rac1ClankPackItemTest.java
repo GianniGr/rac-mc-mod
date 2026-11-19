@@ -8,6 +8,15 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class Rac1ClankPackItemTest {
+    @Test void hydroHasNoRegisteredItemCreativeFixtureOrRecipe() throws Exception {
+        assertFalse(net.minecraft.core.registries.BuiltInRegistries.ITEM.keySet().stream()
+                .anyMatch(id->id.getNamespace().equals("racmc")&&id.getPath().contains("hydro")));
+        var root=Path.of(System.getProperty("racmc.projectDir"),"src/main/resources");
+        try(var files=Files.walk(root)) {
+            assertFalse(files.anyMatch(path->path.getFileName().toString().contains("hydro")),
+                    "No Hydro item/recipe/model entry may ship");
+        }
+    }
     @Test void registeredItemsHaveImmutableDistinctModulesAndNoEquipmentSlotOrDurability() {
         var heli=RacMcItems.CLANK_HELI_PACK.get();var thruster=RacMcItems.CLANK_THRUSTER_PACK.get();
         assertEquals(Module.HELI,heli.module());assertEquals(Module.THRUSTER,thruster.module());

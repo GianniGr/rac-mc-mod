@@ -4,6 +4,8 @@ This is an **aerial moveset integration checkpoint**, not completion of either
 feature. Native Steve remains the player. The Creative-item and operator session setup below
 can equip the visible backpack. The independent source-step controller is tested,
 and the approved travel/network/fall hooks are installed in the current integration.
+The frozen aerial/Creative review target is **`e979560a11c107908cc35d8054b367560d49cf0d`**.
+The later, separately authorized Hydro follow-on below is not part of that target.
 The owner subsequently approved a Heli-only landing policy correction. P36's fresh
 normal build and 21 real-player headless tests pass; independent T22 and actual
 client/owner playtesting remain required. There is no survival acquisition,
@@ -59,7 +61,8 @@ zero failures) and all 21 native world tests, including the prior 19 movement ca
 
 `asset/clank/Rac1ClankImporter.read(Path)` reuses the full retail-image validator,
 then the existing Novalis extractor. It imports wearable **601**, separate
-Heli-Pack **607**, and separate Thruster-Pack **608**. Hydro609 is not a feature.
+Heli-Pack **607**, and separate Thruster-Pack **608**. The optional Hydro609
+follow-on uses a separate in-memory assembly; it does not change this bundle.
 The typed bundle checks classes, skeleton sizes, all original component sequences,
 source timing and Clank's antenna attachment. It owns validated encoded copies:
 `copyModel(Role)` returns a detached mutable generic model, to copy once per
@@ -260,10 +263,10 @@ approved integration is installed; verification status:
 2. Fresh normal build passed; independent exact-candidate T22 checks remain.
 3. Verify native input/prediction/action animations with dedicated/two-client runtime.
 
-Hydro609 is deferred until the aerial moveset is playable, independently checked
-and owner-playtested. Current aerial water gates are not a final “no Clank
-swimming” product policy. No Hydro research, bundle expansion or water boost is
-part of this checkpoint. The observed lower-cape overlap is owner-accepted;
+Hydro609 was excluded from the frozen aerial checkpoint. The owner subsequently
+authorized the separate temporary test implementation described below while T22
+verifies that exact aerial checkpoint in another worktree.
+The observed lower-cape overlap is owner-accepted;
 native cape/mesh/mount are not hidden or rescaled.
 
 Native collision substeps, high/long/glide admission, prediction/reconciliation,
@@ -292,3 +295,90 @@ Format/behavior facts: independently inspected supported retail discs and R13's
 [ReRAC ae1e343 (ISC)](https://github.com/re-rac/rerac/tree/ae1e3432a0d5e21bd08d3872d3b04afef98be666).
 Implementation and tests are independent MIT project code, not copied upstream
 implementation. No GPL dependency/code or proprietary game assets are included.
+
+## Later Hydro test follow-on (not the frozen aerial review target)
+
+Permission2 `/clanktest <player> hydro on|off` controls **temporary session test
+access**, requiring an already-worn Clank for `on`. Repeating `on` is idempotent.
+This does not grant Clank/Heli/Thruster, consume an item, or add ownership/save data.
+There is **no Hydro Creative entry, item, recipe, purchase or persistence**.
+Existing Heli/Thruster Creative items are temporary test fixtures too, not production
+unlock semantics. The existing equipment codec/module enum remains unchanged.
+
+Access survives a dry-pack switch, dimension change and teleport; those events
+invalidate the wet action and input epoch. Off/unequip/death/respawn/logout/server
+stop clear it. The authoritative dry selection is never replaced by Hydro, so
+exit/off returns the exact prior Heli/Thruster selection; explicitly switching the
+dry fixture while wet changes that remembered selection rather than granting access.
+
+### Minecraft water predicate (explicit host adaptation)
+
+Native `Entity.updateSwimming()` requires `isSprinting()` to enter **and** continue;
+`Player.updateSwimming()` also excludes flight. Thus `isSwimming()` alone would
+violate automatic no-Sprint equip. Hydro samples native fluid volumes, eye immersion
+and native collision support independently, without forcing Sprint or a swim pose:
+
+- No body water-volume overlap: dry. Rain, water contact flags and lava do not count.
+- Eye point below actual native water surface: submerged, even on a deep pool floor.
+- Otherwise: surface only if unsupported (floor distance >.6 blocks) and body
+  immersion >=.8 blocks; an existing native swimming pose may use immersion >.2.
+- Other water overlap: wading, with no Hydro override or power.
+
+These are Minecraft thresholds, **not measured retail distances or a universal
+fluid API**. They let a nonsprinting standing body enter surface swim without
+requiring Ctrl, while preserving native shallow-wading behavior. Native surface
+travel, Jump/Sneak outside admitted propulsion and Steve pose remain vanilla.
+
+### Controls, movement owner and coexistence
+
+Configured **Sprint key held** requests thrust only while eye-submerged, never
+from native sprint/toggle state or a hardcoded Ctrl key. No direction key is needed.
+Configured Jump pitches up; Sneak pitches down; Jump wins both. Direction keys
+request yaw-relative heading (back turns, not reverse gear); normalized diagonals,
+positive facing speed, no camera-pitch coupling or added vertical impulse.
+
+Independent source60 controller: three bounded native-collision substeps per MC
+tick, 1 source unit mapped to 1 block, target7 units/s, accel13/brake8 units/s²,
+yaw spring .007/.08 capped300°/s; pitch .015/.2, ±78°, capped70°/s. Ordinary
+stroke-to-thrust waits strict >20 source steps; an idle start does not. Surface
+dive entry can use the strict >40-step initial dive window. Released thrust yields
+to native directional swimming, or collision-resolved linear8-units/s² drift.
+Digital keys use full pressure; exact original nonpressure/PAL trajectories are
+not certified. Native ordinary swim pulses/surface movement are not replaced.
+
+Aerial water cancellation runs first. Hydro owns native travel only after actual
+server-authoritative collision movement; the existing connection adapter ignores
+client position during those ticks. Input is epoch/serial/rate bounded; stale
+samples cannot sustain thrust. Native oxygen, drowning, damage and collision
+remain active. Hydro grants **no Heli fall grace, flight flags or hazard immunity**.
+
+Propulsion yields to vehicles, spectators, flight/elytra, sleeping/spin/climbing,
+levitation, hurt/teleport, flowing water, bubble columns, Dolphin's Grace and
+nonzero native water-movement-efficiency (including Depth Strider). Compatible
+surface/submerged players may still wear the override without thrust. Conduit/
+Water Breathing keep their native oxygen behavior; Hydro never adds breathing.
+External velocity changes cancel the powered episode rather than overwriting
+currents/knockback. This conservative coexistence policy is not original-current
+parity, and enhanced-swim composition remains a future product choice.
+
+### Semantic visuals and limits
+
+A separate bounded Hydro protocol carries access/effective wet category, prior dry
+selection, action/collision checkpoint and source-timed put-away/gap/unfold/fold
+phases to self and late observers. No proprietary data or private path crosses it.
+The existing torso layer/mount/native skin/armor/cape stays intact. Optional local
+609 uses the existing validated media path/extractor and shared texture/mesh APIs;
+no new extraction was executed to develop this change. No substitute art is bundled.
+Nominal lifecycle is2 old-pack updates,1 gap,14 unfold; exit6 fold,1 restore gap.
+Surface movement uses609:3/601:16, distinct from underwater thrust/idle.
+
+Actual GPU appearance, authored transition blending/material fidelity, remapped
+physical-key input and two-real-client synchronization still require separately
+cleared T22/owner verification. Headless packet sinks are not real network clients.
+No live client is launched while the owner's T22 runtime is active.
+
+P36's fresh Hydro full build passed: **847 passed,51 skipped,0 failures/errors**
+from179 JUnit suites/898 tests. All **25/25 native tests** passed (four Hydro
+cases plus all21 frozen aerial/Creative regressions). The normal JAR excludes
+opt-in Clank world fixtures and proprietary/cache payloads. This is implementation
+evidence, not independent T22 or owner acceptance.

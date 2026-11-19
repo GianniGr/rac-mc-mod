@@ -26,6 +26,7 @@ public final class Rac1ClankLayer extends RenderLayer<AbstractClientPlayer, Play
         try {
             getParentModel().body.translateAndRotate(pose); // exactly ONCE, after established root
             pose.mulPose(Rac1ClankSteveMount.local());
+            if(Rac1HydroLayer.draw(player.getUUID(),view,pose,buffers,light,partial))return;
             double serverTime = Rac1ClankClient.VIEWS.serverTime(player.getUUID(),
                     player.level().getGameTime() + partial);
             draw(Role.CLANK, pose, buffers, light, player.getUUID(),view,serverTime);

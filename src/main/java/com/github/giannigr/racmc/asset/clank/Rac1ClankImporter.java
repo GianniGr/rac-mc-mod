@@ -13,6 +13,18 @@ import java.nio.file.Path;
 /** Revalidates the complete retail image before reading Novalis; no image/cache upload. */
 public final class Rac1ClankImporter {
     private Rac1ClankImporter() {}
+    /** Optional Hydro-only lazy read under the same complete retail validation, not an aerial cache migration. */
+    public static Rac1HydroAsset readHydro(Path image)
+            throws IOException,DiscFormatException,WadFormatException,AssetFormatException {
+        var validator=new Rac1DiscValidator();
+        try(var selected=validator.inspect(image)) {
+            if(!selected.isSupported())throw new IOException("Hydro requires a validated retail disc");
+            var revision=selected.result().revision();
+            var profile=validator.catalog().profiles().stream().filter(p->p.revision()==revision).findFirst().orElseThrow();
+            return new Rac1HydroAsset(Rac1DiscIdentity.key(revision,profile),
+                    Rac1AssetExtractor.readAnimatedAsset(Rac1LevelAssets.load(selected.image(),1),609));
+        }
+    }
 
     public static Rac1ClankAssets read(Path image)
             throws IOException, DiscFormatException, WadFormatException, AssetFormatException {
