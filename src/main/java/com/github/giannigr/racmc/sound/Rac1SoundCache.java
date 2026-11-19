@@ -5,9 +5,9 @@ import java.nio.file.*;
 import java.util.EnumMap;
 import java.util.Optional;
 
-/** Independent RACS sidecar, schema/converter 2 (adds501/local1); never changes RACM. */
+/** Independent RACS sidecar, schema/converter 3 (adds168/local1); never changes RACM. */
 public final class Rac1SoundCache {
-    public static final int VERSION = 2;
+    public static final int VERSION = 3;
     private static final int MAX_FILE = 64 * 1024 * 1024;
     private final Path root;
     public Rac1SoundCache(Path root) { this.root = root.toAbsolutePath().normalize(); }

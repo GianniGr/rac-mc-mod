@@ -22,7 +22,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 /** Optional client-local provider. No media gate changes, proprietary server bytes or sound calls.
- * Existing arrow graphics remain the fallback until a complete local GPU generation is ready. */
+ * No vanilla-arrow fallback; the existing imported drawing path owns available projectile graphics. */
 @EventBusSubscriber(modid = RacMcConstants.MOD_ID, value = Dist.CLIENT)
 public final class Rac1EffectClient {
     private record Cpu(String sha1, EffectClock.Profile profile, List<EffectGpuCatalog.CpuTexture> textures,
@@ -36,6 +36,7 @@ public final class Rac1EffectClient {
     private static Object world;
     private static boolean installed;
     private static boolean failed;
+    private static boolean projectileUnavailableReported;
     private static NanotechTables nanotech;
     private static String discSha1;
     private static final Map<net.minecraft.core.BlockPos, Long> health = new HashMap<>();
@@ -92,7 +93,7 @@ public final class Rac1EffectClient {
                 RacMcMod.LOGGER.info("Optional original effects ready: level1 local catalog generation {}.", generation);
             } catch (RuntimeException failure) {
                 failed = requestGeneration == generation;
-                RacMcMod.LOGGER.warn("Optional original effects unavailable; existing graphics retained: {}", failure.toString());
+                RacMcMod.LOGGER.warn("Optional original effects unavailable; Blaster projectile geometry is hidden, no vanilla arrow fallback: {}", failure.toString());
             }
         }
     }
@@ -139,6 +140,7 @@ public final class Rac1EffectClient {
         nanotech = null;
         health.clear();
         nanoStep = -1;
+        projectileUnavailableReported = false;
         // Do not cancel the underlying read mid-ISO; let it finish and discard before any upload.
         // Its requestGeneration prevents stale completion attaching after a disc switch.
     }
@@ -158,6 +160,22 @@ public final class Rac1EffectClient {
         return catalog != null && session != null && Minecraft.getInstance().level == arrow.level()
                 && session.ownsProjectile(arrow.getUUID());
     }
+    public static void prepareProjectile(Rac1BlasterArrow arrow, float partial) {
+        if (!arrow.visualFlying()) return;
+        boolean ready = catalog != null && session != null && Minecraft.getInstance().level == arrow.level();
+        boolean admitted = ready && session.admitProjectile(source(arrow, partial));
+        if (!admitted && (!ready || !session.ownsProjectile(arrow.getUUID()))
+                && !projectileUnavailableReported) {
+            projectileUnavailableReported = true;
+            RacMcMod.LOGGER.warn("Blaster imported projectile unavailable for this generation (media loading/missing or bounded effect capacity); no vanilla arrow fallback.");
+        }
+    }
+    private static EffectPlaybackSession.Source source(Rac1BlasterArrow arrow, float partial) {
+        return new EffectPlaybackSession.Source(arrow.getUUID(),
+                Rac1EffectTriggers.point(arrow.getPosition(partial)),
+                Rac1EffectTriggers.point(arrow.getDeltaMovement().normalize()),
+                (int) Math.min(600, arrow.tickCount * session.runtime().profile().hz() / 20));
+    }
     /** Renderer supplies visibility only, never release/pickup/healing state. */
     public static void healthVisible(net.minecraft.core.BlockPos pos) {
         var level = Minecraft.getInstance().level;
@@ -172,12 +190,8 @@ public final class Rac1EffectClient {
         List<EffectPlaybackSession.Source> sources = new ArrayList<>();
         for (var entity : minecraft.level.entitiesForRendering()) {
             if (sources.size() >= 512) break;
-            if (entity instanceof Rac1BlasterArrow arrow && arrow.visualFlying()
-                    && !com.github.giannigr.racmc.item.Rac1ArrowVisibility.hidden(arrow.tickCount, partial)) {
-                sources.add(new EffectPlaybackSession.Source(arrow.getUUID(),
-                        Rac1EffectTriggers.point(arrow.getPosition(partial)),
-                        Rac1EffectTriggers.point(arrow.getDeltaMovement().normalize()),
-                        (int) Math.min(600, arrow.tickCount * session.runtime().profile().hz() / 20)));
+            if (entity instanceof Rac1BlasterArrow arrow && arrow.visualFlying()) {
+                sources.add(source(arrow, partial));
             }
         }
         long tick = minecraft.level.getGameTime();

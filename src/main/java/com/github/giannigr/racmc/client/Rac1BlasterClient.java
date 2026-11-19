@@ -33,10 +33,13 @@ import net.neoforged.neoforge.client.event.RenderLivingEvent;
 public final class Rac1BlasterClient {
 
     /** The animation of the weapon of every player that is in the world. */
-    private static final Map<Integer, Rac1BlasterAnimation> ANIMATIONS = new HashMap<>();
+    private static final Map<java.util.UUID, Rac1BlasterAnimation> ANIMATIONS = new HashMap<>();
 
     /** The player that is drawn at the moment, or {@code null} when none is drawn. */
     private static LivingEntity current;
+    private static net.minecraft.client.model.HumanoidModel<?> currentModel;
+    private static float currentPartial;
+    private static ClientLevel animationWorld;
 
     /** The trigger of the sprint of the player of the client. */
     private static final Rac1BlasterSprint.Trigger SPRINT = new Rac1BlasterSprint.Trigger();
@@ -52,6 +55,9 @@ public final class Rac1BlasterClient {
      */
     public static void onRenderLivingPre(RenderLivingEvent.Pre<?, ?> event) {
         current = event.getEntity();
+        currentPartial = event.getPartialTick();
+        currentModel = event.getRenderer().getModel() instanceof net.minecraft.client.model.HumanoidModel<?> model
+                ? model : null;
     }
 
     /**
@@ -61,6 +67,8 @@ public final class Rac1BlasterClient {
      */
     public static void onRenderLivingPost(RenderLivingEvent.Post<?, ?> event) {
         current = null;
+        currentModel = null;
+        currentPartial = 0;
     }
 
     /**
@@ -70,6 +78,11 @@ public final class Rac1BlasterClient {
      */
     public static LivingEntity current() {
         return current;
+    }
+
+    public static float renderPartial(LivingEntity entity) {
+        return current == entity ? currentPartial
+                : Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(false);
     }
 
     /**
@@ -169,10 +182,17 @@ public final class Rac1BlasterClient {
      * @param level the world of the client
      */
     public static void update(ClientLevel level) {
+        if (animationWorld != level) {
+            ANIMATIONS.clear();
+            current = null;
+            currentModel = null;
+            currentPartial = 0;
+            animationWorld = level;
+        }
         int tick = (int) level.getGameTime();
         List<AbstractClientPlayer> players = level.players();
         for (AbstractClientPlayer player : players) {
-            Rac1BlasterAnimation animation = ANIMATIONS.computeIfAbsent(player.getId(),
+            Rac1BlasterAnimation animation = ANIMATIONS.computeIfAbsent(player.getUUID(),
                     key -> new Rac1BlasterAnimation());
             animation.setFiring(isFiring(player), tick);
         }
@@ -180,7 +200,7 @@ public final class Rac1BlasterClient {
         // an old state.
         ANIMATIONS.keySet().removeIf(id -> {
             for (AbstractClientPlayer player : players) {
-                if (player.getId() == id) {
+                if (player.getUUID().equals(id)) {
                     return false;
                 }
             }
@@ -195,7 +215,7 @@ public final class Rac1BlasterClient {
      * @return the animation, or {@code null} when the player is not known
      */
     public static Rac1BlasterAnimation animationOf(LivingEntity entity) {
-        return entity == null ? null : ANIMATIONS.get(entity.getId());
+        return entity == null ? null : ANIMATIONS.get(entity.getUUID());
     }
 
     /**
@@ -209,10 +229,44 @@ public final class Rac1BlasterClient {
      * @return the place of the mouth of the weapon in the world
      */
     public static Rac1BlasterGrip.Point muzzleOf(Player player) {
-        Rac1BlasterGrip.Look look = new Rac1BlasterGrip.Look(
-                Mth.wrapDegrees(player.getYRot() - player.yBodyRot), player.getXRot(),
-                player.yBodyRot);
-        return Rac1BlasterGrip.muzzle(player.getX(), player.getY(), player.getZ(), look);
+        return muzzleOf(player, Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(false));
+    }
+
+    public static Rac1BlasterGrip.Point muzzleOf(Player player, float partial) {
+        return Rac1BlasterGrip.muzzle(com.github.giannigr.racmc.item.weapon.RangedPlayerPose.of(
+                player, partial, expectedSlim(player), player instanceof AbstractClientPlayer client
+                        ? client.getDeltaMovementLerped(partial) : player.getDeltaMovement()));
+    }
+
+    public static boolean expectedSlim(Player player) {
+        var mc = Minecraft.getInstance();
+        var info = mc.getConnection() == null ? null : mc.getConnection().getPlayerInfo(player.getUUID());
+        return com.github.giannigr.racmc.item.weapon.RangedSkin.of(
+                info == null ? player.getGameProfile() : info.getProfile(), mc.getMinecraftSessionService());
+    }
+
+    /** Actual PlayerModel hand offset may temporarily use the UUID skin while a profile loads.
+     * Reconcile ONLY its known +/- .5 model-unit offset to the profile-derived authoritative
+     * hand; do not move the player's arm/head, rescale the gun or accept remote coordinates.
+     */
+    public static com.github.giannigr.racmc.item.weapon.WeaponDefinition.Vector skinCorrection(Player player) {
+        var zero = new com.github.giannigr.racmc.item.weapon.WeaponDefinition.Vector(0, 0, 0);
+        if (player != current || currentModel == null || !(player instanceof AbstractClientPlayer client)) return zero;
+        boolean actualSlim = client.getSkin().model() == net.minecraft.client.resources.PlayerSkin.Model.SLIM;
+        boolean agreedSlim = expectedSlim(player);
+        if (actualSlim == agreedSlim) return zero;
+        boolean left = player.getMainArm() == net.minecraft.world.entity.HumanoidArm.LEFT;
+        var arm = left ? currentModel.leftArm : currentModel.rightArm;
+        var pose = new com.github.giannigr.racmc.item.weapon.HandPoseSnapshot(zero, 0, 1, left,
+                new com.github.giannigr.racmc.item.weapon.WeaponDefinition.Vector(arm.x, arm.y, arm.z),
+                new com.github.giannigr.racmc.item.weapon.WeaponDefinition.Vector(
+                        Math.toDegrees(arm.xRot), Math.toDegrees(arm.yRot), Math.toDegrees(arm.zRot)),
+                new com.github.giannigr.racmc.item.weapon.WeaponDefinition.Vector(arm.xScale, arm.yScale, arm.zScale),
+                .9375, 1.501);
+        double difference = ((agreedSlim ? 1 : 0) - (actualSlim ? 1 : 0)) * (left ? -.5 : .5) / 16;
+        return com.github.giannigr.racmc.item.weapon.HandTransform.localForModelDisplacement(
+                com.github.giannigr.racmc.item.weapon.Rac1BlasterDefinition.INSTANCE, pose,
+                new com.github.giannigr.racmc.item.weapon.WeaponDefinition.Vector(difference, 0, 0));
     }
 
     /**

@@ -59,7 +59,8 @@ public class BlasterItem extends Item {
             // The state of the use is the state of the server only: the client does not guess
             // that the shot was made, so that the pose of the arm and the animation of the
             // shot agree with the shots that are really made.
-            if (Rac1BlasterServer.fireFirstShot(level, player) && !player.isUsingItem()) {
+            if (Rac1BlasterServer.fireFirstShot(level, player) && player.isAlive() && !player.isRemoved()
+                    && !player.isSpectator() && player.level() == level && !player.isUsingItem()) {
                 // The weapon keeps being used, so that the shots of the burst follow. The state
                 // of the use is sent to the other players by the game itself.
                 player.startUsingItem(hand);

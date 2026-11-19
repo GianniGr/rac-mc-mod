@@ -118,6 +118,17 @@ public final class RacMcClient {
     }
 
     /**
+     * The usable asset-cache directory resolved at client startup, if configuration succeeded.
+     * This is a local read-only view, not a media/cache readiness check or a live filesystem
+     * revalidation. Rejected configuration never exposes a requested path or another fallback.
+     *
+     * @return the effective directory, or empty when the configured cache location is unusable
+     */
+    public static Optional<Path> assetCacheDirectory() {
+        return CACHE_LOCATION.usable() ? Optional.of(CACHE_LOCATION.directory()) : Optional.empty();
+    }
+
+    /**
      * Whether the game may not be entered at the moment.
      *
      * @return {@code true} while no verified disc image is configured or while the cache of the

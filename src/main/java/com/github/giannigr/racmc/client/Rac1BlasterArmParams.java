@@ -1,6 +1,5 @@
 package com.github.giannigr.racmc.client;
 
-import com.github.giannigr.racmc.item.Rac1BlasterGrip;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
@@ -47,23 +46,34 @@ public final class Rac1BlasterArmParams {
     /**
      * Turns the arm of the player towards the place the player looks at.
      *
-     * <p>The head of the player is already turned in the model of the player when the pose is
-     * applied, so the turn of the head around the body and the turn of the head around the side
-     * axis are read out of the model itself.
+     * <p>The custom arm uses the same local player-look inputs as shot authority, not the reused
+     * vanilla model's render-history-dependent swimming head pitch. Vanilla still applies attack,
+     * crouch and bob afterward. Only its attack head term is bridged for this custom arm; the
+     * player's head and other arm are not changed.
      *
      * @param model the model of the player
      * @param entity the player
      * @param arm the arm that is turned
      */
     private static void aimTheWeapon(HumanoidModel<?> model, LivingEntity entity, HumanoidArm arm) {
-        if (arm != HumanoidArm.RIGHT) {
-            return;
-        }
-        Rac1BlasterGrip.Look look = new Rac1BlasterGrip.Look(Math.toDegrees(model.head.yRot),
-                Math.toDegrees(model.head.xRot), 0.0);
-        Rac1BlasterGrip.ArmTurn turn = Rac1BlasterGrip.aim(look);
-        model.rightArm.xRot = (float) Math.toRadians(turn.x());
-        model.rightArm.yRot = (float) Math.toRadians(turn.y());
-        model.rightArm.zRot = 0.0f;
+        if (!(entity instanceof net.minecraft.world.entity.player.Player player)) return;
+        float partial = Rac1BlasterClient.renderPartial(entity);
+        var look = com.github.giannigr.racmc.item.weapon.RangedPlayerPose.look(player, partial);
+        var attackArm = player.swingingArm == net.minecraft.world.InteractionHand.MAIN_HAND
+                ? player.getMainArm() : player.getMainArm().getOpposite();
+        applyAim(model, arm, look, model.attackTime > 0 && attackArm == arm);
+    }
+
+    /** Pure renderer bridge, separately exercisable without a Minecraft singleton or entity. */
+    static void applyAim(HumanoidModel<?> model, HumanoidArm arm,
+                         com.github.giannigr.racmc.item.weapon.RangedPlayerPose.Look look, boolean attacked) {
+        var part = arm == HumanoidArm.RIGHT ? model.rightArm : model.leftArm;
+        float pitch = look.pitch() * ((float) Math.PI / 180);
+        part.xRot = pitch - (float) (Math.PI / 2);
+        part.yRot = look.headYaw() * ((float) Math.PI / 180);
+        part.zRot = 0.0f;
+        if (attacked)
+            part.xRot += com.github.giannigr.racmc.item.weapon.RangedArmPose.attackHeadTerm(model.attackTime, model.head.xRot)
+                    - com.github.giannigr.racmc.item.weapon.RangedArmPose.attackHeadTerm(model.attackTime, pitch);
     }
 }

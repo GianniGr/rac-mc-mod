@@ -28,4 +28,10 @@ public final class Rac1BlasterEvents {
     public static void onEntityTick(EntityTickEvent.Post event) {
         Rac1BlasterServer.removeExpiredArrow(event.getEntity());
     }
+
+    @SubscribeEvent(priority = net.neoforged.bus.api.EventPriority.HIGHEST)
+    public static void captureImpact(net.neoforged.neoforge.event.entity.ProjectileImpactEvent event) {
+        if (event.getProjectile() instanceof Rac1BlasterArrow arrow && !arrow.level().isClientSide())
+            arrow.captureCollision(event.getRayTraceResult());
+    }
 }

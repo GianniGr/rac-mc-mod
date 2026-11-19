@@ -16,6 +16,20 @@ class RealSoundDiscTest {
             assertTrue(result.isSupported());
             var image = result.image();
             var catalog = Rac1AudioCatalog.extract(image);
+            var blaster = catalog.clips().get(Rac1AudioEvent.BLASTER_FIRE_LOOP);
+            assertEquals(101, blaster.cueId()); // curated level1 only, never a global cue binding
+            assertEquals(9912 * 2, blaster.pcm().length);
+            assertEquals(28, blaster.loopStart());
+            assertEquals(9912, blaster.loopEnd());
+            assertTrue(blaster.repeat());
+            assertEquals("082a821f756c1ff2b92f92c487fc2e13dd3dfaeecd01136445b536ddfb37c7d0",
+                    blaster.adpcmHash(), "R11/R07 waveform identity");
+            byte[] blasterBlob = Rac1LevelAssets.load(image, 1).gadgetClass(168);
+            int fireSequence = SoundBytes.view(blasterBlob).getInt(0x48 + 4 * 4);
+            assertEquals(1, blasterBlob[fireSequence + 0x11] & 255, "Sequence4 sustained local slot");
+            assertEquals(15, blasterBlob[fireSequence + 0x10] & 255);
+            System.out.println(result.result().revision() + " class168/local1 PCM-SHA256="
+                    + SoundBytes.hash(blaster.pcm()));
             var health = catalog.clips().get(Rac1AudioEvent.NANOTECH_FIRST_ARRIVAL);
             assertEquals(175, health.cueId());
             assertEquals(21728 * 2, health.pcm().length);

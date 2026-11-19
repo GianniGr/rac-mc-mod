@@ -395,6 +395,203 @@ draws the hero with the Blaster as long as the cache holds the assets; the main 
 
 ## The Blaster as an item of the game
 
+### M2 shared ranged candidate (2026-11-18)
+
+The current bounded extraction routes Blaster firing through `item.weapon.FireService`,
+`FireState`, `BlasterAmmo`, and immutable `WeaponDefinition`; `Rac1BlasterGrip.muzzle`
+delegates to `HandTransform`. The synthetic test weapon has a nonorigin grip, different
+forward/up axes, off-axis muzzle, XYZ item rotations, scale1.7, cadence7 and a separate
+ammo identity. It is a test fixture, not a registered second gun.
+
+Physical points use imported mesh blocks. Item rotation is XYZ (point application Z,Y,X);
+ModelPart is ZYX (point application X,Y,Z). Item centering -.5 and imported socket
+restoration +.5 cancel exactly once. The player chain includes PlayerRenderer's .9375,
+entity scale, physical left/right hand, resolved pivot/arm scale/rotation, and an ordered
+`HandRoot` (yaw/pitch/roll/translation, not merely standing body yaw).
+Corrective pass1 adds the actual passenger body/head clamp, swimming/fall-flight roots,
+attack final arm rotations/pivots, crouch render offset and vanilla arm bob;
+client position/head/body/pitch are interpolated, and camera subtraction stays double
+precision until relative coordinates are narrowed.
+
+Bind extents remain (.7102,.3099,.7366) imported blocks on mesh X/Y/Z. World item
+scale is1; PlayerRenderer yields (.6658125,.29053125,.6905625) before rotation,
+at entity scale1. First-person .55 and separate GUI fitting are unchanged.
+No canonical Ratchet/player ratio is asserted.
+
+R11's measured 12-vertex front ring is already centered within .000081 blocks of
+(.2305,-.03,.6335) in the held pose. Firing moves it (e.g. z≈.811801 at .2s).
+Held rendering now applies a rigid translation of that sampled ring onto the definition
+muzzle. Original deformations, normals, dimensions and cycle remain; the gun body
+translates around the barrel rather than retaining a fixed source grip. GUI/demo are
+not corrected, and server firing does not require ISO/animation data. Projection alignment
+matches both screen axes, without the former deliberate vertical clamp. Natural fitting,
+crosshair clearance and jitter still require owner visual acceptance.
+
+**Corrective pass1 source contract:** MC1.21.1/NeoForge21.1.265 source pin
+`6d1662ddc50a486115cfd9a98bd4b097d8bd1f6086dc62f13b208876c1652cd1`.
+The custom Blaster aim uses the existing authoritative look inputs, rather than the
+reused vanilla model's render-history-dependent swimming head pitch. The custom arm
+compensates only vanilla attack's head-pitch term; the player head/other arm are not
+rewritten. Source attack/crouch/bob then run normally. Vanilla swimming arm strokes
+are guarded off while an item is being used; the swimming root still applies.
+The client bridge takes the actual entity-render event's partial tick.
+
+`RangedSkin` derives the official hand model from existing vanilla GameProfile metadata
+using Authlib6.0.54's local unpack operation, or the exact UUID fallback (18 models,
+first9 slim). No skin download/profile fetch, new client-report trust, ISO or client
+class dependency on the server. The client reads its actual rendered skin model.
+During asynchronous UUID-skin fallback, only the known half-model-unit hand offset is
+reconciled to the profile-derived authoritative pivot; it does not move the player arm,
+rescale the gun or accept client coordinates. That offset is
+.5/16 × .9375 ≈.0293 blocks at entity scale1. Profile changes invalidate the bounded
+metadata cache key. Headless servers without an authentication service use UUID fallback.
+
+**Limits, not acceptance claims:** these are source-pinned vanilla firing adapters, not
+arbitrary modded player renderers. Exact new-tree T20/live pose, skin-loading, movement,
+sprint, lifecycle and calibrated muzzle checks remain required; no unsupported-pose
+acceptance waiver is inferred. Prior T20 captures at FOV70/77/110 and its24-shot two-client
+subset on77eb592 are baseline evidence, not approval of this correction or of natural
+grip/jitter. Passing matrix tests or source-ring measurements is not live equivalence.
+
+**B3 remains held:** both-disc joint16 attachment sampling with the bind-local ring offset
+tracks the actual animated ring within1.82e-7 blocks over90 key/half-key/blend samples,
+without translating the gun body. This is a measured alternative, not an installed
+grip-preserving authority strategy. A no-media server still lacks that animated socket
+data; phase alone cannot supply it. No extracted animation curve or client-provided
+muzzle coordinates are shipped. Current whole-body anchoring can translate .18844
+blocks and remains unapproved pending the owner’s presentation/data-policy decision.
+
+The legacy bolt headless fixture now uses a local ServerPlayer account and explicit
+packet sink rather than triggering unnegotiated mock login. Its oracle isolates the
+new pickup UUID and counts genuine balance payloads, not teleport packets. Production
+ledger/network/login validation is unchanged. This ledger-only fixture is not a real
+network client; the prior failure is not called a proven M2 production regression.
+
+For local client consumers, `RacMcClient.assetCacheDirectory()` returns
+`Optional<Path>` containing only the usable startup-resolved cache directory, or empty
+for an unusable configuration. It does not revalidate disk state, change configuration,
+start media work or imply media/cache readiness. The client-only entrypoint remains
+isolated from dedicated-server loading; no cache path enters a network message.
+
+### M2 corrective pass2: live-owner admission and physical-left first person
+
+T20 independently reproduced two production failures on `cf006dae`: shots32–40
+continued after a real active-shooter kill, and actual left first-person frames showed
+an inverted/cropped model despite subpixel ring-center agreement. Neither is waived by
+the earlier source/headless passes.
+
+All Blaster firing admissions now require a live, nonremoved, nonspectator ServerPlayer
+in the supplied server world. Invalid owners stop use, reset their burst and stop their
+own accepted audio session before preparation/payment/feedback. The predicate reported
+to renderers also denies dead/removed/spectator held use. Admission rechecks after the
+synchronous entity-join callback: death there rejects/discards the proposal and refunds
+only its actual reservation. A shot already accepted while alive stays paid if death
+occurs in its feedback; it cannot restart held use. Delayed callbacks from an old player
+object cannot create a dead session or stop a replacement object's new session.
+Immediate first shot, cadence2, arrow policy and projectile physics remain unchanged.
+
+`blaster.json` has an explicit `firstperson_lefthand` rotation `[0,180,-90]`.
+Vanilla's physical-left mirror makes this `[0,-180,90]`: imported +X stays camera-up
+and +Z stays camera-forward (-Z), as with the right hand. The existing `.55` FP fitting
+scale, source mesh/animation, translations, right FP and all world/third-person transforms
+are unchanged. Independent tests execute the actual JSON through vanilla ItemTransform,
+checking both hands' up/forward/grip, source-unit scale and the complete mirror matrix.
+This mathematical correction still needs independent actual new-head screenshots; matching
+ring centers alone does not certify model orientation, cropping or owner natural fitting.
+B3 whole-body anchoring remains installed and owner-held, not silently replaced.
+
+### M2 final corrective pass3: separate physical-left world and camera slots
+
+T20's independent actual-model source-up probe on `45cc252` ran and failed: the
+right-hand vanilla world chain sent imported +X to +.9375Y, but the left sent it
+to -.9375Y. FP-left was upright, yet still cropped in reviewed WIDE captures.
+`THIRD_PERSON_LEFT_HAND` was falling back to the right JSON slot before vanilla
+negated left Y/Z angles. The shared physical hand math agreed with that inverted
+frame, which also put its world muzzle low and pulled FP alignment down.
+
+Blaster now has raw `thirdperson_lefthand` rotation `[180,0,90]`, whose effective
+left-mirrored rotation is `[180,0,-90]`. `WeaponDefinition.leftItemRotation` names
+the raw physical-left display slot, selected before vanilla's sign mirror.
+The existing constructor still defaults left to the raw right slot, preserving
+other definitions' previous behavior. Only Blaster opts into the explicit slot.
+Independent tests execute real ItemTransforms/ModelPart/ItemTransform operations,
+check source-up/forward/grip separately, and compare the physical muzzle against
+that JSON/vanilla oracle. A real headless left shot checks the upright spawn and
+one ordinary-arrow payment. Right-hand physical numbers/source scale remain intact.
+
+Correcting the world frame fixes standing left FP's low target, but the full-source
+fixed-camera test still measured crouch clipping (bottom865px at1000×720).
+Measured extra left camera depths .5 and1 blocks produced bottom728 and673px,
+respectively. The explicit FP-left slot therefore keeps rotation `[0,180,-90]`
+and scale`.55`, but uses JSON translation `[0,0,-16]` (one camera block).
+This is a fixed, left-only camera placement—not a physical/world grip displacement,
+mesh-scale change, new animation policy or server-media dependency. Its apparent
+screen size changes with depth; unchanged mesh scale does not imply unchanged pixels.
+Right FP, GUI, wrench and ordinary bow contexts are untouched.
+
+The real-disc fitting regression projects all original posed vertices and the original
+12-vertex ring at1080 fixed-camera phase/hand/skin/crouch/FOV samples per disc.
+Its LEFT fit bounds are x10..990px, y7.2..676.8px at1000×720 (6% bottom clearance).
+Right is retained as an unchanged reference, not falsely certified: the same independent
+camera test exposes pre-existing right-crouch cropping (bottom865px atFOV70), which is
+outside this left-only repair and is escalated rather than silently retuned.
+These numeric bounds are not GPU/new-head screenshots or owner natural-fit acceptance.
+Independent T20 exact-head visual checks and B3 owner-held grip/audio gates remain.
+This is corrective pass3 of3; unresolved genuine criteria require escalation, not pass4.
+
+### Owner-directed left FP depth match
+
+In the subsequent approved fitting wave, the reference is the unchanged right FP
+of `01085c0` (T20 WIDE FOV70 crouch capture `T20Shooter-requested-28.png`).
+The left-only JSON depth offset is removed: both FP slots retain their upright
+effective orientation and `.55` scale and use the existing exact muzzle projection.
+Right FP, TP/world transforms, animation and server behavior do not change.
+
+The real-disc comparison pairs the same skin, stance, FOV and source phase/blend
+through the actual vanilla display transforms. It checks depth and apparent extent
+separately from ring agreement. Viewport clipping and projected bounds intersecting
+the HUD region are reported separately; a size match to the cropped right reference
+is not a clipping fix. The owner accepted the bottom-edge grip clipping shown
+in that reference frame, not materially worse cropping or blanket dynamic fit.
+New-head live comparison and B3 whole-body anchoring remain open. The earlier
+left-only clearance test and deeper both-hand prototype are retained as historical
+evidence, not current behavior.
+
+Accepted Creative/Survival/Adventure/main-hand/spectator rules, two-tick held cadence,
+ordinary-arrow offhand-first payment, damage/drag/no-gravity/speed2/lifetime12/no-pickup
+remain. A same-tick duplicate pull cannot admit another immediate shot. Dry-click state
+survives tick reconstruction, and its ten-tick bound survives release; initial genuine
+pulls remain immediate. Preparation/obstruction precedes reservation; spawn admission
+follows payment; veto refunds the reserved item; only accepted admission emits feedback.
+This is a synchronous server-tick contract, not arbitrary-plugin/crash atomicity.
+Held-empty animation policy has **not** been changed.
+
+`RangedCrateHits` authorizes only registered RaC1 crates, after the real projectile veto
+and a separate BreakEvent/permissions/identity recheck; Gadgetron vendor is hard denied,
+including Creative. Ordinary grounded/falling destruction delegates to the existing
+reward service: original wood bolts, one existing health cluster, no ammo reward.
+Carrier placement UUID/consumed state survives transfer; transfer itself never pays.
+Offline/dead/cross-dimension owners are denied. Airborne BreakEvent uses captured carrier
+state at its cell; arbitrary protection-plugin compatibility is not claimed.
+
+Both-disc original dispatch/hit evidence establishes ordinary Blaster→505 short fuse,
+not instant removal. Idle/long fuses use the existing conservative MC2..5 adaptation;
+already-short (≤5), chain and terminal fuses do not reroll or consume RNG. Wrench
+behavior is untouched. Original RNG is floating [5,15), then video scale/truncation
+(NTSC5..14, PAL4..12 updates), **not** inclusive uniform5..15. The retained project's
+integer adaptation is not an exact reproduction of that distribution. Landing/migration
+ordering and existing detonation/chain/reward ownership are unchanged.
+
+Blaster shafts are never submitted, including missing-effect/stuck paths. Nonpiercing
+Blaster hit delivery retains the supported vanilla damage/fire/enchantment/Enderman/
+deflection path without modifying victim arrow counts or enabling piercing. Real bow
+arrows remain unchanged. Ordinary impact audio remains unbound; firing uses the verified
+sustained class168/local1 loop, not per-shot intros or Gold local4. See
+[sound.md](sound.md) and [effects.md](effects.md).
+
+The detailed PoC narrative below is historical where it conflicts with this candidate
+section (notably omitted player scale, arrow graphics, vertical clamp and old dry state).
+
 The Blaster of the game is the first item of the mod. The item is registered under
 `racmc:blaster`, it holds one weapon per stack, and it has a tab of the creative mode of its
 own.

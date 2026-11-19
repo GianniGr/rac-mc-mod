@@ -45,7 +45,7 @@ public final class RacMcEntities {
                     .sized(0.5F, 0.5F)
                     .eyeHeight(0.13F)
                     .clientTrackingRange(4)
-                    .updateInterval(20)
+                    .updateInterval(1) // short twelve-tick flight must not outlive its update interval
                     .build("blaster_arrow"));
 
     private RacMcEntities() {

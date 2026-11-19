@@ -2,7 +2,7 @@ package com.github.giannigr.racmc.client;
 
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.joml.Matrix4f;
-import org.joml.Vector3f;
+import org.joml.Vector3d;
 
 /**
  * The frame of the world of the game of blocks.
@@ -27,7 +27,8 @@ public final class Rac1BlasterFrame {
     private static final Matrix4f MODEL_VIEW = new Matrix4f();
 
     /** The place of the camera of the player in the world. */
-    private static final Vector3f CAMERA = new Vector3f();
+    private static final Vector3d CAMERA = new Vector3d();
+    private static Object world;
 
     /** Whether the matrices of a frame of the world are known. */
     private static boolean ready;
@@ -46,6 +47,7 @@ public final class Rac1BlasterFrame {
             return;
         }
         PROJECTION.set(event.getProjectionMatrix());
+        world = net.minecraft.client.Minecraft.getInstance().level;
         MODEL_VIEW.set(event.getModelViewMatrix());
         if (event.getCamera() != null) {
             CAMERA.set(event.getCamera().getPosition().x, event.getCamera().getPosition().y,
@@ -60,7 +62,7 @@ public final class Rac1BlasterFrame {
      * @return {@code true} when the world was drawn
      */
     public static boolean ready() {
-        return ready;
+        return ready && world != null && world == net.minecraft.client.Minecraft.getInstance().level;
     }
 
     /**
@@ -86,7 +88,7 @@ public final class Rac1BlasterFrame {
      *
      * @return the place
      */
-    public static Vector3f camera() {
+    public static Vector3d camera() {
         return CAMERA;
     }
 }

@@ -1,5 +1,22 @@
 # Approved feature-wave integration candidate — P33
 
+**M2 shared-ranged candidate, 2026-11-18:** current work builds on owner-accepted
+PR39; earlier T19-pending prose below is historical, not a reopened gate.
+The new candidate still requires independent T20 on its exact commit. Shared ranged
+definitions/hand/fire/ammo seams, imported-projectile admission/no-shaft rendering,
+grounded/airborne crate authorization and verified sustained Blaster audio are
+described in [development.md](development.md), [effects.md](effects.md) and
+[sound.md](sound.md). RACS is now3; RACM stays unchanged. No shop/vendor or currency
+ledger implementation is part of this change. Pose/root/skin and live audiovisual/
+two-client limits remain explicit; this is not full #9/#11 acceptance.
+
+**Corrective pass1:** source-pinned vanilla root/final-arm/profile-skin handling and
+the narrowly repaired legacy bolt headless account fixture supersede the initial
+standing-only adapter. Independent exact-new-tree retest is still required. The
+whole-body animated-ring anchor is not owner-approved; B3 presentation/data policy
+and T20's remaining live matrix are not waived. No P35 extractor/codec/shop files or
+production currency/network services were changed.
+
 **Current P33 nanotech addition:** T18 combined PASS applies to exact
 `99b781e87a255927bd1e30de6099d2252ee60033`, before this change. Owner authorized P33
 on this same branch/worktree. Health destruction/released and falling visuals,

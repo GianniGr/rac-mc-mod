@@ -44,6 +44,21 @@ public final class EffectPlaybackSession {
         lastBlast = Long.MIN_VALUE / 2;
     }
     public boolean ownsProjectile(UUID id) { return shots.containsKey(id) || terminal.containsKey(id); }
+    /** Admit/update before entity rendering as well as the effect pass. Does not advance the
+     * fixed simulation clock, consume trail RNG on repeat calls, or resurrect a terminal. */
+    public boolean admitProjectile(Source source) {
+        UUID id = source.lifecycle();
+        if (terminal.containsKey(id)) return false;
+        var existing = shots.get(id);
+        if (existing != null) return existing.active();
+        if (shots.size() >= 512 || terminal.size() >= 4096 || runtime.remaining() < 18) return false;
+        var adapter = new Rac1BlasterVisuals(runtime, sha1, id, source.position(),
+                id.getLeastSignificantBits());
+        if (!adapter.active()) return false;
+        adapter.update(source.position(), source.tangent(), source.originalAge());
+        shots.put(id, adapter);
+        return true;
+    }
     public boolean receive(EffectSignal signal, long tick, Point camera) {
         if (!gate.accept(signal, tick, generation)) return false;
         // Same 250ms presentation catch-up bound as the clock. Keep long dedup tombstones,
@@ -111,12 +126,7 @@ public final class EffectPlaybackSession {
         for (Source source : sources) {
             if (tracked.size() >= 512) break;
             tracked.add(source.lifecycle());
-            if (terminal.size() < 4096 && !terminal.containsKey(source.lifecycle()) && !shots.containsKey(source.lifecycle())
-                    && runtime.remaining() >= 18) {
-                var adapter = new Rac1BlasterVisuals(runtime, sha1, source.lifecycle(), source.position(),
-                        source.lifecycle().getLeastSignificantBits());
-                shots.put(source.lifecycle(), adapter);
-            }
+            admitProjectile(source);
         }
         shots.entrySet().removeIf(entry -> {
             if (tracked.contains(entry.getKey())) return false;
@@ -141,6 +151,9 @@ public final class EffectPlaybackSession {
             if (procedural != null) procedural.clear();
             shots.values().forEach(Rac1BlasterVisuals::close);
             shots.clear();
+            // Discard historical one-shots, but a currently tracked authoritative projectile
+            // is not historical. Re-admit its imported graphics in this same rendered frame.
+            for (Source source : sources) admitProjectile(source);
         }
         return advance;
     }

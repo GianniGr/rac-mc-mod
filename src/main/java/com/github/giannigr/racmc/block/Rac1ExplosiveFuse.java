@@ -59,6 +59,16 @@ public final class Rac1ExplosiveFuse {
         return lastTick;
     }
 
+    /** R11 ordinary Blaster: idle/full may become short; an already-short countdown is not
+     * rerolled, even to a smaller value. Supplier is deliberately lazy so duplicate contact
+     * consumes no random draw. 5..15 here is the existing MC adaptation input, not the original
+     * game's half-open floating [5,15), video-scale-and-truncate distribution.
+     */
+    public boolean blasterHit(java.util.function.IntSupplier adaptedSourceUpdates, long gameTime) {
+        if (remaining != IDLE && remaining <= 5) return false;
+        return wrenchHit(adaptedSourceUpdates.getAsInt(), gameTime);
+    }
+
     public void save(net.minecraft.nbt.CompoundTag tag) {
         tag.putInt("RacFuse", remaining);
         tag.putLong("RacFuseTick", lastTick);

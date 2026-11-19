@@ -95,11 +95,13 @@ class Rac1BlasterArrowTest {
     }
 
     @Test
-    @DisplayName("The renderer of the arrow of the Blaster hides it while it is at the mouth")
+    @DisplayName("The Blaster renderer admits imported effects without any vanilla arrow path")
     void theRendererHidesTheArrow() {
         String source = ModSource.of(
                 "com/github/giannigr/racmc/client/render/Rac1BlasterArrowRenderer.java");
-        assertTrue(source.contains("Rac1ArrowVisibility.hidden("),
-                "the arrow of the Blaster is drawn while it is at the mouth of the weapon");
+        assertTrue(source.contains("prepareProjectile(arrow, partialTick)"));
+        assertFalse(source.contains("extends ArrowRenderer"));
+        assertFalse(source.contains("super.render("));
+        assertFalse(source.contains("NORMAL_ARROW_LOCATION"));
     }
 }

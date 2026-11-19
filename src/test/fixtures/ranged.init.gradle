@@ -1,0 +1,6 @@
+// Explicit opt-in: probe classes never enter ordinary production/source artifacts.
+allprojects {
+    afterEvaluate {
+        project.sourceSets.main.java.srcDir(new File(project.projectDir, 'src/test/fixtures/ranged/java'))
+    }
+}

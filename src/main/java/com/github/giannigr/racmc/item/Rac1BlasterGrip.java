@@ -1,5 +1,10 @@
 package com.github.giannigr.racmc.item;
 
+import com.github.giannigr.racmc.item.weapon.HandPoseSnapshot;
+import com.github.giannigr.racmc.item.weapon.HandTransform;
+import com.github.giannigr.racmc.item.weapon.Rac1BlasterDefinition;
+import com.github.giannigr.racmc.item.weapon.WeaponDefinition.Vector;
+
 /**
  * The frame of the weapon of the game and the place of its mouth in the world.
  *
@@ -15,12 +20,10 @@ package com.github.giannigr.racmc.item;
  * <ul>
  *   <li>the skeleton of the weapon holds a chain of four joints (the joints 13, 14, 15 and 16 of
  *       the class 168) that runs along the bore. Every one of the four joints stands at the same
- *       place along the first and the second axis: the first axis {@value #BORE_X} and the second
- *       axis {@value #BORE_Y}. The chain ends at the joint 16, at the third axis
- *       {@value #MUZZLE_Z}, which is the place of the mouth of the barrel;</li>
- *   <li>the mesh itself has a ring of twelve vertices at the third axis {@value #MUZZLE_Z} that
- *       stands around the very same place - the first axis {@value #BORE_X} and the second axis
- *       {@value #BORE_Y} - and the normals of that ring point into the bore. The ring is the
+ *       place along the first and second axes, {@link #BORE_X} and {@link #BORE_Y}.
+ *       Joint16 is near z=.6141, behind the front ring;</li>
+ *   <li>the mesh has a ring of twelve vertices near {@link #MUZZLE_Z}, centered around
+ *       {@link #BORE_X} and {@link #BORE_Y}. The ring is the
  *       mouth of the barrel.</li>
  * </ul>
  *
@@ -63,13 +66,13 @@ package com.github.giannigr.racmc.item;
 public final class Rac1BlasterGrip {
 
     /** The place of the axis of the bore of the weapon, along the first axis of the mesh. */
-    public static final double BORE_X = 0.2305;
+    public static final double BORE_X = Rac1BlasterDefinition.INSTANCE.muzzle().x();
 
     /** The place of the axis of the bore of the weapon, along the second axis of the mesh. */
-    public static final double BORE_Y = -0.0300;
+    public static final double BORE_Y = Rac1BlasterDefinition.INSTANCE.muzzle().y();
 
     /** The place of the mouth of the barrel, along the third axis of the mesh. */
-    public static final double MUZZLE_Z = 0.6335;
+    public static final double MUZZLE_Z = Rac1BlasterDefinition.INSTANCE.muzzle().z();
 
     /** The smallest place of the mesh of the weapon along the first axis, which runs up. */
     public static final double MESH_MIN_X = -0.1830;
@@ -125,7 +128,10 @@ public final class Rac1BlasterGrip {
      * weapon: with the arm of the player hanging at the side of his body, the weapon points down
      * along the arm.
      */
-    public static final double[] THIRD_PERSON_ROTATION = { 180.0, 0.0, -90.0 };
+    public static final double[] THIRD_PERSON_ROTATION = {
+            Rac1BlasterDefinition.INSTANCE.itemRotation().x(),
+            Rac1BlasterDefinition.INSTANCE.itemRotation().y(),
+            Rac1BlasterDefinition.INSTANCE.itemRotation().z() };
 
     /**
      * The turn of the model of the item in the first person, in degrees.
@@ -135,7 +141,10 @@ public final class Rac1BlasterGrip {
      * weapon points away from the eye of the player, into the screen, and the up axis of the
      * weapon points up, into the screen.
      */
-    public static final double[] FIRST_PERSON_ROTATION = { 0.0, 180.0, 90.0 };
+    public static final double[] FIRST_PERSON_ROTATION = {
+            Rac1BlasterDefinition.INSTANCE.firstPerson().rotation().x(),
+            Rac1BlasterDefinition.INSTANCE.firstPerson().rotation().y(),
+            Rac1BlasterDefinition.INSTANCE.firstPerson().rotation().z() };
 
     /**
      * The size of the weapon in the first person, as a share of its size in the game.
@@ -144,7 +153,7 @@ public final class Rac1BlasterGrip {
      * and it is open to the review of the owner of the project. The size of the weapon in the
      * world is the size of the game.
      */
-    public static final double FIRST_PERSON_SCALE = 0.55;
+    public static final double FIRST_PERSON_SCALE = Rac1BlasterDefinition.INSTANCE.firstPerson().scale();
 
     /**
      * The place of the hand of the player in the first person, in blocks.
@@ -165,7 +174,10 @@ public final class Rac1BlasterGrip {
      * towards the player, so the picture of the weapon in the lists is the weapon seen from the
      * side and not the weapon seen from above.
      */
-    public static final double[] GUI_ROTATION = { 0.0, 60.0, 90.0 };
+    public static final double[] GUI_ROTATION = {
+            Rac1BlasterDefinition.INSTANCE.gui().rotation().x(),
+            Rac1BlasterDefinition.INSTANCE.gui().rotation().y(),
+            Rac1BlasterDefinition.INSTANCE.gui().rotation().z() };
 
     /**
      * The greatest place of the mouth of the weapon from the eye of the player, in blocks.
@@ -282,8 +294,16 @@ public final class Rac1BlasterGrip {
      * @return the place of the mouth of the weapon
      */
     public static Point muzzle(double x, double y, double z, Look look) {
-        return toWorld(x, y, z, inModel(new double[] { BORE_X, BORE_Y, MUZZLE_Z }, aim(look)),
-                look.bodyYaw());
+        var pose = com.github.giannigr.racmc.item.weapon.HandPoseSnapshot.standing(
+                new com.github.giannigr.racmc.item.weapon.WeaponDefinition.Vector(x, y, z),
+                look.bodyYaw(), look.headYaw(), look.headPitch(), false, false, 1);
+        return muzzle(pose);
+    }
+
+    public static Point muzzle(com.github.giannigr.racmc.item.weapon.HandPoseSnapshot pose) {
+        var point = com.github.giannigr.racmc.item.weapon.HandTransform.muzzle(
+                com.github.giannigr.racmc.item.weapon.Rac1BlasterDefinition.INSTANCE, pose);
+        return new Point(point.x(), point.y(), point.z());
     }
 
     /**
@@ -330,30 +350,9 @@ public final class Rac1BlasterGrip {
      * @return the place in the frame of the model of the player
      */
     public static double[] inModel(double[] mesh, ArmTurn arm) {
-        double[] place = { mesh[0], mesh[1], mesh[2] };
-        // The turn of the model of the item: the game of blocks turns the model around the first
-        // axis, then around the second axis and then around the third axis, so the third axis of
-        // the turn is turned first.
-        rotateZ(place, THIRD_PERSON_ROTATION[2]);
-        rotateY(place, THIRD_PERSON_ROTATION[1]);
-        rotateX(place, THIRD_PERSON_ROTATION[0]);
-        // The place of the item in the joint of the arm.
-        place[0] += ITEM_IN_JOINT_X;
-        place[1] += ITEM_IN_JOINT_Y;
-        place[2] += ITEM_IN_JOINT_Z;
-        // The turn of the joint of the arm: a quarter around the first axis and half a turn around
-        // the second axis.
-        rotateY(place, 180.0);
-        rotateX(place, -90.0);
-        // The turn of the arm of the player: the game of blocks turns the joint of the arm around
-        // the first axis of the model and then around the second axis.
-        rotateX(place, arm.x());
-        rotateY(place, arm.y());
-        // The place of the joint of the arm.
-        place[0] += ARM_JOINT_X;
-        place[1] += ARM_JOINT_Y;
-        place[2] += ARM_JOINT_Z;
-        return place;
+        var pose = HandPoseSnapshot.standing(new Vector(0, 0, 0), 0, arm.y(), arm.x() + 90, false, false, 1);
+        var point = HandTransform.modelPoint(Rac1BlasterDefinition.INSTANCE, pose, new Vector(mesh[0], mesh[1], mesh[2]));
+        return new double[]{point.x(), point.y(), point.z()};
     }
 
     /**
@@ -364,22 +363,9 @@ public final class Rac1BlasterGrip {
      * @return the direction in the frame of the model of the player
      */
     public static double[] inModelDirection(double[] mesh, ArmTurn arm) {
-        double[] place = { mesh[0], mesh[1], mesh[2] };
-        // The turn of the model of the item: the game of blocks turns the model around the first
-        // axis, then around the second axis and then around the third axis, so the third axis of
-        // the turn is turned first.
-        rotateZ(place, THIRD_PERSON_ROTATION[2]);
-        rotateY(place, THIRD_PERSON_ROTATION[1]);
-        rotateX(place, THIRD_PERSON_ROTATION[0]);
-        // The turn of the joint of the arm: a quarter around the first axis and half a turn around
-        // the second axis.
-        rotateY(place, 180.0);
-        rotateX(place, -90.0);
-        // The turn of the arm of the player: the game of blocks turns the joint of the arm around
-        // the first axis of the model and then around the second axis.
-        rotateX(place, arm.x());
-        rotateY(place, arm.y());
-        return place;
+        var point = inModel(mesh, arm);
+        var origin = inModel(new double[]{0, 0, 0}, arm);
+        return new double[]{point[0] - origin[0], point[1] - origin[1], point[2] - origin[2]};
     }
 
     /**
@@ -393,15 +379,9 @@ public final class Rac1BlasterGrip {
      * @return the place in the world
      */
     public static Point toWorld(double x, double y, double z, double[] model, double bodyYaw) {
-        // The move of the game of blocks below the shoulders of the player.
-        double[] world = { model[0], model[1] - MODEL_HEIGHT, model[2] };
-        // The turn of the game of blocks around the vertical axis by a half a turn and the turn
-        // around the side axis by a half a turn.
-        world[0] = -world[0];
-        world[1] = -world[1];
-        // The turn of the body of the player.
-        rotateY(world, 180.0 - bodyYaw);
-        return new Point(world[0] + x, world[1] + y, world[2] + z);
+        var pose = HandPoseSnapshot.standing(new Vector(x, y, z), bodyYaw, 0, 0, false, false, 1);
+        var world = HandTransform.worldPoint(pose, new Vector(model[0], model[1], model[2]));
+        return new Point(world.x(), world.y(), world.z());
     }
 
     /**
@@ -412,40 +392,8 @@ public final class Rac1BlasterGrip {
      * @return the direction in the world
      */
     public static double[] toWorldDirection(double[] model, double bodyYaw) {
-        double[] world = { model[0], model[1], model[2] };
-        world[0] = -world[0];
-        world[1] = -world[1];
-        rotateY(world, 180.0 - bodyYaw);
-        return world;
-    }
-
-    private static void rotateX(double[] place, double degrees) {
-        double radians = Math.toRadians(degrees);
-        double cos = Math.cos(radians);
-        double sin = Math.sin(radians);
-        double y = place[1];
-        double z = place[2];
-        place[1] = y * cos - z * sin;
-        place[2] = y * sin + z * cos;
-    }
-
-    private static void rotateY(double[] place, double degrees) {
-        double radians = Math.toRadians(degrees);
-        double cos = Math.cos(radians);
-        double sin = Math.sin(radians);
-        double x = place[0];
-        double z = place[2];
-        place[0] = x * cos + z * sin;
-        place[2] = -x * sin + z * cos;
-    }
-
-    private static void rotateZ(double[] place, double degrees) {
-        double radians = Math.toRadians(degrees);
-        double cos = Math.cos(radians);
-        double sin = Math.sin(radians);
-        double x = place[0];
-        double y = place[1];
-        place[0] = x * cos - y * sin;
-        place[1] = x * sin + y * cos;
+        var point = toWorld(0, 0, 0, model, bodyYaw);
+        var origin = toWorld(0, 0, 0, new double[]{0, 0, 0}, bodyYaw);
+        return new double[]{point.x() - origin.x(), point.y() - origin.y(), point.z() - origin.z()};
     }
 }

@@ -118,6 +118,17 @@ public final class BlasterItemRenderer extends BlockEntityWithoutLevelRenderer {
                         if (context.firstPerson()) {
                             alignWithWorldMuzzle(adjusted, context);
                         }
+                        if ((context == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND
+                                || context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND)
+                                && entity instanceof net.minecraft.world.entity.player.Player player) {
+                            var skin = Rac1BlasterClient.skinCorrection(player);
+                            adjusted.translate(skin.x(), skin.y(), skin.z());
+                        }
+                        if (context.firstPerson() || context == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND
+                                || context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND) {
+                            var move = this.pose.muzzleCorrection();
+                            adjusted.translate(move.x(), move.y(), move.z());
+                        }
                     });
         } catch (RuntimeException | LinkageError exception) {
             this.failure = exception.toString();
@@ -157,7 +168,7 @@ public final class BlasterItemRenderer extends BlockEntityWithoutLevelRenderer {
             return;
         }
         Matrix4f modelView = Rac1BlasterFrame.modelView();
-        Vector3f camera = Rac1BlasterFrame.camera();
+        org.joml.Vector3d camera = Rac1BlasterFrame.camera();
         Rac1BlasterGrip.Point muzzle = Rac1BlasterClient.muzzleOf(player);
         // The place of the mouth of the weapon in the world, in the space of the camera.
         Vector4f world = new Vector4f((float) (muzzle.x() - camera.x),

@@ -26,7 +26,8 @@ public final class Rac1BlasterPose {
      * <p>The game measures it in the code of the game: the weapon blends to its sequence 1 when
      * it is held and back to it when it stops firing.
      */
-    public static final String HELD_SEQUENCE = "sequence_1";
+    public static final String HELD_SEQUENCE = "sequence_"
+            + com.github.giannigr.racmc.item.weapon.Rac1BlasterDefinition.INSTANCE.heldSequence();
 
     /**
      * The name of the sequence of the weapon that is played while it fires.
@@ -34,7 +35,8 @@ public final class Rac1BlasterPose {
      * <p>The game measures it in the code of the game: the weapon blends to its sequence 4 when
      * it fires.
      */
-    public static final String FIRE_SEQUENCE = "sequence_4";
+    public static final String FIRE_SEQUENCE = "sequence_"
+            + com.github.giannigr.racmc.item.weapon.Rac1BlasterDefinition.INSTANCE.fireSequence();
 
     /** The name of the first sequence of the weapon, which is used when a sequence is missing. */
     private static final String FIRST_SEQUENCE = "sequence_0";
@@ -50,6 +52,7 @@ public final class Rac1BlasterPose {
 
     /** The weapon the pose was built for. */
     private Rac1AnimatedAsset source;
+    private com.github.giannigr.racmc.item.weapon.AnimatedMuzzleAnchor muzzleAnchor;
 
     /**
      * Builds the pose of the weapon.
@@ -67,6 +70,7 @@ public final class Rac1BlasterPose {
         if (this.source != blaster) {
             this.source = blaster;
             this.bounds = measure(blaster);
+            this.muzzleAnchor = frontRing(blaster.mesh().positions());
         }
         Rac1Animation held = sequence(blaster, HELD_SEQUENCE);
         if (held == null) {
@@ -118,6 +122,27 @@ public final class Rac1BlasterPose {
      */
     public float[] normals() {
         return this.normals;
+    }
+
+    /** Only held contexts apply this correction. GUI/demo retain the original socket animation. */
+    public com.github.giannigr.racmc.item.weapon.WeaponDefinition.Vector muzzleCorrection() {
+        if (muzzleAnchor == null || positions.length == 0)
+            throw new IllegalStateException("Blaster front ring is not the verified twelve-vertex ring");
+        return muzzleAnchor.correction(positions,
+                com.github.giannigr.racmc.item.weapon.Rac1BlasterDefinition.INSTANCE.muzzle());
+    }
+
+    private static com.github.giannigr.racmc.item.weapon.AnimatedMuzzleAnchor frontRing(float[] bind) {
+        float front = -Float.MAX_VALUE;
+        for (int i = 2; i < bind.length; i += 3) front = Math.max(front, bind[i]);
+        var vertices = new java.util.ArrayList<Integer>();
+        var unique = new java.util.HashSet<String>();
+        for (int i = 0; i + 2 < bind.length; i += 3)
+            if (Math.abs(bind[i + 2] - front) < .0001
+                    && unique.add(bind[i] + "," + bind[i + 1] + "," + bind[i + 2])) vertices.add(i / 3);
+        if (vertices.size() != 12) return null;
+        return new com.github.giannigr.racmc.item.weapon.AnimatedMuzzleAnchor(
+                vertices.stream().mapToInt(Integer::intValue).toArray());
     }
 
     /**

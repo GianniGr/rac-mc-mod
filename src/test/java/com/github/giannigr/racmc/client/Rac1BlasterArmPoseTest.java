@@ -18,6 +18,33 @@ import org.junit.jupiter.api.Test;
  * the other arm of the player is never turned.
  */
 class Rac1BlasterArmPoseTest {
+    @Test
+    void actualCustomBridgePreservesHeadAndOtherArmWhileVanillaAttackUsesDeterministicAim() {
+        var root = net.minecraft.client.model.geom.builders.LayerDefinition.create(
+                net.minecraft.client.model.HumanoidModel.createMesh(
+                        net.minecraft.client.model.geom.builders.CubeDeformation.NONE, 0), 64, 64).bakeRoot();
+        var model = new net.minecraft.client.model.HumanoidModel<net.minecraft.world.entity.LivingEntity>(root);
+        model.attackTime = .37f;
+        float desiredPitch = .21f;
+        for (var side : net.minecraft.world.entity.HumanoidArm.values())
+            for (float priorHead : new float[]{-1.4f, -.7853982f, 0, .9f}) {
+                model.head.xRot = priorHead;
+                var other = side == net.minecraft.world.entity.HumanoidArm.RIGHT ? model.leftArm : model.rightArm;
+                other.xRot = .123f; other.yRot = -.456f; other.zRot = .789f;
+                Rac1BlasterArmParams.applyAim(model, side,
+                        new com.github.giannigr.racmc.item.weapon.RangedPlayerPose.Look(
+                                37, 29, (float) Math.toDegrees(desiredPitch)), true);
+                var held = side == net.minecraft.world.entity.HumanoidArm.RIGHT ? model.rightArm : model.leftArm;
+                // Literal vanilla381..406 head term, not the production term helper.
+                float sourceSine = net.minecraft.util.Mth.sin(model.attackTime * (float) Math.PI);
+                float afterSourceHeadTerm = held.xRot - sourceSine * -(model.head.xRot - .7f) * .75f;
+                float expected = desiredPitch - (float) (Math.PI / 2)
+                        - sourceSine * -(desiredPitch - .7f) * .75f;
+                assertEquals(expected, afterSourceHeadTerm, 3e-7);
+                assertEquals(priorHead, model.head.xRot);
+                assertEquals(.123f, other.xRot); assertEquals(-.456f, other.yRot); assertEquals(.789f, other.zRot);
+            }
+    }
 
     @Test
     @DisplayName("The arm points at the place the player looks at while the weapon fires")
