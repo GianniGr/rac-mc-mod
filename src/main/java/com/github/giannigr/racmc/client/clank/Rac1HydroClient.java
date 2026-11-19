@@ -20,7 +20,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 @EventBusSubscriber(modid=RacMcConstants.MOD_ID,value=Dist.CLIENT)
 public final class Rac1HydroClient {
     public record View(Rac1HydroWire.Snapshot state,long localTick) {}
-    private record Pending(long serial,Rac1HydroMotion.Input frame) {}
+    private record Pending(long serial,Rac1HydroMotion.Input frame,double lookPitch) {}
     private static final Map<UUID,View> VIEWS=new HashMap<>();
     private static final ArrayDeque<Pending> PENDING=new ArrayDeque<>();
     private static Rac1HydroMotion motion=new Rac1HydroMotion();
@@ -53,7 +53,7 @@ public final class Rac1HydroClient {
         if(correcting&&Rac1HydroWater.observe(player).compatible()) {
             player.setPos(state.position().x(),state.position().y(),state.position().z());
             player.setDeltaMovement(Rac1HydroRuntime.vec(motion.velocity()).scale(1.0/20));
-            for(var pending:PENDING){frame=pending.frame();simulate(player);}
+            for(var pending:PENDING){frame=pending.frame();simulate(player,pending.lookPitch());}
         }
     }
     @SubscribeEvent public static void input(MovementInputUpdateEvent event) {
@@ -67,13 +67,13 @@ public final class Rac1HydroClient {
                 minecraft.options.keyJump.isDown(),minecraft.options.keyShift.isDown(),
                 (keys.left?1:0)-(keys.right?1:0),(keys.up?1:0)-(keys.down?1:0),player.getYRot())
                 :Rac1HydroMotion.Input.RELEASED;
-        long next=serial++;PENDING.addLast(new Pending(next,frame));
+        long next=serial++;PENDING.addLast(new Pending(next,frame,Rac1HydroMotion.boundedLookPitch(player.getXRot())));
         while(PENDING.size()>8)PENDING.removeFirst();
         PacketDistributor.sendToServer(new Rac1HydroNetwork.Input(new Rac1HydroWire.Input(epoch,next,frame)));
         var water=Rac1HydroWater.observe(player);var probe=motion.copy();
         if(water.propulsion())for(int i=0;i<3;i++) {
             var step=probe.step(frame,Rac1HydroRuntime.vector(player.getDeltaMovement().scale(20)),
-                    previousWater==Rac1HydroWater.Mode.SURFACE&&frame.dive(),water.lowAir());
+                    previousWater==Rac1HydroWater.Mode.SURFACE&&frame.dive(),water.lowAir(),player.getXRot());
             if(step.controlled()){keys.jumping=false;keys.shiftKeyDown=false;break;}
         }
     }
@@ -83,10 +83,10 @@ public final class Rac1HydroClient {
         if(view==null||!view.state().access()||view.state().epoch()!=epoch||world!=player.level())return false;
         if(travelTick==player.tickCount)return controlledTick==player.tickCount;
         travelTick=player.tickCount;
-        boolean controlled=simulate(player);if(controlled)controlledTick=player.tickCount;
+        boolean controlled=simulate(player,player.getXRot());if(controlled)controlledTick=player.tickCount;
         return controlled;
     }
-    private static boolean simulate(LocalPlayer player) {
+    private static boolean simulate(LocalPlayer player,double lookPitch) {
         var water=Rac1HydroWater.observe(player);
         boolean dive=previousWater==Rac1HydroWater.Mode.SURFACE&&water.mode()==Rac1HydroWater.Mode.SUBMERGED;
         previousWater=water.mode();
@@ -96,7 +96,7 @@ public final class Rac1HydroClient {
         boolean controlled=false;
         for(int i=0;i<3;i++) {
             if(!Rac1HydroWater.observe(player).propulsion()){motion.cancel();break;}
-            var step=motion.step(frame,nativeVelocity,dive&&frame.dive(),water.lowAir());
+            var step=motion.step(frame,nativeVelocity,dive&&frame.dive(),water.lowAir(),lookPitch);
             if(!step.controlled())continue;
             if(step.displacement().length()>.54){motion.cancel();break;}
             controlled=true;var before=player.position();

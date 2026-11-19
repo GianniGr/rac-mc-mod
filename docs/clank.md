@@ -344,7 +344,15 @@ Configured **Sprint key held** requests thrust only while eye-submerged, never
 from native sprint/toggle state or a hardcoded Ctrl key. No direction key is needed.
 Configured Jump pitches up; Sneak pitches down; Jump wins both. Direction keys
 request yaw-relative heading (back turns, not reverse gear); normalized diagonals,
-positive facing speed, no camera-pitch coupling or added vertical impulse.
+positive facing speed and no added vertical impulse. During **held underwater
+thrust only**, native player look pitch is a finite-clamped ±78° pitch target
+through the existing spring/rate limit. Jump/Sneak override that camera target;
+Jump wins both. Existing low-air/initial dive-in priority remains. Looking around
+does not change normal native surface/dry travel or steer released coast/drift.
+This is an owner-approved Minecraft adaptation, not original camera-pitch behavior.
+The server reads native player rotation, not a new Hydro packet field. Prediction
+uses the same bound and retains local look targets for bounded checkpoint replay;
+resolved pitch/rate already travel in the existing authoritative Hydro snapshot.
 
 Independent source60 controller: three bounded native-collision substeps per MC
 tick, 1 source unit mapped to 1 block, target7 units/s, accel13/brake8 units/s²,

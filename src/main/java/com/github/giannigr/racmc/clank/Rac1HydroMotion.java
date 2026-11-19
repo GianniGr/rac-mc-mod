@@ -32,6 +32,10 @@ public final class Rac1HydroMotion {
     private Vector effective=Vector.ZERO;
     private boolean unresolved;
     public Step step(Input input,Vector nativeVelocity,boolean enteredByDive,boolean lowAir) {
+        return step(input,nativeVelocity,enteredByDive,lowAir,0);
+    }
+    /** Native Minecraft look pitch is positive down. It only targets pitch during held thrust. */
+    public Step step(Input input,Vector nativeVelocity,boolean enteredByDive,boolean lowAir,double nativeLookPitch) {
         if(unresolved)throw new IllegalStateException("Unresolved Hydro collision");
         if(stage==Stage.NATIVE) {
             if(input.magnitude()>.15&&nativeVelocity.length()>.1)stroke=Math.min(36000,stroke+1);
@@ -63,7 +67,7 @@ public final class Rac1HydroMotion {
                     -Math.toRadians(300)*DT,Math.toRadians(300)*DT);
             yaw=wrap(yaw+yawRate);
             double targetPitch=input.rise()||lowAir?-Math.toRadians(78):
-                    input.dive()?Math.toRadians(78):0;
+                    input.dive()?Math.toRadians(78):input.thrust()?Math.toRadians(boundedLookPitch(nativeLookPitch)):0;
             if(diving)targetPitch=Math.max(Math.toRadians(78)*.35,targetPitch);
             pitchRate=Math.clamp(pitchRate+(targetPitch-pitch)*.015-pitchRate*.2,
                     -Math.toRadians(70)*DT,Math.toRadians(70)*DT);
@@ -100,5 +104,8 @@ public final class Rac1HydroMotion {
         yaw=s.yaw();yawRate=s.yawRate();pitch=s.pitch();pitchRate=s.pitchRate();effective=s.effective();unresolved=false;
     }
     public Rac1HydroMotion copy(){var copy=new Rac1HydroMotion();copy.restore(state());return copy;}
+    public static double boundedLookPitch(double degrees) {
+        return Double.isFinite(degrees)?Math.clamp(degrees,-78,78):0;
+    }
     private static double wrap(double value){return Math.IEEEremainder(value,Math.PI*2);}
 }

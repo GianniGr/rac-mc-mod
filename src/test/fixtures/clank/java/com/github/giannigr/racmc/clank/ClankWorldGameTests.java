@@ -407,6 +407,43 @@ public final class ClankWorldGameTests {
             System.out.println("HYDRO_OVERRIDE optionalOff/on/switch/dimension/unequip/logout PASS");done(h,p);
         });
     }
+    @GameTest(template="empty",batch="clank_26_hydro_look",timeoutTicks=40)
+    public static void nativeLookPitchSteersOnlyUnderwaterThrustAndSyncsResolvedPitch(GameTestHelper h) {
+        var base=pool(h);var up=player(h,base.add(3,9,3));var neutral=player(h,base.add(9,9,9));
+        var down=player(h,base.add(15,9,15));var players=new ServerPlayer[]{up,neutral,down};
+        for(int i=0;i<players.length;i++) {
+            var p=players[i];equip(h,p,"heli");p.setPos(base.add(3+i*6,2,3+i*6));
+            p.setOnGround(false);p.setDeltaMovement(Vec3.ZERO);p.connection.resetPosition();
+            p.connection.handleMovePlayer(new ServerboundMovePlayerPacket.Rot(0,(i-1)*45,false));
+            p.setAirSupply(200);
+        }
+        for(int tick=1;tick<=12;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                for(var p:players)hydroFrame(p,t,true,false,false);
+                if(t==12) {
+                    h.assertTrue(up.getY()>neutral.getY()&&down.getY()<neutral.getY(),
+                            "Authoritative native look up/down failed to steer");
+                    for(var p:players) {
+                        var s=Rac1HydroRuntime.snapshot(p);
+                        h.assertTrue(s.controlled()&&Math.abs(s.motion().pitch())<=Math.toRadians(78)
+                                &&Math.abs(s.motion().pitchRate())<=Math.toRadians(70)/60+.00001,
+                                "Look exceeded existing pitch bounds");
+                        h.assertTrue(p.getAirSupply()<200,"Look steering prevented native air drain");
+                    }
+                    Rac1HydroRuntime.tracking(neutral,up);
+                    h.assertTrue(((Sink)neutral.connection).lastHydro.motion().pitch()
+                            ==Rac1HydroRuntime.snapshot(up).motion().pitch(),"Remote pitch checkpoint mismatch");
+                    for(var p:players){p.setPos(base.add(3,9,3));p.setDeltaMovement(Vec3.ZERO);}
+                }
+            });
+        }
+        h.runAtTickTime(13,()->{
+            for(var p:players){hydroFrame(p,13,true,false,false);
+                h.assertTrue(!Rac1HydroRuntime.snapshot(p).controlled(),"Look captured dry native travel");}
+            System.out.println("HYDRO_LOOK nativePitch/upNeutralDown/bounds/air/remote/dry PASS");done(h,players);
+        });
+    }
 
     @GameTest(template="empty",batch="clank_13_same_glide_repress",timeoutTicks=60)
     public static void shortQueuedRepressRearmsHeliWithoutNewActionOrMotionAndFinalReleaseStillDamages(GameTestHelper h) {

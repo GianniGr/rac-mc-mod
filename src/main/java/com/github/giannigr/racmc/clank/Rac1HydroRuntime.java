@@ -100,7 +100,7 @@ public final class Rac1HydroRuntime {
                 long episode=c.epoch;
                 var current=Rac1HydroWater.observe(player);
                 if(!current.propulsion()){c.motion.cancel();c.handoff=c.controlled&&current.compatible();break;}
-                var step=c.motion.step(frame,nativeVelocity,diveEntry&&frame.dive(),current.lowAir());
+                var step=c.motion.step(frame,nativeVelocity,diveEntry&&frame.dive(),current.lowAir(),player.getXRot());
                 c.steps++;
                 if(!step.controlled())continue;
                 if(step.displacement().length()>.54){c.motion.cancel();break;}
