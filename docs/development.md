@@ -539,6 +539,24 @@ These numeric bounds are not GPU/new-head screenshots or owner natural-fit accep
 Independent T20 exact-head visual checks and B3 owner-held grip/audio gates remain.
 This is corrective pass3 of3; unresolved genuine criteria require escalation, not pass4.
 
+### Owner-directed left FP depth match
+
+In the subsequent approved fitting wave, the reference is the unchanged right FP
+of `01085c0` (T20 WIDE FOV70 crouch capture `T20Shooter-requested-28.png`).
+The left-only JSON depth offset is removed: both FP slots retain their upright
+effective orientation and `.55` scale and use the existing exact muzzle projection.
+Right FP, TP/world transforms, animation and server behavior do not change.
+
+The real-disc comparison pairs the same skin, stance, FOV and source phase/blend
+through the actual vanilla display transforms. It checks depth and apparent extent
+separately from ring agreement. Viewport clipping and projected bounds intersecting
+the HUD region are reported separately; a size match to the cropped right reference
+is not a clipping fix. The owner accepted the bottom-edge grip clipping shown
+in that reference frame, not materially worse cropping or blanket dynamic fit.
+New-head live comparison and B3 whole-body anchoring remain open. The earlier
+left-only clearance test and deeper both-hand prototype are retained as historical
+evidence, not current behavior.
+
 Accepted Creative/Survival/Adventure/main-hand/spectator rules, two-tick held cadence,
 ordinary-arrow offhand-first payment, damage/drag/no-gravity/speed2/lifetime12/no-pickup
 remain. A same-tick duplicate pull cannot admit another immediate shot. Dry-click state
