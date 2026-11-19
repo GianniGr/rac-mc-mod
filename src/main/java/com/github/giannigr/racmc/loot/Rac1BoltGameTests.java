@@ -117,6 +117,49 @@ public final class Rac1BoltGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty", batch = "defaultBatch")
+    public static void returningWrenchStartsOneBoltWithoutCreditingOrStealing(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var ledger = Rac1BoltLedger.get(level);
+        var owner = ledgerAccount(level, new java.util.ArrayList<>());
+        var other = ledgerAccount(level, new java.util.ArrayList<>());
+        BlockPos pos = helper.absolutePos(new BlockPos(2, 2, 2));
+        Vec3 center = Vec3.atCenterOf(pos);
+        owner.setPos(center.add(5, 0, 0));
+        other.setPos(center);
+        var bounds = new net.minecraft.world.phys.AABB(pos).inflate(4);
+        var existing = new java.util.HashSet<>(level.getEntitiesOfClass(Rac1BoltEntity.class, bounds));
+        for (int i = 0; i < 3; i++) ledger.reward(UUID.randomUUID(), level, pos, 1);
+        ledger.emit(level);
+        var bolts = level.getEntitiesOfClass(Rac1BoltEntity.class, bounds).stream()
+                .filter(bolt -> !existing.contains(bolt))
+                .sorted(java.util.Comparator.comparingInt(Rac1BoltEntity::getId)).toList();
+        helper.assertTrue(bolts.size() == 3, "Expected three admitted test bolts");
+        double[] offsets = {1, 2.69, 2.71};
+        for (int i = 0; i < bolts.size(); i++) {
+            var point = center.add(0, offsets[i], 0);
+            var state = Rac1BoltMotion.legacy(new Rac1BoltMotion.V(point.x, point.y, point.z));
+            bolts.get(i).restoreMotion(state);
+            ledger.move(bolts.get(i).getUUID(), state);
+        }
+        Rac1BoltEntity.attractFromReturningWrench(owner, center);
+        helper.assertTrue(owner.getUUID().equals(ledger.pickup(bolts.get(0).getUUID()).motion().target()),
+                "First eligible bolt should home to the wrench owner");
+        helper.assertTrue(ledger.pickup(bolts.get(1).getUUID()).motion().target() == null,
+                "A return update must not activate multiple bolts");
+        Rac1BoltEntity.attractFromReturningWrench(other, center);
+        helper.assertTrue(owner.getUUID().equals(ledger.pickup(bolts.get(0).getUUID()).motion().target()),
+                "A competing wrench must not steal an attracting bolt");
+        helper.assertTrue(other.getUUID().equals(ledger.pickup(bolts.get(1).getUUID()).motion().target()),
+                "An already attracting bolt must not consume the next update's quota");
+        Rac1BoltEntity.attractFromReturningWrench(owner, center);
+        helper.assertTrue(ledger.pickup(bolts.get(2).getUUID()).motion().target() == null,
+                "A vertical offset outside the 3D radius must not attract");
+        helper.assertTrue(ledger.balance(owner.getUUID()) == 0 && ledger.balance(other.getUUID()) == 0,
+                "Attraction must not award currency before body arrival");
+        helper.succeed();
+    }
+
     private static net.minecraft.server.level.ServerPlayer ledgerAccount(
             net.minecraft.server.level.ServerLevel level,
             java.util.List<net.minecraft.network.protocol.Packet<?>> packets) {

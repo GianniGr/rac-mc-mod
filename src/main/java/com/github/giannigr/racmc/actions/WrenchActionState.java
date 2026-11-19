@@ -145,11 +145,11 @@ public final class WrenchActionState {
                 ActionVector old = position;
                 double oldSpin = spin;
                 ActionRotation oldRotation = rotation;
-                flightStep(source.hand, source.rotation, surface);
+                ActionVector returnOrigin = flightStep(source.hand, source.rotation, surface);
                 flightSteps.add(new FlightStep(step, old, position, oldSpin, spin, oldRotation, rotation,
                         oldSequence, oldBlend,
                         nearCatch || phase == Phase.CATCH ? 1 : 6,
-                        nearCatch ? catchBlend : wrenchBlendWeight, phase == Phase.DETACHED_BACK));
+                        nearCatch ? catchBlend : wrenchBlendWeight, returnOrigin));
             }
             if ((phase == Phase.CATCH || phase == Phase.RECOVERY) && frame.finished) {
                 var finalSteps = java.util.List.copyOf(flightSteps);
@@ -161,7 +161,7 @@ public final class WrenchActionState {
         }
     }
 
-    private void flightStep(ActionVector hand, ActionRotation handRotation, Surface surface) {
+    private ActionVector flightStep(ActionVector hand, ActionRotation handRotation, Surface surface) {
         double dt = 1.0 / 60;
         spin = (spin + 24.434608 * dt) % (2 * Math.PI);
         double ground = surface.groundHeight(position);
@@ -171,6 +171,7 @@ public final class WrenchActionState {
             double dy = Math.clamp(target - position.y(), -limit, limit);
             position = position.add(new ActionVector(0, dy, 0));
         }
+        ActionVector returnOrigin = phase == Phase.DETACHED_BACK ? position : null;
         if (phase == Phase.DETACHED_OUT) {
             ActionVector next = position.add(direction.multiply(speed * dt));
             ActionVector contact = surface.firstContact(position, next);
@@ -203,6 +204,7 @@ public final class WrenchActionState {
                 position = position.add(toHand.normalized().multiply(travel));
             }
         }
+        return returnOrigin;
     }
 
     /**
@@ -286,7 +288,7 @@ public final class WrenchActionState {
             boolean grounded) {}
     public record FlightStep(int substep, ActionVector from, ActionVector to, double fromSpin,
             double toSpin, ActionRotation fromRotation, ActionRotation toRotation, int fromSequence,
-            double fromBlend, int sequence, double blend, boolean returning) {}
+            double fromBlend, int sequence, double blend, ActionVector returnOrigin) {}
 
     @FunctionalInterface
     public interface Surface {

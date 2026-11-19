@@ -91,6 +91,19 @@ class WrenchActionStateTest {
         assertFalse(state.claimTarget(UUID.randomUUID()));
     }
 
+    @Test void boltScanUsesOnlyActualReturnUpdatesIncludingTheCatchStep() {
+        var state = throwing();
+        state.tick(1, true, false, HAND, new ClipFrame(0.1, true, false, false),
+                (from, to) -> to.x() >= 0.3 ? new ActionVector(0.3, 1, 0) : null);
+        var steps = state.flightSteps();
+        assertNull(steps.getFirst().returnOrigin(), "outward update that starts return must not scan");
+        var last = steps.getLast();
+        assertEquals(Phase.CATCH, state.presentation().phase());
+        assertEquals(HAND, last.to());
+        assertNotEquals(HAND, last.returnOrigin(), "scan is before return displacement");
+        assertEquals(last.from(), last.returnOrigin());
+    }
+
     @Test void lowFlightApproachesOriginalFloorClearanceEvenBelowWorldZero() {
         var state = new WrenchActionState();
         assertTrue(state.start(1, Intent.THROW, 0, THROW,

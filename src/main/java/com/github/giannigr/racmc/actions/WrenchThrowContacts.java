@@ -1,5 +1,6 @@
 package com.github.giannigr.racmc.actions;
 
+import com.github.giannigr.racmc.loot.Rac1BoltEntity;
 import com.github.giannigr.racmc.serverassets.Rac1WrenchServerData;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -44,6 +45,9 @@ final class WrenchThrowContacts {
             if (!authorized(player, step, reach) || !loaded(owner, head) || !loaded(owner, previousHead)) {
                 audit.eligibility++;
                 continue;
+            }
+            if (step.returnOrigin() != null && WrenchActions.valid(owner)) {
+                Rac1BoltEntity.attractFromReturningWrench(owner, WrenchActions.vec(step.returnOrigin()));
             }
             audit.samples++;
             var blocks = WrenchSlamBlocks.snapshot(owner,

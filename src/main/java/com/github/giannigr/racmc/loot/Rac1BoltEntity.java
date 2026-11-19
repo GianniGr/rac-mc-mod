@@ -100,6 +100,36 @@ public final class Rac1BoltEntity extends Entity {
         }
         ledger.move(getUUID(), motion);
     }
+    /** At most one existing bolt per return substep; credit is still only on body arrival. */
+    public static void attractFromReturningWrench(ServerPlayer owner, Vec3 center) {
+        ServerLevel level = owner.serverLevel();
+        if (!eligible(owner, level) || !level.hasChunkAt(net.minecraft.core.BlockPos.containing(center))) return;
+        double radius = 2.7F;
+        var bounds = new net.minecraft.world.phys.AABB(center, center).inflate(radius);
+        var bolts = level.getEntitiesOfClass(Rac1BoltEntity.class, bounds,
+                bolt -> bolt.position().distanceToSqr(center) < radius * radius);
+        bolts.sort(Comparator.comparingInt(Rac1BoltEntity::getId));
+        for (var bolt : bolts) {
+            if (bolt.beginRemoteAttraction(level, owner)) return;
+        }
+    }
+
+    private boolean beginRemoteAttraction(ServerLevel level, ServerPlayer owner) {
+        if (isRemoved()) return false;
+        var ledger = Rac1BoltLedger.get(level);
+        var record = ledger.pickup(getUUID());
+        if (record == null) return false;
+        State current = motion != null ? motion : record.motion();
+        if (current == null) current = Rac1BoltMotion.legacy(new V(getX(), getY(), getZ()));
+        State next = Rac1BoltMotion.beginRemoteAttraction(current, owner.getUUID(), random::nextDouble);
+        if (next == current) return false;
+        restoreMotion(next);
+        ledger.move(getUUID(), next);
+        com.github.giannigr.racmc.sound.Rac1AudioSignal.emit(level, position(),
+                com.github.giannigr.racmc.sound.Rac1AudioEvent.attraction(value()));
+        return true;
+    }
+
     private static boolean eligible(ServerPlayer player, ServerLevel level) {
         return player != null && player.isAlive() && !player.isSpectator()
                 && !player.hasDisconnected() && player.serverLevel() == level;
