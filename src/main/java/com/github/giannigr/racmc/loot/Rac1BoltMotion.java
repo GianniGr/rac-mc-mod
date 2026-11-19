@@ -83,6 +83,16 @@ public final class Rac1BoltMotion {
                 s.total, s.remaining, s.settleFrames, s.idleFrames, s.spin, s.secondary,
                 s.direction, s.flySpeed, s.target);
     }
+
+    static State beginRemoteAttraction(State s, UUID collector, DoubleSupplier random) {
+        if (s.phase == Phase.ATTRACTING || s.target != null) return s;
+        V velocity = s.phase == Phase.IDLE
+                ? s.up.mul((3 + random.getAsDouble() * 4) / 60) : s.velocity;
+        return new State(s.position, velocity, Phase.ATTRACTING, s.startY, s.rest, s.up,
+                s.total, s.remaining, s.settleFrames, s.idleFrames, s.spin, s.secondary,
+                s.direction, 0, collector);
+    }
+
     public static Step step(State s, int value, Collision world, Hero hero, DoubleSupplier random) {
         V p = s.position, v = s.velocity, rest = s.rest, up = s.up;
         Phase phase = s.phase;

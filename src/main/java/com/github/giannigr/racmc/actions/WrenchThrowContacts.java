@@ -1,5 +1,6 @@
 package com.github.giannigr.racmc.actions;
 
+import com.github.giannigr.racmc.loot.Rac1BoltEntity;
 import com.github.giannigr.racmc.serverassets.Rac1WrenchServerData;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -31,6 +32,7 @@ final class WrenchThrowContacts {
             com.github.giannigr.racmc.serverassets.Rac1WrenchData data,
             List<WrenchActionState.FlightStep> steps) {
         var expectedHeld = owner.getMainHandItem();
+        var level = owner.serverLevel();
         ActionVector player = WrenchActions.vector(owner.position());
         double handOffset = sample.hand().subtract(player).length();
         for (var step : steps) {
@@ -41,6 +43,13 @@ final class WrenchThrowContacts {
             double reach = WrenchThrowGeometry.outwardTravelBudget() + handOffset
                     + Math.max(head.subtract(step.to()).length(),
                             previousHead.subtract(step.from()).length()) + 0.4;
+            // Currency uses the pre-move wrench origin, not the loaded/head damage query.
+            // Earlier damage/harvest callbacks can invalidate this batch before later substeps.
+            if (step.returnOrigin() != null && action.hasPendingFlightContacts()
+                    && owner.serverLevel() == level && WrenchActions.valid(owner)
+                    && step.returnOrigin().subtract(WrenchActions.vector(owner.position())).length() <= reach) {
+                Rac1BoltEntity.attractFromReturningWrench(owner, WrenchActions.vec(step.returnOrigin()));
+            }
             if (!authorized(player, step, reach) || !loaded(owner, head) || !loaded(owner, previousHead)) {
                 audit.eligibility++;
                 continue;

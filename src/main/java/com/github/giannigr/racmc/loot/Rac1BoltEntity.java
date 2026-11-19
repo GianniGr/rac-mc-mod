@@ -1,6 +1,7 @@
 package com.github.giannigr.racmc.loot;
 
 import java.util.Comparator;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.*;
 import net.minecraft.server.level.ServerLevel;
@@ -8,6 +9,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.level.*;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import com.github.giannigr.racmc.loot.Rac1BoltMotion.*;
 
@@ -15,6 +17,7 @@ import com.github.giannigr.racmc.loot.Rac1BoltMotion.*;
 public final class Rac1BoltEntity extends Entity {
     private static final EntityDataAccessor<Integer> VALUE =
             SynchedEntityData.defineId(Rac1BoltEntity.class, EntityDataSerializers.INT);
+    private static final double RETURN_ATTRACTION_RADIUS = 2.7F;
     private State motion;
     private Vec3 interpolationTarget = Vec3.ZERO;
     private int interpolationSteps;
@@ -100,6 +103,38 @@ public final class Rac1BoltEntity extends Entity {
         }
         ledger.move(getUUID(), motion);
     }
+
+    /** At most one existing bolt per return substep; credit is still only on body arrival. */
+    public static void attractFromReturningWrench(ServerPlayer owner, Vec3 center) {
+        ServerLevel level = owner.serverLevel();
+        if (!eligible(owner, level) || !level.hasChunkAt(BlockPos.containing(center))) return;
+        var bounds = new AABB(center, center).inflate(RETURN_ATTRACTION_RADIUS);
+        var bolts = level.getEntitiesOfClass(Rac1BoltEntity.class, bounds,
+                bolt -> bolt.position().distanceToSqr(center)
+                        < RETURN_ATTRACTION_RADIUS * RETURN_ATTRACTION_RADIUS);
+        bolts.sort(Comparator.comparingInt(Rac1BoltEntity::getId));
+        for (var bolt : bolts) {
+            if (bolt.beginRemoteAttraction(level, owner)) return;
+        }
+    }
+
+    private boolean beginRemoteAttraction(ServerLevel level, ServerPlayer owner) {
+        // Entity/ledger mutation is serialized with ordinary pickup on the server thread.
+        if (isRemoved() || level.getEntity(getUUID()) != this) return false;
+        var ledger = Rac1BoltLedger.get(level);
+        var record = ledger.pickup(getUUID());
+        if (record == null || record.dimension() != level.dimension()) return false;
+        State current = motion != null ? motion : record.motion();
+        if (current == null) current = Rac1BoltMotion.legacy(new V(getX(), getY(), getZ()));
+        State next = Rac1BoltMotion.beginRemoteAttraction(current, owner.getUUID(), random::nextDouble);
+        if (next == current) return false;
+        restoreMotion(next);
+        ledger.move(getUUID(), next);
+        com.github.giannigr.racmc.sound.Rac1AudioSignal.emit(level, position(),
+                com.github.giannigr.racmc.sound.Rac1AudioEvent.attraction(value()));
+        return true;
+    }
+
     private static boolean eligible(ServerPlayer player, ServerLevel level) {
         return player != null && player.isAlive() && !player.isSpectator()
                 && !player.hasDisconnected() && player.serverLevel() == level;
