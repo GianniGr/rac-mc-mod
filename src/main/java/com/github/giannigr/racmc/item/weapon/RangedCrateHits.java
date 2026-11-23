@@ -45,6 +45,14 @@ public final class RangedCrateHits {
     }
 
     public static boolean grounded(Projectile projectile, BlockPos pos) {
+        return grounded(projectile,pos,false);
+    }
+
+    public static boolean groundedBomb(com.github.giannigr.racmc.item.weapon.bomb.Rac1Bomb bomb,BlockPos pos) {
+        return grounded(bomb,pos,true);
+    }
+
+    private static boolean grounded(Projectile projectile, BlockPos pos,boolean bomb) {
         var player = owner(projectile, pos);
         if (player == null) return false;
         var level = player.serverLevel();
@@ -56,6 +64,12 @@ public final class RangedCrateHits {
         if (owner(projectile, pos) != player || level.getBlockState(pos) != state
                 || level.getBlockEntity(pos) != crate || !id.equals(crate.rewardId()) || !eligible(state)) return false;
         if (((Rac1CrateBlock) state.getBlock()).explosive()) {
+            if (bomb) {
+                var accepted=(com.github.giannigr.racmc.item.weapon.bomb.Rac1Bomb) projectile;
+                if (accepted.acceptedOwner()!=player || !crate.fuse.armFromBomb(player.getUUID(),level.getGameTime())) return false;
+                crate.sync();
+                return true;
+            }
             crate.blasterHit();
             return true; // contact handled, NEVER contact removal or reward
         }
@@ -64,6 +78,14 @@ public final class RangedCrateHits {
     }
 
     public static boolean airborne(Projectile projectile, FallingBlockEntity carrier) {
+        return airborne(projectile,carrier,false);
+    }
+
+    public static boolean airborneBomb(com.github.giannigr.racmc.item.weapon.bomb.Rac1Bomb bomb,FallingBlockEntity carrier) {
+        return airborne(bomb,carrier,true);
+    }
+
+    private static boolean airborne(Projectile projectile, FallingBlockEntity carrier,boolean bomb) {
         var pos = carrier.blockPosition();
         var player = owner(projectile, pos);
         if (player == null || carrier.level() != projectile.level() || carrier.isRemoved()) return false;
@@ -82,6 +104,17 @@ public final class RangedCrateHits {
                 || !id.equals(data.getUUID("BoltRewardId")) || data.getBoolean("BoltRewardConsumed")
                 || !position.equals(carrier.position()) || !eligible(state)) return false;
         if (((Rac1CrateBlock) state.getBlock()).explosive()) {
+            if (bomb) {
+                var accepted=(com.github.giannigr.racmc.item.weapon.bomb.Rac1Bomb) projectile;
+                if (accepted.acceptedOwner()!=player) return false;
+                if (carrier instanceof com.github.giannigr.racmc.block.Rac1FallingExplosive explosive)
+                    return explosive.armFromBomb(player.getUUID());
+                var fuse=new com.github.giannigr.racmc.block.Rac1ExplosiveFuse();
+                fuse.load(data);
+                if (!fuse.armFromBomb(player.getUUID(),player.serverLevel().getGameTime())) return false;
+                fuse.save(data);
+                return true;
+            }
             if (carrier instanceof com.github.giannigr.racmc.block.Rac1FallingExplosive explosive) {
                 explosive.blasterHit();
             } else {

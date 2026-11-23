@@ -7,12 +7,23 @@ public final class Rac1ExplosiveFuse {
     public static final int TERMINAL = -2;
     private int remaining = IDLE;
     private long lastTick = Long.MIN_VALUE;
+    private java.util.UUID bombOwner;
+
+    public java.util.UUID bombOwner() { return bombOwner; }
+
+    public boolean armFromBomb(java.util.UUID owner,long gameTime) {
+        java.util.Objects.requireNonNull(owner);
+        if (!arm(false,gameTime)) return false;
+        bombOwner=owner;
+        return true;
+    }
 
     public int remaining() {
         return remaining;
     }
 
     public void restore(int value, long processedTick) {
+        bombOwner=null;
         remaining = value == IDLE || value == TERMINAL ? value
                 : value >= 0 && value <= FULL_TICKS ? value : TERMINAL;
         lastTick = processedTick;
@@ -49,7 +60,7 @@ public final class Rac1ExplosiveFuse {
         if (sourceUpdates < 5 || sourceUpdates > 15)
             throw new IllegalArgumentException("Wrench fuse requires 5..15 source updates");
         int ticks = (sourceUpdates + 2) / 3;
-        if (remaining == TERMINAL || remaining != IDLE && remaining <= ticks) return false;
+        if (bombOwner!=null || remaining == TERMINAL || remaining != IDLE && remaining <= ticks) return false;
         remaining = ticks;
         lastTick = gameTime;
         return true;
@@ -65,13 +76,15 @@ public final class Rac1ExplosiveFuse {
      * game's half-open floating [5,15), video-scale-and-truncate distribution.
      */
     public boolean blasterHit(java.util.function.IntSupplier adaptedSourceUpdates, long gameTime) {
-        if (remaining != IDLE && remaining <= 5) return false;
+        if (bombOwner!=null || remaining != IDLE && remaining <= 5) return false;
         return wrenchHit(adaptedSourceUpdates.getAsInt(), gameTime);
     }
 
     public void save(net.minecraft.nbt.CompoundTag tag) {
         tag.putInt("RacFuse", remaining);
         tag.putLong("RacFuseTick", lastTick);
+        if (bombOwner!=null) tag.putUUID("RacBombFuseOwner",bombOwner);
+        else tag.remove("RacBombFuseOwner");
     }
 
     public void load(net.minecraft.nbt.CompoundTag tag) {
@@ -82,6 +95,10 @@ public final class Rac1ExplosiveFuse {
         }
         restore(tag.contains("RacFuse") ? tag.getInt("RacFuse") : IDLE,
                 tag.contains("RacFuseTick") ? tag.getLong("RacFuseTick") : Long.MIN_VALUE);
+        if (tag.contains("RacBombFuseOwner")) {
+            if (tag.hasUUID("RacBombFuseOwner") && remaining!=IDLE) bombOwner=tag.getUUID("RacBombFuseOwner");
+            else restore(TERMINAL,Long.MIN_VALUE); // Never load malformed attribution as a normal live fuse.
+        }
     }
 
     public static boolean red(int remaining) {

@@ -1,11 +1,12 @@
 # Bomb Glove v0.1-beta gameplay
 
-This branch provides server gameplay and registration. The approved free,
-one-time Gadgetron claim with ten rounds is an integration contract for the
-shop/catalog lane, not a second grant path here. Ammo crates retain their
-existing Blaster reward policy. Original local-media presentation is separate;
-the gameplay branch intentionally registers a no-op bomb renderer until it is
-replaced by the presentation lane.
+Gadgetron sells the Bomb Glove for **1,000 bolts** when the shopper does not own
+it and tops their dedicated ammo up to ten. This is a Minecraft adaptation:
+the original Veldin grant was free, not a kiosk sale. An owned Glove offers
+ammo (5 bolts per round in Gadgetron, 25 in the ammo-only PDA; cap 40
+including offhand). The old beta claim marker is retained in saves but no
+longer grants or blocks anything. Item delivery and debit are atomic and need
+the matching presented quote and explicit confirmation.
 
 ## Throw and payment
 
@@ -40,7 +41,7 @@ wave. Saving and reloading a terminal phase does not replay it.
 
 Direct contact uses native projectile damage; the wave uses native explosion
 damage attribution without instantiating a vanilla terrain `Explosion`.
-Both start at two Minecraft HP before native mitigation. Direct damage and
+Both start at three Minecraft HP before native mitigation. Direct damage and
 wave share a per-bomb deduplication set; only accepted damage adds a modest
 outward/upward impulse. Owner splash and direct contact are excluded. The
 original aged direct self-hit is distinct from splash and is deferred. Other
@@ -48,11 +49,13 @@ players must pass the server's PvP and scoreboard friendly-fire checks. Mob
 damage uses native damage events and a solid-block line-of-sight check for
 the wave, a Minecraft protection adapter not claimed for the original.
 
-The only block mutations are through the existing ordinary crate hook with
-permission checks, native `BreakEvent` and the shared reward path, including
-registered falling crates. The bomb cannot arm TNT crates: their existing
-secondary blast does not carry the thrower's PvP or owner-immunity policy.
-Vendor blocks, ordinary terrain and fire are never changed by this attack.
+Block effects use registered RaC crate hooks with permission checks and
+`BreakEvent`. A dry blast from an accepted, attributable throw can start a
+red RaC explosive crate's normal fuse. The fuse retains that owner across
+falling and save/restore; other hits do not shorten or reattribute it. Its
+terminal blast fails closed without a live same-world owner, respects event
+vetoes and owner/PvP/team protection, and cannot chain or affect other crates.
+Vanilla TNT, vendor blocks, ordinary terrain and fire are never changed.
 
 ## Presentation seam
 
@@ -72,3 +75,15 @@ without replaying events. A committed flight suppresses matching or older held
 state even if its metadata arrives first or the entity is later removed. If
 the release arrives first, held hides and flight waits for its metadata. Either
 ordering can briefly show neither, but it cannot show both for that throw.
+
+First person draws the imported Glove on the configured primary side without
+the Steve arm/sleeve. It does not suppress offhand or third-person skin. The
+held mesh meets the palm at its directional support plane; this visual seating
+does not move the authoritative release origin or change throw motion. No
+usable ammo hides the held mesh, not an accepted projectile; Creative remains
+unlimited. Live FOV/pose and two-client checks are pending.
+
+No dedicated equip or paid kiosk-sale cue is evidenced in retained R19:
+the glove has no proven normal on-foot equip dispatch and the original did
+not sell it at Gadgetron. No substitution or guessed cue is wired. Existing
+dry-blast and portable UI sound bindings are unchanged.

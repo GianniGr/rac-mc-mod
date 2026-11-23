@@ -23,7 +23,7 @@ class Rac1ShopNetworkTest {
                 new Rac1ShopNetwork.Command(token,2,Rac1ShopNetwork.Action.BUY,0,id),
                 new Rac1ShopNetwork.Command(token,0,Rac1ShopNetwork.Action.CLOSE,0,null)))
             assertEquals(c,roundtrip(Rac1ShopNetwork.Command.CODEC,c));
-        var open=new Rac1ShopNetwork.Opened(token,new BlockPos(-10,60,30),ResourceLocation.parse("minecraft:overworld"),true);
+        var open=new Rac1ShopNetwork.Opened(token,new BlockPos(-10,60,30),ResourceLocation.parse("minecraft:overworld"));
         assertEquals(open,roundtrip(Rac1ShopNetwork.Opened.CODEC,open));
         var q=new Rac1ShopPurchases.Quote(id,Rac1ShopDelivery.Kind.WEAPON,1,2500,250,0,200);
         var p=new Rac1ShopNetwork.Reply(token,2,new Rac1ShopPurchases.Result(Rac1ShopPurchases.Status.PURCHASED,q,true));
@@ -44,10 +44,10 @@ class Rac1ShopNetworkTest {
             b.clear(); assertThrows(IndexOutOfBoundsException.class,() -> Rac1ShopNetwork.Command.CODEC.decode(b));
         } finally { b.release(); }
     }
-    @Test void bombQuotesValidateStarterAndPaidStockAsDifferentOffers() {
+    @Test void bombQuotesBindOneStockWithPaidWeaponAndAmmoKindsAndRejectLegacyFreeClaim() {
         UUID token=UUID.randomUUID(), id=UUID.randomUUID();
         for (var q:List.of(
-                new Rac1ShopPurchases.Quote(id,Rac1ShopDelivery.Kind.WEAPON,1,0,42,10,200,Rac1ShopOffer.BOMB_STARTER),
+                new Rac1ShopPurchases.Quote(id,Rac1ShopDelivery.Kind.WEAPON,1,1000,4,6,200,Rac1ShopOffer.BOMB_AMMO),
                 new Rac1ShopPurchases.Quote(id,Rac1ShopDelivery.Kind.AMMO,2,10,38,2,200,Rac1ShopOffer.BOMB_AMMO))) {
             var reply=new Rac1ShopNetwork.Reply(token,2,
                     new Rac1ShopPurchases.Result(Rac1ShopPurchases.Status.QUOTED,q,false));
@@ -56,6 +56,9 @@ class Rac1ShopNetworkTest {
         var bad=new Rac1ShopPurchases.Quote(id,Rac1ShopDelivery.Kind.AMMO,2,10,39,2,200,Rac1ShopOffer.BOMB_AMMO);
         assertThrows(IllegalArgumentException.class,() -> new Rac1ShopNetwork.Reply(token,2,
                 new Rac1ShopPurchases.Result(Rac1ShopPurchases.Status.QUOTED,bad,false)));
+        var free=new Rac1ShopPurchases.Quote(id,Rac1ShopDelivery.Kind.WEAPON,1,0,0,10,200,Rac1ShopOffer.BOMB_STARTER);
+        assertThrows(IllegalArgumentException.class,() -> new Rac1ShopNetwork.Reply(token,2,
+                new Rac1ShopPurchases.Result(Rac1ShopPurchases.Status.QUOTED,free,false)));
     }
     @Test void quotesCannotLieAboutOriginalPriceUnitDeliveryOrOmitRequiredFacts() {
         UUID token=UUID.randomUUID();

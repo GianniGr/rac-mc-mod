@@ -238,6 +238,39 @@ public final class BombGloveGameTests {
         return entity;
     }
 
+    @GameTest(template = "empty", batch = "bomb_attributed_fuse")
+    public static void acceptedDryWaveArmsOnlyAuthorizedRacCrateWithNormalFuse(GameTestHelper h) {
+        var level=h.getLevel();
+        var owner=player(h);
+        var center=h.absolutePos(new BlockPos(5,4,5));
+        level.setBlockAndUpdate(center,Blocks.STONE.defaultBlockState());
+        var allowed=center.offset(1,1,0);
+        var denied=center.offset(-1,1,0);
+        var vanilla=center.offset(0,1,1);
+        var red=RacMcBlocks.crate(Rac1Crates.EXPLOSIVE).get().defaultBlockState();
+        level.setBlockAndUpdate(allowed,red);
+        level.setBlockAndUpdate(denied,red);
+        level.setBlockAndUpdate(vanilla,Blocks.TNT.defaultBlockState());
+        Consumer<BlockEvent.BreakEvent> veto=e -> { if (e.getPos().equals(denied)) e.setCanceled(true); };
+        NeoForge.EVENT_BUS.addListener(veto);
+        var bomb=bomb(level,owner,Vec3.atBottomCenterOf(center).add(0,1.4,0),new Vec3(0,-1,0));
+        bomb.commitThrow(new BombGloveTracking.Commit(new BombGloveTracking.Key(
+                owner.getUUID(),level.dimension().location(),UUID.randomUUID(),1),level.getGameTime()));
+        try {
+            for (int i=0;i<=BombBallistics.WAVE_STEPS;i++) bomb.tick();
+            var fuse=((Rac1CrateBlockEntity)level.getBlockEntity(allowed)).fuse;
+            h.assertTrue(fuse.remaining()==Rac1ExplosiveFuse.FULL_TICKS && owner.getUUID().equals(fuse.bombOwner()),
+                    "Accepted dry wave failed to start an attributed full fuse");
+            h.assertTrue(((Rac1CrateBlockEntity)level.getBlockEntity(denied)).fuse.remaining()==Rac1ExplosiveFuse.IDLE
+                            && level.getBlockState(vanilla).is(Blocks.TNT) && level.getBlockState(center).is(Blocks.STONE),
+                    "Wave changed vetoed, vanilla TNT or terrain");
+            h.succeed();
+        } finally {
+            NeoForge.EVENT_BUS.unregister(veto);
+            bomb.discard();
+        }
+    }
+
     @GameTest(template = "empty", batch = "bomb_wave")
     public static void dryContactExpandsDamagesOnceAndNeverCarvesTerrain(GameTestHelper h) {
         var level = h.getLevel();

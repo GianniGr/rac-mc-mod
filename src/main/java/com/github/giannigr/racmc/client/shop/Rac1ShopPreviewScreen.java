@@ -56,15 +56,12 @@ public final class Rac1ShopPreviewScreen extends Screen {
     private long sourceReadyNanos,gpuPreparationNanos,gpuPanelsReadyNanos,textureReadyNanos;
     private boolean preparedAtOpen,usableLogged;
     public Rac1ShopPreviewScreen(Rac1VendorBlockEntity vendor,Path path,Object cache,String discKey,UUID token,long clickNanos) {
-        this(vendor,path,cache,discKey,token,clickNanos,false);
-    }
-    public Rac1ShopPreviewScreen(Rac1VendorBlockEntity vendor,Path path,Object cache,String discKey,UUID token,long clickNanos,boolean starterAvailable) {
         super(Component.literal("Gadgetron"));
         this.vendor=vendor; this.path=path; this.cache=cache; this.discKey=discKey;
         this.mediaGeneration=RacMcClient.media().generation();
         this.clickNanos=clickNanos;
         var bomb=com.github.giannigr.racmc.item.weapon.Rac1AmmoPolicy.BOMB_GLOVE;
-        commerce=new Rac1ShopScreenCommerce(token,bomb.weapon().isPresent() && bomb.ammo().isPresent(),starterAvailable);
+        commerce=new Rac1ShopScreenCommerce(token,bomb.weapon().isPresent() && bomb.ammo().isPresent());
         flow=commerce.flow(); catalog=commerce.catalog(); quantity=commerce.quantity();
         // Owner-accepted provisional clock; all sound stays owned by this private screen.
         this.presenterSession=new Rac1ShopPresenterSession(() -> minecraft!=null && minecraft.screen==this

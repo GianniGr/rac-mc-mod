@@ -11,5 +11,7 @@ public enum Rac1ShopOffer {
     private final Rac1AmmoPolicy stock;
     Rac1ShopOffer(Rac1AmmoPolicy stock) { this.stock = stock; }
     public Rac1AmmoPolicy stock() { return stock; }
-    public boolean permitted(boolean portable) { return !portable || this != BOMB_STARTER; }
+    /** BOMB_AMMO is the stable Bomb stock wire ID; kiosk kind is derived by the server.
+     * The legacy free-claim ordinal is reserved and never purchasable. */
+    public boolean permitted(boolean portable) { return this != BOMB_STARTER; }
 }

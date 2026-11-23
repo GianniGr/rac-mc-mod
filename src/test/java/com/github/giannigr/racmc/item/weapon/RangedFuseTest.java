@@ -5,6 +5,27 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class RangedFuseTest {
+    @Test void bombFuseAttributionPersistsAndCannotBeReplacedOrShortened() {
+        var owner=java.util.UUID.randomUUID();
+        var fuse=new Rac1ExplosiveFuse();
+        assertTrue(fuse.armFromBomb(owner,100));
+        assertEquals(60,fuse.remaining());
+        assertFalse(fuse.arm(true,101));
+        assertFalse(fuse.armFromBomb(java.util.UUID.randomUUID(),101));
+        assertFalse(fuse.blasterHit(() -> { fail("Attributed fuse must not draw RNG"); return 5; },101));
+        assertFalse(fuse.wrenchHit(5,101));
+        var tag=new net.minecraft.nbt.CompoundTag(); fuse.save(tag);
+        var transferred=new Rac1ExplosiveFuse(); transferred.load(tag);
+        assertEquals(owner,transferred.bombOwner());
+        assertFalse(transferred.tick(100));
+        for (int tick=101;tick<160;tick++) assertFalse(transferred.tick(tick));
+        assertTrue(transferred.tick(160)); assertEquals(owner,transferred.bombOwner());
+        assertFalse(transferred.tick(161));
+        tag.putString("RacBombFuseOwner","invalid");
+        transferred.load(tag);
+        assertEquals(Rac1ExplosiveFuse.TERMINAL,transferred.remaining());
+        assertFalse(transferred.arm(true,161));
+    }
     @Test void idleAndLongBecomeShortButShortTerminalAndChainNeverReroll() {
         var fuse = new Rac1ExplosiveFuse(); int[] random = {0};
         java.util.function.IntSupplier draw = () -> { random[0]++; return 15; };

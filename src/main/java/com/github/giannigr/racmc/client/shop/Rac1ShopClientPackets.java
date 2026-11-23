@@ -42,7 +42,7 @@ public final class Rac1ShopClientPackets implements Rac1ShopNetwork.ClientSink {
                 && content!=null && RacMcClient.assets().isReady() && RacMcClient.media().isReady()
                 && !RacMcClient.media().isChecking() && path.isPresent()) {
             long clicked=clickNanos;
-            clear(); mc.setScreen(new Rac1ShopPreviewScreen(vendor,path.get(),content,content.discKey(),packet.token(),clicked,packet.starterAvailable()));
+            clear(); mc.setScreen(new Rac1ShopPreviewScreen(vendor,path.get(),content,content.discKey(),packet.token(),clicked));
         } else send(new Rac1ShopNetwork.Command(packet.token(),0,Rac1ShopNetwork.Action.CLOSE,0,null));
     }
     @Override public void reply(Rac1ShopNetwork.Reply packet) {

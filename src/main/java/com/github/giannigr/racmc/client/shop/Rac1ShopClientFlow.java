@@ -12,6 +12,7 @@ public final class Rac1ShopClientFlow {
     private Rac1ShopPurchases.Quote quote;
     private UUID presented;
     private Rac1ShopOffer requestedOffer=Rac1ShopOffer.BLASTER;
+    private Rac1ShopDelivery.Kind requestedKind;
     private Rac1ShopPurchases.Status outcome;
     private Mode mode=Mode.BROWSE;
     private boolean deliberateBuy;
@@ -47,6 +48,7 @@ public final class Rac1ShopClientFlow {
         Objects.requireNonNull(offer);
         if (mode==Mode.CLOSED || mode==Mode.UNCERTAIN || mode==Mode.WAIT_BUY || mode==Mode.WAIT_QUOTE) return null;
         if (next>Rac1ShopSessions.MAX_REQUESTS) { mode=Mode.FAILURE; outcome=Rac1ShopPurchases.Status.EXHAUSTED; return null; }
+        requestedKind=mode==Mode.CONFIRM && quote!=null && quote.offer()==offer ? quote.kind():null;
         quote=null; presented=null; age=0; pending=next++;
         deliberateBuy=false;
         requestedOffer=offer;
@@ -71,6 +73,10 @@ public final class Rac1ShopClientFlow {
                 && (result.status()==Rac1ShopPurchases.Status.STOCK_CAP || result.status()==Rac1ShopPurchases.Status.INSUFFICIENT);
         if (mode==Mode.WAIT_QUOTE && result.status()==Rac1ShopPurchases.Status.QUOTED) {
             if (result.quote().quantity()!=command.quantity() || result.quote().offer()!=requestedOffer) return false;
+            if (requestedKind!=null && result.quote().kind()!=requestedKind) {
+                mode=Mode.FAILURE; outcome=Rac1ShopPurchases.Status.STALE_OFFER; command=null; age=0;
+                return true; // An ammo quantity edit must never become a weapon review.
+            }
             quote=result.quote(); mode=Mode.CONFIRM;
         } else if ((mode==Mode.WAIT_BUY || mode==Mode.UNCERTAIN) && result.status()==Rac1ShopPurchases.Status.PURCHASED) {
             if (!result.quote().id().equals(command.quote()) || result.quote().offer()!=requestedOffer

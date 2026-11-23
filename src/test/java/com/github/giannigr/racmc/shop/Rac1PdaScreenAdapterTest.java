@@ -36,6 +36,28 @@ class Rac1PdaScreenAdapterTest {
         f.ui.flow().close(); assertNull(f.ui.confirm());
     }
     private static final Rac1ShopSessions.Vendor VENDOR=new Rac1ShopSessions.Vendor("minecraft:overworld",1,UUID.randomUUID());
+    @Test void realKioskAdapterBindsPaidBombWeaponAndThenOffersOnlyRefill() {
+        var f=new Fixture();
+        f.inventory.setItem(2,ItemStack.EMPTY);
+        f.inventory.setItem(40,new ItemStack(RacMcItems.BOMB_GLOVE_AMMO.get(),4));
+        var server=new Rac1ShopPurchases();
+        var ui=new Rac1ShopScreenCommerce(server.open(f.owner,VENDOR,0).token(),true);
+        assertTrue(ui.move(1));
+        assertTrue(ui.receive(kiosk(f,server,ui.request()),f.balance));
+        var quote=ui.flow().quote();
+        assertEquals(Rac1ShopDelivery.Kind.WEAPON,quote.kind());
+        assertEquals(Rac1ShopOffer.BOMB_AMMO,quote.offer());
+        assertEquals(1000,quote.price()); assertEquals(6,quote.deliveredAmmo());
+        assertFalse(ui.adjust(1)); assertNull(ui.flow().confirm());
+        assertEquals(0,f.debits); assertEquals(4,f.ammo(Rac1ShopOffer.BOMB_AMMO));
+        ui.flow().presented(quote.id());
+        var buy=ui.flow().confirm();
+        assertTrue(ui.receive(kiosk(f,server,buy),f.balance)); assertEquals(PURCHASED,ui.flow().outcome());
+        assertEquals(0,f.balance); assertEquals(10,f.ammo(Rac1ShopOffer.BOMB_AMMO));
+        assertTrue(Rac1AmmoPolicy.BOMB_GLOVE.owns(f.inventory));
+        assertTrue(kiosk(f,server,buy).result().replay()); assertEquals(1,f.debits);
+        assertTrue(ui.receive(kiosk(f,server,ui.request()),f.balance)); assertEquals(INSUFFICIENT,ui.flow().outcome());
+    }
     private static Rac1ShopNetwork.Reply kiosk(Fixture f,Rac1ShopPurchases server,Rac1ShopNetwork.Command command) {
         assertNotNull(command);
         var bytes=new FriendlyByteBuf(Unpooled.buffer());
@@ -52,7 +74,7 @@ class Rac1PdaScreenAdapterTest {
         for (var offer:new Rac1ShopOffer[]{Rac1ShopOffer.BLASTER,Rac1ShopOffer.BOMB_AMMO}) {
             var f=new Fixture(); var server=new Rac1ShopPurchases();
             var opened=server.open(f.owner,VENDOR,0);
-            var ui=new Rac1ShopScreenCommerce(opened.token(),true,false);
+            var ui=new Rac1ShopScreenCommerce(opened.token(),true);
             assertTrue(ui.move(1)); assertTrue(ui.move(-1));
             if (offer==Rac1ShopOffer.BOMB_AMMO) ui.move(1);
             var initial=ui.request(); assertEquals(offer,initial.offer());

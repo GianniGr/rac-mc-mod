@@ -126,7 +126,8 @@ public final class BombGloveThrows {
     @SubscribeEvent public static void tick(PlayerTickEvent.Post event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             var pending = PENDING.get(player);
-            if (pending != null && !pending.valid(player)) cancel(player);
+            if (pending != null && (!pending.valid(player)
+                    || !player.getAbilities().instabuild && BombGloveAmmo.count(player) == 0)) cancel(player);
             if (!PENDING.containsKey(player)) BombGloveTrackingServer.idle(player);
         }
     }

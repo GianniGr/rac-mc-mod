@@ -302,7 +302,7 @@ public final class Rac1ShopTransactionGameTests {
         var hydro=com.github.giannigr.racmc.clank.Rac1HydroNetwork.Snapshot.TYPE.id();
         channels.put(hydro,new net.neoforged.neoforge.network.registration.NetworkChannel(hydro,"clank-hydro-test-1"));
         for (var id:List.of(Rac1ShopNetwork.Command.TYPE.id(),Rac1ShopNetwork.Opened.TYPE.id(),Rac1ShopNetwork.Reply.TYPE.id()))
-            channels.put(id,new net.neoforged.neoforge.network.registration.NetworkChannel(id,"shop-2"));
+            channels.put(id,new net.neoforged.neoforge.network.registration.NetworkChannel(id,Rac1ShopNetwork.VERSION));
         for (var id:List.of(Rac1PdaNetwork.Command.TYPE.id(),Rac1PdaNetwork.Opened.TYPE.id(),Rac1PdaNetwork.Reply.TYPE.id()))
             channels.put(id,new net.neoforged.neoforge.network.registration.NetworkChannel(id,"pda-2"));
         var observed=Rac1ShopObserverNetwork.State.TYPE.id();

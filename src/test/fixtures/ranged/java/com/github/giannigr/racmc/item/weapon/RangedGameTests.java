@@ -303,7 +303,7 @@ public final class RangedGameTests {
         var projectile = new Probe(level, shooter); projectile.setDeltaMovement(2, 0, 0);
         float health = victim.getHealth();
         projectile.hit(victim);
-        h.assertTrue(victim.getHealth() == health - 4, "Vanilla speed*base damage changed");
+        h.assertTrue(victim.getHealth() == health - 6, "Blaster direct damage was not 1.5 times its former 4 HP");
         h.assertTrue(victim.getArrowCount() == 3, "Blaster embedded a shaft or erased existing bow arrows");
         h.assertTrue(projectile.isRemoved(), "Accepted hit failed to terminate");
         victim.invulnerableTime = 0;

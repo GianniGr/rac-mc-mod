@@ -2,7 +2,6 @@ package com.github.giannigr.racmc.client.bomb.mixin;
 
 import com.github.giannigr.racmc.client.bomb.BombGloveRenderScope;
 import com.github.giannigr.racmc.client.bomb.BombGloveWornDrawing;
-import com.github.giannigr.racmc.item.weapon.bomb.BombGloveClientTracking;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -55,7 +54,7 @@ abstract class BombGlovePlayerRenderMixin {
         try (var mask = new BombGloveRenderScope.SkinMask(arm, sleeve)) {
             original.call(model, poses, skin, light, overlay, color);
         }
-        boolean held = BombGloveClientTracking.heldBomb(scope.player()) != null;
+        boolean held = BombGloveWornDrawing.drawsHeldBomb(scope.player());
         if (prep.nativeIdle()) {
             BombGloveWornDrawing.drawNativeCarry(prep, poses, scope.buffers(), skin, light, overlay, color, held);
             return;

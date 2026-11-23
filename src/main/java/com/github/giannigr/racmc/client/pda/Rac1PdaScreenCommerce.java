@@ -11,7 +11,7 @@ public final class Rac1PdaScreenCommerce {
     private int quantity=1;
     public Rac1PdaScreenCommerce(UUID token,boolean bombRegistered) {
         flow=new Rac1PdaClientFlow(token);
-        catalog=new Rac1CommerceSelection(true,bombRegistered,false);
+        catalog=new Rac1CommerceSelection(true,bombRegistered);
     }
     public Rac1PdaClientFlow flow() { return flow; }
     public Rac1CommerceSelection catalog() { return catalog; }

@@ -2,7 +2,6 @@ package com.github.giannigr.racmc.shop;
 
 import java.util.*;
 import com.github.giannigr.racmc.item.RacMcItems;
-import com.github.giannigr.racmc.item.weapon.BlasterAmmo;
 import com.github.giannigr.racmc.item.weapon.Rac1AmmoPolicy;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.*;
@@ -50,29 +49,26 @@ public final class Rac1ShopDelivery {
     }
     private static Staged stageBlaster(Inventory inventory,Item weapon,Kind expected,int quantity,Item ammo,int count,
                                       boolean portable) {
-        return stageStock(inventory,weapon,ammo,Rac1ShopOffer.BLASTER,expected,quantity,count,portable,true);
+        return stageStock(inventory,weapon,ammo,Rac1ShopOffer.BLASTER,expected,quantity,count,portable);
     }
-    static Staged stageSelected(Inventory inventory,Rac1ShopOffer offer,int quantity,boolean portable,boolean starterAvailable) {
+    static Staged stageSelected(Inventory inventory,Rac1ShopOffer offer,int quantity,boolean portable) {
         var weapon=offer.stock().weapon().orElse(null);
         var ammo=offer.stock().ammo().orElse(null);
         if (weapon==null || ammo==null) return new Staged(null,Failure.STALE_OFFER);
-        return stageStock(inventory,weapon,ammo,offer,offer==Rac1ShopOffer.BOMB_STARTER ? Kind.WEAPON:Kind.AMMO,
-                quantity,Rac1AmmoPolicy.count(inventory,ammo),portable,starterAvailable);
+        return stageStock(inventory,weapon,ammo,offer,portable ? Kind.AMMO:offer(inventory,weapon),
+                quantity,Rac1AmmoPolicy.count(inventory,ammo),portable);
     }
     /** Item parameters also admit synthetic vanilla fixtures without registering placeholder mod items. */
     static Staged stageStock(Inventory inventory,Item weapon,Item ammo,Rac1ShopOffer offer,Kind expected,int quantity,
-                             int count,boolean portable,boolean starterAvailable) {
+                             int count,boolean portable) {
         var stock=offer.stock();
-        boolean starter=offer==Rac1ShopOffer.BOMB_STARTER;
         if (quantity<1 || quantity>Rac1AmmoPolicy.MAX_ORDER || expected==Kind.WEAPON && quantity!=1)
             return new Staged(null,Failure.INVALID_QUANTITY);
-        if (!offer.permitted(portable) || starter && (!starterAvailable || expected!=Kind.WEAPON)
-                || offer==Rac1ShopOffer.BOMB_AMMO && (expected!=Kind.AMMO || !Rac1AmmoPolicy.owns(inventory,weapon))
-                || offer==Rac1ShopOffer.BLASTER && (offer(inventory,weapon)!=expected || portable && expected!=Kind.AMMO))
+        if (!offer.permitted(portable) || offer(inventory,weapon)!=expected || portable && expected!=Kind.AMMO)
             return new Staged(null,Failure.STALE_OFFER);
         if (expected==Kind.AMMO && quantity>Math.max(0,stock.cap()-count)) return new Staged(null,Failure.STOCK_CAP);
         var before=snapshot(inventory); var after=copy(before);
-        int grant=starter ? stock.starterUnits():expected==Kind.WEAPON ? Math.max(0,stock.weaponFill()-count):quantity;
+        int grant=expected==Kind.WEAPON ? Math.max(0,stock.weaponFill()-count):quantity;
         // Stage weapon FIRST. A spare slot that fits only the weapon is not complete capacity.
         if (expected==Kind.WEAPON && !insert(after,new ItemStack(weapon),inventory))
             return new Staged(null,Failure.FULL);

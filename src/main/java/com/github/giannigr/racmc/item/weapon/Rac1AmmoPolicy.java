@@ -9,15 +9,15 @@ import net.minecraft.world.item.Item;
 
 /** Bounded stock catalog. Shop caps are not limits on firing, pickup or item storage. */
 public enum Rac1AmmoPolicy {
-    BLASTER("blaster", "blaster_ammo", 25, 200, 1, 10, 2500, 100, 0),
-    BOMB_GLOVE("bomb_glove", "bomb_glove_ammo", 3, 40, 5, 25, 0, 0, 10);
+    BLASTER("blaster", "blaster_ammo", 25, 200, 1, 10, 2500, 100),
+    BOMB_GLOVE("bomb_glove", "bomb_glove_ammo", 3, 40, 5, 25, 1000, 10);
 
     public static final int MAX_ORDER = 200;
     private final ResourceLocation weaponId, ammoId;
-    private final int pickupUnits, cap, kioskPrice, pdaPrice, weaponPrice, weaponFill, starterUnits;
+    private final int pickupUnits, cap, kioskPrice, pdaPrice, weaponPrice, weaponFill;
 
     Rac1AmmoPolicy(String weaponId, String ammoId, int pickupUnits, int cap, int kioskPrice, int pdaPrice,
-                   int weaponPrice, int weaponFill, int starterUnits) {
+                   int weaponPrice, int weaponFill) {
         this.weaponId = key(weaponId);
         this.ammoId = key(ammoId);
         this.pickupUnits = pickupUnits;
@@ -26,7 +26,6 @@ public enum Rac1AmmoPolicy {
         this.pdaPrice = pdaPrice;
         this.weaponPrice = weaponPrice;
         this.weaponFill = weaponFill;
-        this.starterUnits = starterUnits;
     }
 
     public ResourceLocation weaponId() { return weaponId; }
@@ -38,7 +37,6 @@ public enum Rac1AmmoPolicy {
     public int unitPrice(boolean portable) { return portable ? pdaPrice : kioskPrice; }
     public int weaponPrice() { return weaponPrice; }
     public int weaponFill() { return weaponFill; }
-    public int starterUnits() { return starterUnits; }
     public boolean owns(Inventory inventory) { return weapon().filter(item -> owns(inventory, item)).isPresent(); }
     public int count(Inventory inventory) { return ammo().map(item -> count(inventory, item)).orElse(0); }
 

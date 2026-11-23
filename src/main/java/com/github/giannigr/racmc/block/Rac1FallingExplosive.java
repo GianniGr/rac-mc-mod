@@ -60,7 +60,7 @@ public final class Rac1FallingExplosive extends FallingBlockEntity {
         if (level.getBlockEntity(pos) instanceof Rac1CrateBlockEntity crate) {
             crate.initializeReward();
             entity.blockData = crate.saveWithoutMetadata(level.registryAccess());
-            entity.fuse.restore(crate.fuse.remaining(), crate.fuse.lastTick());
+            entity.fuse.load(entity.blockData);
         }
         entity.storeFuse();
         // As with migration, spawn denial must preserve the placed incarnation.
@@ -96,6 +96,12 @@ public final class Rac1FallingExplosive extends FallingBlockEntity {
         if (fuse.arm(chain, level().getGameTime())) {
             storeFuse();
         }
+    }
+
+    public boolean armFromBomb(java.util.UUID owner) {
+        if (!fuse.armFromBomb(owner,level().getGameTime())) return false;
+        storeFuse();
+        return true;
     }
 
     public boolean blasterHit() {
