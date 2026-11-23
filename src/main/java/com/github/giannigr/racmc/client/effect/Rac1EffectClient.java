@@ -33,7 +33,8 @@ public final class Rac1EffectClient {
     private record Cpu(String sha1, EffectClock.Profile profile, List<EffectGpuCatalog.CpuTexture> textures,
                        List<EffectMeshAsset> meshes, NanotechTables nanotech, Rac1BlastTables blast,
                        EffectMeshAsset ammoPickup, Rac1AnimatedAsset bombGlove,
-                       EffectMeshAsset bomb, EffectMeshAsset bombAmmo, ParticleFrameLists definitions) {}
+                       EffectMeshAsset bomb, EffectMeshAsset bombAmmo, ParticleFrameLists definitions,
+                       int shipExhaustTexture) {}
     /** Read-only local presentation capability; generation invalidates every consumer handle. */
     public record LocalPresentation(long generation,String sha1,ParticleFrameLists definitions,EffectClock.Profile profile) {
         public EffectAssetRef particle(int type) {
@@ -71,6 +72,7 @@ public final class Rac1EffectClient {
     private static Rac1AnimatedAsset bombGlove;
     private static EffectMeshAsset bomb;
     private static EffectMeshAsset bombAmmo;
+    private static int shipExhaustTexture = -1;
     private static final Map<net.minecraft.core.BlockPos, Long> health = new HashMap<>();
     private static long nanoStep = -1;
     private record Nano(UUID id, EffectSignal.Point base, long seed, boolean intact,
@@ -123,6 +125,7 @@ public final class Rac1EffectClient {
                 bomb = cpu.bomb();
                 bombAmmo = cpu.bombAmmo();
                 local=new LocalPresentation(generation,cpu.sha1(),cpu.definitions(),cpu.profile());
+                shipExhaustTexture = cpu.shipExhaustTexture();
                 session = new EffectPlaybackSession(cpu.sha1(), cpu.profile(), 2048);
                 session.bombFlashReady(cpu.meshes().stream()
                         .anyMatch(mesh -> mesh.source().sourceId() == BombGloveDryVisuals.FLASH_CLASS));
@@ -175,11 +178,14 @@ public final class Rac1EffectClient {
             catch (Exception unavailable) {
                 RacMcMod.LOGGER.warn("Original Blaster Ammo pickup art unavailable: {}", unavailable.toString());
             }
+            var definitions = banks.definitions();
+            byte[] exhaustFrames = definitions.count() > 23 ? definitions.storedSpan(23) : new byte[0];
+            int exhaust = exhaustFrames.length > 0 ? Byte.toUnsignedInt(exhaustFrames[0]) : -1;
             return new Cpu(sha1, ntsc ? EffectClock.Profile.NTSC : EffectClock.Profile.PAL,
                     EffectGpuCatalog.decode(banks), List.copyOf(meshes), tables, blast, pickup,
                     optionalBombArt(192, () -> BombGloveArt.glove(assets)),
                     optionalBombArt(121, () -> BombGloveArt.bomb(assets, sha1)),
-                    optionalBombArt(226, () -> BombGloveArt.ammo(assets, sha1)), banks.definitions());
+                    optionalBombArt(226, () -> BombGloveArt.ammo(assets, sha1)), definitions, exhaust);
         } catch (Exception failure) { throw new CompletionException(failure); }
     }
     private static EffectMeshAsset verifiedBombFlash(Rac1LevelAssets assets, String sha1)
@@ -224,6 +230,7 @@ public final class Rac1EffectClient {
         BombGloveItemDrawing.clearTextures();
         BombGloveFlightRenderer.clearTextures();
         BombGloveWornDrawing.clearTextures();
+        shipExhaustTexture = -1;
         nanotech = null;
         health.clear();
         nanoStep = -1;
@@ -248,6 +255,32 @@ public final class Rac1EffectClient {
     private static boolean currentMedia() {
         var media = RacMcClient.media();
         return media.isReady() && Objects.equals(selected, media.configuredPath().orElse(null));
+    }
+
+    public enum ShipArt { FLAME, GLASS, EXHAUST }
+
+    /** Borrow ready level-01 materials only. This neither initiates I/O nor owns a texture. */
+    public static net.minecraft.client.renderer.RenderType shipMaterial(ShipArt art) {
+        var media = RacMcClient.media();
+        if (catalog == null || discSha1 == null || !media.isReady() || media.isChecking()
+                || selected == null || media.configuredPath().filter(selected::equals).isEmpty()) {
+            return null;
+        }
+        var revision = media.attemptResult().map(IsoValidationResult::revision).orElse(null);
+        boolean sameDisc = Rac1DiscCatalog.supported().profiles().stream()
+                .anyMatch(profile -> profile.revision() == revision && profile.imageSha1().equals(discSha1));
+        if (!sameDisc) {
+            return null;
+        }
+        return switch (art) {
+            case FLAME -> catalog.type(new EffectAssetRef(discSha1, 1, EffectAssetRef.Bank.FX, 5),
+                    EffectMaterial.ADDITIVE);
+            case GLASS -> catalog.type(new EffectAssetRef(discSha1, 1, EffectAssetRef.Bank.FX, 21),
+                    EffectMaterial.NORMAL);
+            case EXHAUST -> shipExhaustTexture < 0 ? null : catalog.type(
+                    new EffectAssetRef(discSha1, 1, EffectAssetRef.Bank.PARTICLE, shipExhaustTexture),
+                    EffectMaterial.NORMAL);
+        };
     }
     private static void receive(EffectSignal signal) {
         var minecraft = Minecraft.getInstance();

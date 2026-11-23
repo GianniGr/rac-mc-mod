@@ -52,6 +52,7 @@ public class RacMcMod {
         RacMcBlockEntities.register(modEventBus);
         // The kinds of entity of the mod are registered with the same bus.
         RacMcEntities.register(modEventBus);
+        com.github.giannigr.racmc.ship.Rac1Ships.register(modEventBus);
         // The tab of the creative mode of the mod is registered with the same bus.
         RacMcCreativeTabs.register(modEventBus);
         StructureSupplies.register(modEventBus);

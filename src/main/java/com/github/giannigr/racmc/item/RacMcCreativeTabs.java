@@ -5,6 +5,7 @@ import com.github.giannigr.racmc.asset.Rac1CrateDefinition;
 import com.github.giannigr.racmc.asset.Rac1Crates;
 import com.github.giannigr.racmc.block.RacMcBlocks;
 import com.github.giannigr.racmc.rescue.Rac1PodRegistration;
+import com.github.giannigr.racmc.ship.Rac1Ships;
 import java.util.List;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -64,9 +65,10 @@ public final class RacMcCreativeTabs {
                         RacMcItems.BOLTS.values().forEach(item -> output.accept(item.get()));
                         output.accept(RacMcItems.OMNIWRENCH.get());
                         output.accept(RacMcItems.CLANK_HELI_PACK.get());
-                         output.accept(RacMcItems.CLANK_THRUSTER_PACK.get());
-                         output.accept(RacMcItems.BOLT_GRABBER.get());
+                        output.accept(RacMcItems.CLANK_THRUSTER_PACK.get());
+                        output.accept(RacMcItems.BOLT_GRABBER.get());
                         output.accept(Rac1PodRegistration.DECORATIVE.get());
+                        output.accept(Rac1Ships.PLACEMENT_ITEM.get());
                         // Every crate of the game is in the tab, in the order of the table of
                         // the crates.
                         for (Rac1CrateDefinition definition : Rac1Crates.definitions()) {

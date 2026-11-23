@@ -1,0 +1,58 @@
+// Opt-in only: fixture classes, generated structure, and headless world are not in the owner artifact.
+allprojects {
+    afterEvaluate {
+        def directory = layout.buildDirectory.dir('ship-gametest').get().asFile
+        def fixture = new File(directory, 'resources/data/racmc_ship/structure/empty.nbt')
+        def ratioFixture = new File(directory, 'resources/data/racmc_ship_ratio/structure/empty.nbt')
+        sourceSets.main.java.srcDir('src/test/fixtures/ship/java')
+        sourceSets.main.resources.srcDir(new File(directory, 'resources'))
+        tasks.register('generateShipFixture') {
+            outputs.files(fixture, ratioFixture)
+            doLast {
+                fixture.parentFile.mkdirs()
+                new DataOutputStream(new java.util.zip.GZIPOutputStream(new FileOutputStream(fixture))).withCloseable { out ->
+                    out.writeByte(10); out.writeUTF('')
+                    out.writeByte(3); out.writeUTF('DataVersion'); out.writeInt(3955)
+                    out.writeByte(9); out.writeUTF('size'); out.writeByte(3); out.writeInt(3)
+                    out.writeInt(15); out.writeInt(13); out.writeInt(44)
+                    out.writeByte(9); out.writeUTF('palette'); out.writeByte(10); out.writeInt(1)
+                    out.writeByte(8); out.writeUTF('Name'); out.writeUTF('minecraft:air'); out.writeByte(0)
+                    out.writeByte(9); out.writeUTF('blocks'); out.writeByte(10); out.writeInt(0)
+                    out.writeByte(9); out.writeUTF('entities'); out.writeByte(10); out.writeInt(0)
+                    out.writeByte(0)
+                }
+                ratioFixture.parentFile.mkdirs()
+                java.nio.file.Files.copy(fixture.toPath(), ratioFixture.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            }
+        }
+        tasks.named('processResources') { dependsOn('generateShipFixture') }
+        neoForge.runs.gameTestServer.gameDirectory = new File(directory, 'runtime')
+        boolean ratio = project.hasProperty('shipRatioGameTest')
+        neoForge.runs.gameTestServer.systemProperty('neoforge.enabledGameTestNamespaces',
+                ratio ? 'racmc_ship_ratio' : 'racmc_ship')
+        if (!ratio) neoForge.runs.gameTestServer.systemProperty('racmc.shipLegacyProfile', 'true')
+        if (project.hasProperty('shipDedicatedStage')) {
+            def stage = project.property('shipDedicatedStage')
+            if (!(stage in ['write', 'read'])) throw new GradleException('Use shipDedicatedStage=write or read')
+            def probe = project.findProperty('shipDedicatedCase') ?: 'dedicated'
+            if (!(probe ==~ /[A-Za-z0-9_-]+/)) throw new GradleException('Use a simple local case name')
+            def dedicated = new File(directory, probe)
+            neoForge.runs.server.gameDirectory = dedicated
+            neoForge.runs.server.systemProperty('racmc.shipDedicatedStage', stage)
+            tasks.register('prepareShipDedicatedProbe') {
+                doLast {
+                    dedicated.mkdirs()
+                    def eula = new File(dedicated, 'eula.txt')
+                    if (!eula.exists()) {
+                        throw new GradleException("Acknowledge the Minecraft EULA for the disposable test server in ${eula}")
+                    }
+                    def settings = new File(dedicated, 'server.properties')
+                    if (!settings.exists()) {
+                        settings.text = 'server-ip=127.0.0.1\nserver-port=0\nonline-mode=false\nspawn-protection=0\nview-distance=4\nsimulation-distance=4\nlevel-type=minecraft:flat\n'
+                    }
+                }
+            }
+            tasks.named('runServer') { dependsOn('prepareShipDedicatedProbe') }
+        }
+    }
+}

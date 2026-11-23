@@ -112,5 +112,17 @@
   "item.racmc.bolt_grabber": "Bolt Grabber",
   "item.racmc.belt_fixture": "Belt gadget",
   "key.racmc.blaster_test": "Open the Blaster test",
-  "key.categories.racmc": "Ratchet & Clank: Getting Wood"
+  "key.categories.racmc": "Ratchet & Clank: Getting Wood",
+  "entity.racmc.travel_ship": "Travel Ship",
+  "item.racmc.travel_ship_fixture": "Travel Ship (Creative Placement)",
+  "key.categories.racmc.travel_ship": "Travel Ship",
+  "key.racmc.travel_ship.boost": "Toggle Ship Boost",
+  "hud.racmc.travel_ship.boost": "Boost",
+  "message.racmc.travel_ship.occupied": "The travel ship already has a pilot.",
+  "message.racmc.travel_ship.land_first": "The travel ship must be landed and stopped.",
+  "message.racmc.travel_ship.blocked": "The travel ship has no clear, safe access here.",
+  "message.racmc.travel_ship.aim_side": "Aim across the cockpit side from a clear, supported spot.",
+  "message.racmc.travel_ship.remove_occupied": "The travel ship cannot be removed while a pilot is aboard or boarding.",
+  "message.racmc.travel_ship.place_mode": "Travel ship placement is Creative-only in the Overworld.",
+  "message.racmc.travel_ship.place_pad": "Use the placement item on a solid, dry block with clear space above it."
 }
