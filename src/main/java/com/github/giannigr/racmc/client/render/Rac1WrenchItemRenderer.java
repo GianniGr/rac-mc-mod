@@ -116,10 +116,32 @@ public final class Rac1WrenchItemRenderer extends BlockEntityWithoutLevelRendere
         if (itemCube) {
             Rac1ImportedItemDrawing.draw(poses, source, asset, sample.positions(), sample.normals(),
                     locations.toArray(ResourceLocation[]::new), context, light, true,
-                    frame -> { if (adjustment != null) frame.mulPose(adjustment); });
+                    frame -> applyItemSocket(frame, context, adjustment));
         } else {
-            Rac1MeshRenderer.render(poses, source, asset.mesh(), sample.positions(), sample.normals(),
-                    locations.toArray(ResourceLocation[]::new), light);
+            poses.pushPose();
+            try {
+                // Both managed held viewmodel and the detached proxy receive this after
+                // composing the same unscaled grip/release/catch socket.
+                scaleSteveMesh(poses);
+                Rac1MeshRenderer.render(poses, source, asset.mesh(), sample.positions(), sample.normals(),
+                        locations.toArray(ResourceLocation[]::new), light);
+            } finally {
+                poses.popPose();
+            }
         }
+    }
+
+    static void applyItemSocket(PoseStack frame, ItemDisplayContext context, org.joml.Matrix4f adjustment) {
+        if (adjustment != null) frame.mulPose(adjustment);
+        switch (context) {
+            case FIRST_PERSON_LEFT_HAND, FIRST_PERSON_RIGHT_HAND,
+                    THIRD_PERSON_LEFT_HAND, THIRD_PERSON_RIGHT_HAND -> scaleSteveMesh(frame);
+            default -> { } // Inventory, ground, fixed, head and other displays keep the source scale.
+        }
+    }
+
+    static void scaleSteveMesh(PoseStack poses) {
+        float scale = WrenchActionGeometry.STEVE_MESH_SCALE;
+        poses.scale(scale, scale, scale);
     }
 }

@@ -140,6 +140,14 @@ class WrenchCorrectionRealDataTest {
                             .mul(pose.head()).getTranslation(new Vector3f());
                     maxError = Math.max(maxError, visible.distance(authority));
                     assertTrue(visible.equals(authority, 2.0e-5F));
+                    var enlarged = new Matrix4f(render.last().pose())
+                            .scale(WrenchActionGeometry.STEVE_MESH_SCALE).mul(localHead)
+                            .getTranslation(new Vector3f());
+                    var soundHead = WrenchActionGeometry.visiblePoint(
+                            new ActionVector(grip.x, grip.y, grip.z),
+                            new ActionVector(authority.x, authority.y, authority.z));
+                    assertTrue(enlarged.equals(new Vector3f((float)soundHead.x(),
+                            (float)soundHead.y(), (float)soundHead.z()), 2.0e-5F));
                 }
             }
         }

@@ -38,9 +38,11 @@ public final class Rac1ClientAudio {
         long token = IMPORT.invalidate();
         boolean hasBombGlove = net.minecraft.core.registries.BuiltInRegistries.ITEM.getOptional(
                 net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(RacMcConstants.MOD_ID, "bomb_glove")).isPresent();
+        long wrenchToken = Rac1WrenchAudioClient.invalidateCatalog();
         CompletableFuture.supplyAsync(() -> {
             try (var inspected = new Rac1DiscValidator().inspect(iso)) {
                 if (!inspected.isSupported()) throw new java.io.IOException("Sound source no longer verified");
+                Rac1WrenchAudioClient.prepare(inspected.image(), wrenchToken);
                 var profile = new Rac1DiscValidator().catalog().profiles().stream()
                         .filter(p -> p.revision() == inspected.result().revision()).findFirst().orElseThrow();
                 var store = new Rac1SoundCache(cacheDirectory.resolve("sound"));
@@ -75,6 +77,7 @@ public final class Rac1ClientAudio {
         return built;
     }
     public static void stopAll() {
+        Rac1WrenchAudioClient.stopAll();
         var manager = Minecraft.getInstance().getSoundManager();
         for (var sound : ACTIVE) { manager.stop(sound); sound.close(); }
         ACTIVE.clear();
@@ -84,6 +87,10 @@ public final class Rac1ClientAudio {
         minimumFireTick = level == null ? Long.MIN_VALUE : level.getGameTime();
         lastBoltTick = Long.MIN_VALUE;
         lastAmmoPickupTick = Long.MIN_VALUE;
+    }
+    static boolean hasRoom(boolean sustained) {
+        return ACTIVE.size() + LOOPS.size() + Rac1WrenchAudioClient.soundCount() < 4
+                && (!sustained || LOOPS.size() + Rac1WrenchAudioClient.loopCount() < 2);
     }
     private static void receive(Rac1AudioSignal signal) {
         if (signal.event() == Rac1AudioEvent.BLASTER_FIRE_LOOP) return; // never one intro per shot
@@ -99,7 +106,7 @@ public final class Rac1ClientAudio {
             lastBoltTick = tick;
         }
         // Short one-shots share scarce vanilla streaming channels; drop audio under pressure.
-        if (ACTIVE.size() + LOOPS.size() >= 4) return;
+        if (!hasRoom(false)) return;
         var clip = catalog.clip(signal.event());
         if (clip == null) return;
         if (signal.event().ammoPickup()) {
@@ -128,7 +135,7 @@ public final class Rac1ClientAudio {
             return; // accepted held refresh, no new PCM stream or intro
         }
         var catalog = IMPORT.current();
-        if (catalog == null || LOOPS.size() >= 2 || ACTIVE.size() + LOOPS.size() >= 4
+        if (catalog == null || !hasRoom(true)
                 || mc.player.distanceToSqr(signal.x(), signal.y(), signal.z()) > 32 * 32) return;
         var clip = catalog.clips().get(Rac1AudioEvent.BLASTER_FIRE_LOOP);
         if (clip == null || !clip.repeat() || clip.loopStart() < 0) return;
@@ -142,6 +149,7 @@ public final class Rac1ClientAudio {
         RangedFireSignal.receiver = Rac1ClientAudio::receiveFire;
         var mc = Minecraft.getInstance();
         if (world != mc.level) { stopAll(); LOOP_STATE.clear(); world = mc.level; }
+        Rac1WrenchAudioClient.tick(mc);
         ACTIVE.removeIf(sound -> {
             if (mc.getSoundManager().isActive(sound)) return false;
             sound.close(); return true;
@@ -157,7 +165,7 @@ public final class Rac1ClientAudio {
             return stop;
         });
         if (RacMcClient.media().state() != Rac1MediaState.VALID && path != null) {
-            IMPORT.invalidate(); stopAll(); path = null;
+            IMPORT.invalidate(); Rac1WrenchAudioClient.invalidateCatalog(); stopAll(); path = null;
         }
     }
     @EventBusSubscriber(modid = RacMcConstants.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)

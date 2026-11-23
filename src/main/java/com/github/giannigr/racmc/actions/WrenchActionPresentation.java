@@ -26,6 +26,10 @@ public record WrenchActionPresentation(long serial, Phase phase, int bodySequenc
         THROW_WINDUP, DETACHED_OUT, DETACHED_BACK, CATCH
     }
 
+    public static boolean inFlight(Phase phase) {
+        return phase == Phase.DETACHED_OUT || phase == Phase.DETACHED_BACK;
+    }
+
     public static WrenchActionPresentation idle() {
         return new WrenchActionPresentation(0, Phase.IDLE, -1, 1, 0, 0, 1, 1, true,
                 ActionVector.ZERO, 0, ActionRotation.IDENTITY);

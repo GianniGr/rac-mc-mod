@@ -6,6 +6,7 @@ import com.github.giannigr.racmc.actions.WrenchActionPresentation;
 import com.github.giannigr.racmc.actions.WrenchActionState;
 import com.github.giannigr.racmc.actions.WrenchActions;
 import com.github.giannigr.racmc.actions.WrenchActionInput;
+import com.github.giannigr.racmc.sound.WrenchAudioGate;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -53,6 +54,15 @@ public final class WrenchActionClient {
             return WrenchActionPresentation.idle();
         }
         return snapshot.view();
+    }
+
+    /** An audio edge can start one voice; snapshots only sustain/stop that already-started voice. */
+    public static boolean cometInFlight(Player player, long action, long now) {
+        var state = STATES.get(player.getUUID());
+        if (world != player.level() || state == null || !state.available()
+                || !player.isAlive() || !WrenchActions.isWrench(player.getMainHandItem())) return false;
+        return WrenchAudioGate.flightMatches(action, state.view().serial(), state.view().phase(),
+                state.serverTick(), now);
     }
 
     public static boolean slim(Player player) {

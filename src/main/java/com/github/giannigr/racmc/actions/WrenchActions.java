@@ -7,6 +7,7 @@ import java.util.UUID;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
@@ -69,6 +70,16 @@ public final class WrenchActions {
     public static void normalAttackAccepted(ServerPlayer player) {
         SESSIONS.computeIfAbsent(player.getUUID(), id -> new Session(player))
                 .state.normalAttackAccepted(player.serverLevel().getGameTime());
+    }
+
+    public static void normalMeleeStarted(ServerPlayer player, Entity target) {
+        normalAttackAccepted(player);
+        SESSIONS.get(player.getUUID()).meleeAudio.arm(player.server.getTickCount(), target.getUUID());
+    }
+
+    static boolean claimMeleeAdmission(ServerPlayer player, Entity target) {
+        Session session = SESSIONS.get(player.getUUID());
+        return session != null && session.meleeAudio.claim(player.server.getTickCount(), target.getUUID());
     }
 
     static void intent(ServerPlayer player, long serial, WrenchActionState.Intent intent, boolean slim) {
@@ -135,6 +146,7 @@ public final class WrenchActions {
         Session session = SESSIONS.computeIfAbsent(player.getUUID(), id -> new Session(player));
         session.airTicks = player.onGround() ? 0 : Math.min(100, session.airTicks + 1);
         long tick = player.serverLevel().getGameTime();
+        WrenchActionState.AudioEdge pendingAudio = null;
         if (sampler == null || !sampler.ready(player)) {
             session.state.cancel();
         } else if (busy(player)) {
@@ -151,9 +163,10 @@ public final class WrenchActions {
                 if (sample == null) {
                     session.state.cancel();
                 } else {
-                    session.state.tickSources(tick, true, sample.sources.stream()
+                    var audioLevel = player.serverLevel();
+                    var audio = session.state.tickSources(tick, true, sample.sources.stream()
                             .map(p -> new WrenchActionState.SourceFrame(p.frame(), p.hand(),
-                                    p.rotation(), p.grounded())).toList(),
+                                    p.rotation(), p.grounded(), p.visibleHead())).toList(),
                             new WrenchActionState.Surface() {
                                 @Override
                                 public ActionVector firstContact(ActionVector from, ActionVector to) {
@@ -194,10 +207,18 @@ public final class WrenchActions {
                     }
                     WrenchThrowContacts.deliver(player, session.state, sample, session.audit);
                     session.previous = sample;
+                    if (audio != null && player.serverLevel() == audioLevel && player.isAlive()
+                            && session.slot == player.getInventory().selected
+                            && session.stack == player.getMainHandItem()) {
+                        pendingAudio = audio;
+                    }
                 }
             }
         }
         if (busy(player) || session.wasBusy || tick % 20 == 0) broadcast(player, session);
+        // The accepted state snapshot precedes the one-time audio edge on the ordered connection.
+        if (pendingAudio != null) WrenchActionAudio.dispatch(player, pendingAudio,
+                session.actionSerial, session.state.presentation().phase());
         if (session.wasBusy && !busy(player)) {
             com.github.giannigr.racmc.RacMcMod.LOGGER.info("Wrench {} #{} for {}: {}",
                     session.actionType, session.actionSerial, player.getUUID(), session.audit);
@@ -389,6 +410,7 @@ public final class WrenchActions {
         Session session = SESSIONS.get(player.getUUID());
         if (session != null) {
             session.state.cancel();
+            session.meleeAudio.clear();
             if (sampler != null) sampler.forget(player.getUUID());
             if (player instanceof ServerPlayer server) broadcast(server, session);
         }
@@ -420,6 +442,7 @@ public final class WrenchActions {
         private long intentTick = Long.MIN_VALUE;
         private int airTicks;
         private int age;
+        private final WrenchActionAudio.MeleeGate meleeAudio = new WrenchActionAudio.MeleeGate();
         private int slot;
         private ItemStack stack;
         private ResourceLocation dimension;

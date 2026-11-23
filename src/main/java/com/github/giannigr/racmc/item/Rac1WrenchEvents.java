@@ -36,7 +36,7 @@ public final class Rac1WrenchEvents {
                 || player.getAttackStrengthScale(0) < 0.999F) {
             event.setCanceled(true);
         } else {
-            WrenchActions.normalAttackAccepted(player);
+            WrenchActions.normalMeleeStarted(player, event.getTarget());
         }
     }
 

@@ -23,6 +23,9 @@ issueTrackerURL="https://github.com/GianniGr/rac-mc-mod/issues"
 config="racmc.wrench-actions.mixins.json"
 
 [[mixins]]
+config="racmc.wrench-melee-audio.mixins.json"
+
+[[mixins]]
 config="racmc.clank-moveset.mixins.json"
 
 [[mixins]]

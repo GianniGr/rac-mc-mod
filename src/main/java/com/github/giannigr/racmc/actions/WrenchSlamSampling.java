@@ -12,7 +12,10 @@ public final class WrenchSlamSampling {
     public record Actor(ActionVector position, float yaw, float scale, boolean crouching,
             boolean left, boolean slim) {}
     public record Pose(ActionVector hand, ActionVector head, ActionVector body, ActionRotation rotation,
-            boolean active, boolean bodyContact, boolean grounded, WrenchActionState.ClipFrame frame) {}
+            boolean active, boolean bodyContact, boolean grounded, WrenchActionState.ClipFrame frame) {
+        /** Sound is attached to the drawn head; combat still uses the unscaled sampled head. */
+        public ActionVector visibleHead() { return WrenchActionGeometry.visiblePoint(hand, head); }
+    }
 
     public static List<Pose> sample(WrenchSteveRig rig, int bodySequence, int childSequence,
             List<WrenchOriginalClock.Result> source, Actor before, Actor current) {
