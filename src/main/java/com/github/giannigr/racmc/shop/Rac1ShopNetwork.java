@@ -18,6 +18,7 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 /** Shop-only bounded wire. No assets, account selector, client price or changes to the bolt protocol. */
 @EventBusSubscriber(modid=RacMcConstants.MOD_ID,bus=EventBusSubscriber.Bus.MOD)
 public final class Rac1ShopNetwork {
+    public static final String VERSION="shop-3";
     public enum Action { QUOTE, BUY, CLOSE }
     public record Command(UUID token,long sequence,Action action,int quantity,UUID quote,Rac1ShopOffer offer) implements CustomPacketPayload {
         public Command(UUID token,long sequence,Action action,int quantity,UUID quote) {
@@ -45,13 +46,11 @@ public final class Rac1ShopNetwork {
         }
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
-    public record Opened(UUID token,BlockPos position,ResourceLocation dimension,boolean starterAvailable) implements CustomPacketPayload {
-        public Opened(UUID token,BlockPos position,ResourceLocation dimension) { this(token,position,dimension,false); }
+    public record Opened(UUID token,BlockPos position,ResourceLocation dimension) implements CustomPacketPayload {
         public static final Type<Opened> TYPE=Rac1ShopNetwork.type("shop_opened");
         public static final StreamCodec<FriendlyByteBuf,Opened> CODEC=codec(b ->
-                new Opened(b.readUUID(),b.readBlockPos(),ResourceLocation.parse(b.readUtf(128)),b.readBoolean()),
-                (b,p) -> { b.writeUUID(p.token); b.writeBlockPos(p.position); b.writeUtf(p.dimension.toString(),128);
-                    b.writeBoolean(p.starterAvailable); });
+                new Opened(b.readUUID(),b.readBlockPos(),ResourceLocation.parse(b.readUtf(128))),
+                (b,p) -> { b.writeUUID(p.token); b.writeBlockPos(p.position); b.writeUtf(p.dimension.toString(),128); });
         public Opened { Objects.requireNonNull(token); position=Objects.requireNonNull(position).immutable(); Objects.requireNonNull(dimension); }
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
@@ -90,7 +89,7 @@ public final class Rac1ShopNetwork {
     private Rac1ShopNetwork() {}
     public static void client(ClientSink sink) { client=Objects.requireNonNull(sink); }
     @SubscribeEvent public static void register(RegisterPayloadHandlersEvent event) {
-        var r=event.registrar("shop-2");
+        var r=event.registrar(VERSION);
         r.playToServer(Command.TYPE,Command.CODEC,(packet,context) -> context.enqueueWork(() -> {
             if (context.player() instanceof ServerPlayer player) handle(player,packet);
         }));
@@ -108,8 +107,7 @@ public final class Rac1ShopNetwork {
     public static void opened(ServerPlayer player,Rac1ShopSessions.Opened opened) {
         try { com.github.giannigr.racmc.loot.Rac1BoltNetwork.send(player,com.github.giannigr.racmc.loot.Rac1BoltLedger.get(player.serverLevel()),false); }
         catch (RuntimeException failure) { org.slf4j.LoggerFactory.getLogger(Rac1ShopNetwork.class).warn("Shop opening balance sync failed",failure); }
-        send(player,new Opened(opened.token(),BlockPos.of(opened.vendor().position()),player.level().dimension().location(),
-                Rac1StarterClaim.available(player)));
+        send(player,new Opened(opened.token(),BlockPos.of(opened.vendor().position()),player.level().dimension().location()));
     }
     public static void closed(ServerPlayer player,UUID token) {
         send(player,new Reply(token,0,new Rac1ShopPurchases.Result(Rac1ShopPurchases.Status.INVALID_SESSION,null,false)));
@@ -123,11 +121,8 @@ public final class Rac1ShopNetwork {
                 || q.quantity()<1 || q.quantity()>Rac1AmmoPolicy.MAX_ORDER || q.currentAmmo()<0 || q.expires()<0)
             return false;
         var stock=q.offer().stock();
-        if (q.offer()==Rac1ShopOffer.BOMB_STARTER)
-            return q.kind()==Rac1ShopDelivery.Kind.WEAPON && q.quantity()==1 && q.price()==0
-                    && q.deliveredAmmo()==stock.starterUnits();
         if (q.kind()==Rac1ShopDelivery.Kind.WEAPON)
-            return !portable && q.offer()==Rac1ShopOffer.BLASTER && q.quantity()==1 && q.price()==stock.weaponPrice()
+            return !portable && q.quantity()==1 && q.price()==stock.weaponPrice()
                     && q.deliveredAmmo()==Math.max(0,stock.weaponFill()-q.currentAmmo());
         return q.currentAmmo()<=stock.cap()-q.quantity() && q.price()==(long)q.quantity()*stock.unitPrice(portable)
                 && q.deliveredAmmo()==q.quantity();

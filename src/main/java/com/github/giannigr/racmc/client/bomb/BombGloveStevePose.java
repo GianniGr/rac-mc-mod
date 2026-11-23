@@ -93,6 +93,14 @@ final class BombGloveStevePose {
         return (float) Math.sqrt(radiusSquared) + .003f;
     }
 
+    /** Support distance toward the palm along the arm's unit wrist-to-finger axis. */
+    static float palmSupport(float[] vertices, org.joml.Vector3fc axis) {
+        float min=Float.POSITIVE_INFINITY;
+        for (int i=0;i+2<vertices.length;i+=3)
+            min=Math.min(min,vertices[i]*axis.x()+vertices[i+1]*axis.y()+vertices[i+2]*axis.z());
+        return Float.isFinite(min) ? -min:0;
+    }
+
     /**
      * Arm-frame offset from the class-121 center. +Y is wrist-to-fingers, +Z is
      * dorsal; shift the shell dorsally, not the held/committed bomb center.

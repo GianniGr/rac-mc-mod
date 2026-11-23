@@ -47,7 +47,10 @@ public final class Rac1CrateBlast {
 
     public static void detonate(ServerLevel level, Vec3 center,
             @Nullable Rac1CrateBlockEntity grounded, @Nullable Rac1FallingExplosive airborne) {
-        Explosion context = new Explosion(level, airborne, center.x, center.y, center.z,
+        var attribution=grounded!=null ? grounded.fuse.bombOwner():airborne!=null ? airborne.fuse.bombOwner():null;
+        var owner=attribution==null ? null:level.getServer().getPlayerList().getPlayer(attribution);
+        if (attribution!=null && !liveOwner(level,owner)) return; // Never fall back to an anonymous blast.
+        Explosion context = new Explosion(level, owner!=null ? owner:airborne, center.x, center.y, center.z,
                 Rac1CrateBlastPolicy.TNT_KNOCKBACK_POWER, false, Explosion.BlockInteraction.DESTROY);
         if (EventHooks.onExplosionStart(level, context)) {
             return; // Terminal suppressed state: no retries, removal, damage, chain or payout.
@@ -57,6 +60,7 @@ public final class Rac1CrateBlast {
         for (BlockPos mutable : BlockPos.betweenClosed(origin.offset(-4, -4, -4),
                 origin.offset(4, 4, 4))) {
             BlockPos pos = mutable.immutable();
+            if (owner!=null && (grounded==null || !pos.equals(grounded.getBlockPos()))) continue;
             if (level.hasChunkAt(pos) && inCrateRange(center, new AABB(pos))
                     && level.getBlockState(pos).getBlock() instanceof Rac1CrateBlock
                     && level.getBlockEntity(pos) instanceof Rac1CrateBlockEntity crate) {
@@ -65,15 +69,18 @@ public final class Rac1CrateBlast {
         }
         List<Entity> entities = new ArrayList<>(level.getEntities((Entity) null,
                 new AABB(center, center).inflate(Rac1CrateBlastPolicy.KNOCKBACK_RADIUS + 1.0E-6), e ->
-                        !(e instanceof ItemEntity) && (isLivingTarget(e)
+                         !(e instanceof ItemEntity) && (e instanceof LivingEntity living && isLivingTarget(e)
+                         && (owner==null || mayHit(level,owner,living))
                         && (Rac1CrateBlastPolicy.inRange(center, e.getBoundingBox(), e instanceof Player)
                         || e.distanceToSqr(center) <= 64.0)
-                        || e instanceof FallingBlockEntity falling
+                         || (owner==null || e==airborne) && e instanceof FallingBlockEntity falling
                         && falling.getBlockState().getBlock() instanceof Rac1CrateBlock
                         && inCrateRange(center, e.getBoundingBox()))));
         Set<Entity> originals = new HashSet<>(entities);
         context.getToBlow().addAll(blocks.keySet());
         EventHooks.onExplosionDetonate(level, context, entities, Rac1CrateBlastPolicy.KNOCKBACK_RADIUS);
+        if (owner!=null && (!liveOwner(level,owner) || !level.mayInteract(owner,origin)
+                || owner.blockActionRestricted(level,origin,owner.gameMode.getGameModeForPlayer()))) return;
         Set<BlockPos> authorized = new HashSet<>(context.getToBlow());
         Set<Entity> authorizedEntities = new HashSet<>(entities);
         // Self-consumption is protected by the same event list as other targets.
@@ -83,11 +90,11 @@ public final class Rac1CrateBlast {
             return;
         }
         if (grounded != null && !destroyCrate(level, grounded.getBlockPos(),
-                grounded.getBlockState(), airborne)) {
+                grounded.getBlockState(), owner!=null ? owner:airborne)) {
             return;
         }
         if (airborne != null) {
-            com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(level, airborne, airborne);
+            com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(level, airborne, owner!=null ? owner:airborne);
         }
         // Like primed TNT, the emitting cube is gone before exposure sampling. Other
         // crate blocks still shield living targets until after the damage pass.
@@ -98,7 +105,7 @@ public final class Rac1CrateBlast {
                 continue;
             }
             if (entity instanceof FallingBlockEntity falling) {
-                if (!inCrateRange(center, entity.getBoundingBox())
+                if (owner!=null || !inCrateRange(center, entity.getBoundingBox())
                         || !(falling.getBlockState().getBlock() instanceof Rac1CrateBlock block)) {
                     continue;
                 }
@@ -113,6 +120,7 @@ public final class Rac1CrateBlast {
                     com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(level, falling, airborne);
                 }
             } else if (entity instanceof LivingEntity living && isLivingTarget(entity)
+                    && (owner==null || mayHit(level,owner,living))
                     && !entity.ignoreExplosion(context)) {
                 livingTargets.add(living);
             }
@@ -120,26 +128,27 @@ public final class Rac1CrateBlast {
         // Independent loops: an 8-block impulse must never imply an 8-block damage hit.
         Set<LivingEntity> hurtTargets = new HashSet<>();
         for (LivingEntity living : livingTargets) {
-            if (!living.isRemoved() && isLivingTarget(living)
-                    && damage(level, context, center, living)) {
+            if (!living.isRemoved() && isLivingTarget(living) && (owner==null || mayHit(level,owner,living))
+                    && damage(level, context, center, living,owner)) {
                 hurtTargets.add(living);
             }
         }
         Map<ServerPlayer, Vec3> playerPushes = new HashMap<>();
         for (LivingEntity living : livingTargets) {
-            if (!living.isRemoved() && !living.ignoreExplosion(context)) {
+            if (!living.isRemoved() && !living.ignoreExplosion(context)
+                    && (owner==null || hurtTargets.contains(living) && mayHit(level,owner,living))) {
                 knockback(level, context, center, living, playerPushes);
             }
         }
         for (LivingEntity living : hurtTargets) {
-            if (!living.isRemoved()) {
+            if (owner==null && !living.isRemoved()) {
                 living.onExplosionHit(airborne);
             }
         }
         for (Map.Entry<BlockPos, Rac1CrateBlockEntity> entry : blocks.entrySet()) {
             BlockPos pos = entry.getKey();
             Rac1CrateBlockEntity crate = entry.getValue();
-            if (crate == grounded || !authorized.contains(pos) || !level.hasChunkAt(pos)
+            if (owner!=null || crate == grounded || !authorized.contains(pos) || !level.hasChunkAt(pos)
                     || level.getBlockEntity(pos) != crate || crate.isRemoved()
                     || !(level.getBlockState(pos).getBlock() instanceof Rac1CrateBlock block)) {
                 continue;
@@ -170,7 +179,7 @@ public final class Rac1CrateBlast {
     }
 
     private static boolean damage(ServerLevel level, Explosion context, Vec3 center,
-            LivingEntity entity) {
+            LivingEntity entity,@Nullable ServerPlayer owner) {
         boolean player = entity instanceof Player;
         double distance = Rac1CrateBlastPolicy.distance(center, entity.getBoundingBox());
         if (distance > Rac1CrateBlastPolicy.radius(player)) {
@@ -181,6 +190,7 @@ public final class Rac1CrateBlast {
         if (amount <= 0) {
             return false;
         }
+        if (owner!=null) return entity.hurt(level.damageSources().explosion(owner,owner), amount);
         entity.hurt(level.damageSources().explosion(context), amount);
         return true;
     }
@@ -215,5 +225,15 @@ public final class Rac1CrateBlast {
     private static boolean isLivingTarget(Entity entity) {
         return entity.isAlive() && !entity.isSpectator()
                 && (entity instanceof Player || entity instanceof Mob);
+    }
+
+    private static boolean liveOwner(ServerLevel level,@Nullable ServerPlayer owner) {
+        return owner!=null && owner.isAlive() && !owner.isRemoved() && !owner.isSpectator() && owner.level()==level;
+    }
+
+    private static boolean mayHit(ServerLevel level,ServerPlayer owner,LivingEntity target) {
+        if (!liveOwner(level,owner) || target==owner) return false;
+        if (target instanceof Player player) return level.getServer().isPvpAllowed() && owner.canHarmPlayer(player);
+        return !owner.isAlliedTo(target) && !target.isAlliedTo(owner);
     }
 }

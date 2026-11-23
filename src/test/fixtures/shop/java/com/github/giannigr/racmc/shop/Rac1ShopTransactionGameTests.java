@@ -294,7 +294,8 @@ public final class Rac1ShopTransactionGameTests {
         var belt=com.github.giannigr.racmc.gear.Rac1BeltNetwork.Snapshot.TYPE.id();
         channels.put(belt,new net.neoforged.neoforge.network.registration.NetworkChannel(belt,"belt-1"));
         var gear=com.github.giannigr.racmc.gear.Rac1GearNetwork.Snapshot.TYPE.id();
-        channels.put(gear,new net.neoforged.neoforge.network.registration.NetworkChannel(gear,"gear-2"));
+        channels.put(gear,new net.neoforged.neoforge.network.registration.NetworkChannel(
+                gear,com.github.giannigr.racmc.gear.Rac1GearNetwork.VERSION));
         // Current-main login/tick listeners send these even to a shopper with no Clank equipped.
         for (var id:List.of(com.github.giannigr.racmc.clank.Rac1ClankNetwork.Snapshot.TYPE.id(),
                 com.github.giannigr.racmc.clank.Rac1ClankNetwork.Correction.TYPE.id()))
@@ -302,7 +303,7 @@ public final class Rac1ShopTransactionGameTests {
         var hydro=com.github.giannigr.racmc.clank.Rac1HydroNetwork.Snapshot.TYPE.id();
         channels.put(hydro,new net.neoforged.neoforge.network.registration.NetworkChannel(hydro,"clank-hydro-test-1"));
         for (var id:List.of(Rac1ShopNetwork.Command.TYPE.id(),Rac1ShopNetwork.Opened.TYPE.id(),Rac1ShopNetwork.Reply.TYPE.id()))
-            channels.put(id,new net.neoforged.neoforge.network.registration.NetworkChannel(id,"shop-2"));
+            channels.put(id,new net.neoforged.neoforge.network.registration.NetworkChannel(id,Rac1ShopNetwork.VERSION));
         for (var id:List.of(Rac1PdaNetwork.Command.TYPE.id(),Rac1PdaNetwork.Opened.TYPE.id(),Rac1PdaNetwork.Reply.TYPE.id()))
             channels.put(id,new net.neoforged.neoforge.network.registration.NetworkChannel(id,"pda-2"));
         var observed=Rac1ShopObserverNetwork.State.TYPE.id();

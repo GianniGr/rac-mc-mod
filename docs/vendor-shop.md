@@ -1,5 +1,12 @@
 # Original vendor shop foundations (P35)
 
+Post-beta Bomb Glove commerce is documented in [Bomb Glove gameplay](bomb-glove-gameplay.md):
+one ownership-derived product row, a 1,000-bolt weapon quote with a top-up to
+ten or a 5-bolt refill, and no free starter. The PDA remains ammo-only.
+Kiosk protocol `shop-3` advertises no starter flag; a quantity requote cannot
+replace the reviewed ammo kind with a weapon purchase. The notes below retain
+historical source/reconstruction milestones, not a current catalog listing.
+
 Current owner-approved wire/Buy/quantity/confirmation candidate and its runtime
 evidence/limitations: [vendor-shop-wired.md](vendor-shop-wired.md).
 

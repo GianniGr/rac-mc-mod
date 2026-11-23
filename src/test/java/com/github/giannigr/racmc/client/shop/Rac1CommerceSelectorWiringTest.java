@@ -24,7 +24,7 @@ class Rac1CommerceSelectorWiringTest {
             assertTrue(s.contains("Rac1ShopPreviewDrawing.renderCatalog"));
             assertTrue(s.contains("private boolean switchable()"));
         }
-        assertTrue(source("shop/Rac1ShopClientPackets").contains("clicked,packet.starterAvailable()"));
+        assertTrue(source("shop/Rac1ShopClientPackets").contains("packet.token(),clicked"));
     }
     @Test void supplementalCatalogCannotSubstituteBlasterProductArtOrSpeech() throws Exception {
         var draw=source("shop/Rac1ShopPreviewDrawing");

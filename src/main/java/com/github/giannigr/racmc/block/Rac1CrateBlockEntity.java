@@ -130,7 +130,9 @@ public class Rac1CrateBlockEntity extends BlockEntity {
     @Override
     public net.minecraft.nbt.CompoundTag getUpdateTag(
             net.minecraft.core.HolderLookup.Provider registries) {
-        return saveWithoutMetadata(registries);
+        var tag=saveWithoutMetadata(registries);
+        tag.remove("RacBombFuseOwner");
+        return tag;
     }
 
     @Override

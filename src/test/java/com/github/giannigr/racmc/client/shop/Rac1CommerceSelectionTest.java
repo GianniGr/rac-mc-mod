@@ -7,12 +7,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class Rac1CommerceSelectionTest {
     @Test void directionalBrowsingHasEndpointsAndCannotSpendOrWrap() {
-        var shop=new Rac1CommerceSelection(false,true,true);
+        var shop=new Rac1CommerceSelection(false,true);
         assertFalse(shop.move(-1)); assertTrue(shop.blaster());
         assertTrue(shop.move(1)); assertEquals(Rac1ShopOffer.BOMB_AMMO,shop.offer());
-        assertTrue(shop.move(1)); assertEquals(Rac1ShopOffer.BOMB_STARTER,shop.offer());
         assertFalse(shop.move(1)); assertTrue(shop.move(-1));
-        assertEquals(Rac1ShopOffer.BOMB_AMMO,shop.offer());
+        assertEquals(Rac1ShopOffer.BLASTER,shop.offer());
         assertThrows(IllegalArgumentException.class,() -> shop.move(0));
         var flow=new Rac1ShopClientFlow(UUID.randomUUID());
         assertTrue(flow.activationDown(262));
@@ -21,35 +20,31 @@ class Rac1CommerceSelectionTest {
         assertEquals(Rac1ShopClientFlow.Mode.BROWSE,flow.mode());
     }
     private static Rac1ShopPurchases.Quote quote(Rac1ShopOffer row,int qty,int current,int delivered,long total) {
-        return new Rac1ShopPurchases.Quote(UUID.randomUUID(),row==Rac1ShopOffer.BOMB_STARTER
-                ? Rac1ShopDelivery.Kind.WEAPON:Rac1ShopDelivery.Kind.AMMO,qty,total,current,delivered,200,row);
+        return new Rac1ShopPurchases.Quote(UUID.randomUUID(),Rac1ShopDelivery.Kind.AMMO,qty,total,current,delivered,200,row);
     }
     @Test void portableHasOnlyRealAmmoRowsNeverStarterAndNeverPlaceholder() {
-        var absent=new Rac1CommerceSelection(true,false,true);
+        var absent=new Rac1CommerceSelection(true,false);
         absent.cycle(); assertEquals(List.of(Rac1ShopOffer.BLASTER),absent.rows());
-        var pda=new Rac1CommerceSelection(true,true,true);
+        var pda=new Rac1CommerceSelection(true,true);
         assertEquals(List.of(Rac1ShopOffer.BLASTER,Rac1ShopOffer.BOMB_AMMO),pda.rows());
         pda.cycle(); assertEquals(Rac1ShopOffer.BOMB_AMMO,pda.offer());
         assertTrue(pda.label().contains("25 bolts/round; cap 40"));
         pda.cycle(); assertTrue(pda.blaster());
     }
-    @Test void kioskUsesServerStarterAvailabilityAndExactTenNotCapFill() {
-        var used=new Rac1CommerceSelection(false,true,false);
-        assertFalse(used.rows().contains(Rac1ShopOffer.BOMB_STARTER));
-        var shop=new Rac1CommerceSelection(false,true,true);
-        shop.cycle(); assertTrue(shop.label().contains("5 bolts/round"));
-        shop.cycle(); assertEquals(Rac1ShopOffer.BOMB_STARTER,shop.offer());
-        var q=quote(Rac1ShopOffer.BOMB_STARTER,1,39,10,0);
+    @Test void kioskReviewsExactPaidTopUpOnTheSameBombRow() {
+        var shop=new Rac1CommerceSelection(false,true);
+        shop.cycle();
+        var q=new Rac1ShopPurchases.Quote(UUID.randomUUID(),Rac1ShopDelivery.Kind.WEAPON,1,1000,7,3,200,Rac1ShopOffer.BOMB_AMMO);
         String details=String.join("\n",shop.details(q));
-        assertTrue(details.contains("MC acquisition adaptation"));
-        assertTrue(details.contains("exactly 10")); assertTrue(details.contains("0 bolts (FREE)"));
+        assertTrue(details.contains("MC paid weapon offer"));
+        assertTrue(details.contains("3 rounds (top up to 10)")); assertTrue(details.contains("TOTAL: 1000 bolts"));
         shop.purchased(q);
         assertEquals(Rac1ShopOffer.BOMB_AMMO,shop.offer());
         assertFalse(shop.rows().contains(Rac1ShopOffer.BOMB_STARTER));
-        assertTrue(String.join("\n",shop.details(null)).contains("personal claim spent"));
+        assertTrue(String.join("\n",shop.details(null)).contains("Paid 1000 bolts"));
     }
     @Test void paidReviewShowsOnlyMatchingServerRowQuantityDeliveryAndTotal() {
-        var pda=new Rac1CommerceSelection(true,true,false); pda.cycle();
+        var pda=new Rac1CommerceSelection(true,true); pda.cycle();
         var q=quote(Rac1ShopOffer.BOMB_AMMO,7,33,7,175);
         var details=String.join("\n",pda.details(q));
         assertTrue(details.contains("Current: 33; deliver: 7"));

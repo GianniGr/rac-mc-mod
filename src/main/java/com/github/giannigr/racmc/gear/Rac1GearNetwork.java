@@ -2,6 +2,7 @@ package com.github.giannigr.racmc.gear;
 
 import com.github.giannigr.racmc.RacMcConstants;
 import com.github.giannigr.racmc.clank.Rac1ClankEquipment;
+import com.github.giannigr.racmc.clank.Rac1ClankEquipment.Module;
 import java.io.IOException;
 import java.util.Objects;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -16,6 +17,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 @EventBusSubscriber(modid = RacMcConstants.MOD_ID)
 public final class Rac1GearNetwork {
+    public static final String VERSION = "gear-3";
     private static final int BACK_BYTES = 7;
 
     @FunctionalInterface
@@ -33,7 +35,7 @@ public final class Rac1GearNetwork {
 
     @SubscribeEvent
     public static void register(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("gear-2"); // The default handlers are on the game thread.
+        var registrar = event.registrar(VERSION); // The default handlers are on the game thread.
         registrar.playToClient(Snapshot.TYPE, Snapshot.CODEC,
                 (packet, context) -> selfReceiver.receive(packet.state(), context));
         registrar.playToServer(EquipBack.TYPE, EquipBack.CODEC, (packet, context) -> {
@@ -49,7 +51,12 @@ public final class Rac1GearNetwork {
                     out.writeLong(packet.state.revision());
                     out.writeBytes(packet.state.back().save());
                     out.writeByte((packet.state.clankInInventory() ? 1 : 0)
-                            | (packet.state.rewardPending() ? 2 : 0) | (packet.state.returnPending() ? 4 : 0));
+                            | (packet.state.rewardPending() ? 2 : 0) | (packet.state.returnPending() ? 4 : 0)
+                            | (switch (packet.state.fixture()) {
+                                case NONE -> 0;
+                                case HELI -> 8;
+                                case THRUSTER -> 16;
+                            }));
                 },
                 in -> {
                     long epoch = in.readLong();
@@ -57,10 +64,15 @@ public final class Rac1GearNetwork {
                     byte[] back = new byte[BACK_BYTES];
                     in.readBytes(back);
                     int flags = in.readUnsignedByte();
-                    if (flags > 7) throw new IllegalArgumentException("Invalid Gear availability flags");
+                    Module fixture = switch (flags >>> 3) {
+                        case 0 -> Module.NONE;
+                        case 1 -> Module.HELI;
+                        case 2 -> Module.THRUSTER;
+                        default -> throw new IllegalArgumentException("Invalid Gear availability flags");
+                    };
                     try {
                         return new Snapshot(new Rac1GearState(epoch, revision, Rac1ClankEquipment.load(back),
-                                (flags & 1) != 0, (flags & 2) != 0, (flags & 4) != 0));
+                                (flags & 1) != 0, (flags & 2) != 0, (flags & 4) != 0, fixture));
                     } catch (IOException invalid) {
                         throw new IllegalArgumentException("Invalid Gear Back slot", invalid);
                     }

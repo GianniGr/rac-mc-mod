@@ -85,11 +85,6 @@ public final class Rac1ShopTransactionServer {
         return new Rac1ShopPurchases.Account() {
             public long balance() { return ledger.balance(player.getUUID()); }
             public long revision() { return ledger.revision(player.getUUID()); }
-            public boolean starterAvailable() { return Rac1StarterClaim.available(player); }
-            public boolean commitStarter(Rac1ShopDelivery delivery) {
-                check();
-                return Rac1ShopAtomicCommit.claim(player.getInventory(),delivery,() -> Rac1StarterClaim.claim(player));
-            }
             public boolean commit(Rac1ShopDelivery delivery,long balance,long revision) {
                 check();
                 var result=Rac1ShopAtomicCommit.run(player.getInventory(),delivery,balance,revision,new Rac1ShopAtomicCommit.Debit() {

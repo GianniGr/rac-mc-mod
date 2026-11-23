@@ -18,30 +18,23 @@ import org.junit.jupiter.api.Test;
 class Rac1BombCommerceTest {
     @BeforeAll static void bootstrap() { SharedConstants.tryDetectVersion(); Bootstrap.bootStrap(); }
 
-    private static Rac1ShopDelivery.Staged stage(Inventory inv,Rac1ShopOffer offer,int qty,boolean portable,boolean available) {
-        return Rac1ShopDelivery.stageStock(inv,Items.SPYGLASS,Items.EGG,offer,offer==BOMB_AMMO ? AMMO:WEAPON,qty,
-                Rac1AmmoPolicy.count(inv,Items.EGG),portable,available);
+    private static Rac1ShopDelivery.Staged stage(Inventory inv,Rac1ShopOffer offer,int qty,boolean portable) {
+        return Rac1ShopDelivery.stageStock(inv,Items.SPYGLASS,Items.EGG,offer,
+                portable ? AMMO:Rac1ShopDelivery.offer(inv,Items.SPYGLASS),qty,
+                Rac1AmmoPolicy.count(inv,Items.EGG),portable);
     }
 
     private static final class Account implements Rac1ShopPurchases.Account,Rac1ShopAtomicCommit.Debit {
         final Inventory inventory=new Inventory(null);
         long balance,revision;
-        boolean claimed,rejectClaim;
+        boolean rejectDebit;
         public long balance() { return balance; }
         public long revision() { return revision; }
-        public boolean starterAvailable() { return !claimed; }
-        public boolean commitStarter(Rac1ShopDelivery d) {
-            return Rac1ShopAtomicCommit.claim(inventory,d,() -> {
-                if (claimed || rejectClaim) return false;
-                claimed=true;
-                return true;
-            });
-        }
         public boolean commit(Rac1ShopDelivery d,long b,long r) {
             return Rac1ShopAtomicCommit.run(inventory,d,b,r,this).committed();
         }
         public boolean tryDebit(long amount) {
-            if (balance<amount) return false;
+            if (rejectDebit || balance<amount) return false;
             balance-=amount; revision++; return true;
         }
         int bombs() { return Rac1AmmoPolicy.count(inventory,Items.EGG); }
@@ -62,47 +55,45 @@ class Rac1BombCommerceTest {
         }
     }
 
-    @Test void fullFitAndRejectedCommitDoNotSpendPersonalGrant() {
+    @Test void fullFitAndRejectedDebitNeverPartiallyDeliverThePaidWeapon() {
         var a=new Account(); var k=new Kiosk(a);
+        a.balance=1000;
         for (int i=1;i<36;i++) a.inventory.setItem(i,new ItemStack(Items.STONE,64));
-        assertEquals(FULL,k.quote(1,BOMB_STARTER,1).status()); // only the weapon would fit
+        assertEquals(FULL,k.quote(1,BOMB_AMMO,1).status()); // only the weapon would fit
         assertTrue(a.inventory.getItem(0).isEmpty());
-        assertFalse(a.claimed);
+        assertEquals(1000,a.balance);
         a.inventory.setItem(1,ItemStack.EMPTY);
-        var first=k.quote(2,BOMB_STARTER,1).quote();
-        a.rejectClaim=true;
+        var first=k.quote(2,BOMB_AMMO,1).quote();
+        a.rejectDebit=true;
         assertEquals(COMMIT_REJECTED,k.buy(3,first.id()).status());
-        assertFalse(a.claimed); assertEquals(0,a.bombs()); assertTrue(a.inventory.getItem(0).isEmpty());
+        assertEquals(1000,a.balance); assertEquals(0,a.bombs()); assertTrue(a.inventory.getItem(0).isEmpty());
         assertTrue(k.buy(3,first.id()).replay());
-        var next=k.quote(4,BOMB_STARTER,1).quote();
-        a.rejectClaim=false;
-        a.revision++; // free claims do not depend on unrelated currency changes
+        var next=k.quote(4,BOMB_AMMO,1).quote();
+        a.rejectDebit=false;
         assertEquals(PURCHASED,k.buy(5,next.id()).status());
-        assertTrue(a.claimed); assertEquals(10,a.bombs());
+        assertEquals(10,a.bombs());
         assertTrue(a.inventory.getItem(0).is(Items.SPYGLASS));
         assertEquals(0,a.balance); assertEquals(1,a.revision);
         assertTrue(k.buy(5,next.id()).replay());
         assertEquals(STALE_QUOTE,k.buy(6,next.id()).status());
     }
 
-    @Test void personalClaimPersistsAcrossSessionsAndIsIndependentOfPossession() {
+    @Test void ownershipDrivesKindAndReacquisitionWithOffhandTopUpOnly() {
         var a=new Account(); var k=new Kiosk(a);
-        a.inventory.setItem(2,new ItemStack(Items.SPYGLASS)); // received from someone else
-        a.inventory.setItem(40,new ItemStack(Items.EGG,16));
-        a.inventory.setItem(3,new ItemStack(Items.EGG,24)); // cap does not clip the starter grant
-        var quote=k.quote(1,BOMB_STARTER,1).quote();
-        assertEquals(0,quote.price()); assertEquals(40,quote.currentAmmo());
-        assertEquals(10,quote.deliveredAmmo());
+        a.balance=2000;
+        a.inventory.setItem(40,new ItemStack(Items.EGG,4));
+        var quote=k.quote(1,BOMB_AMMO,1).quote();
+        assertEquals(WEAPON,quote.kind()); assertEquals(1000,quote.price()); assertEquals(4,quote.currentAmmo());
+        assertEquals(6,quote.deliveredAmmo());
         assertEquals(PURCHASED,k.buy(2,quote.id()).status());
-        assertEquals(50,a.bombs()); assertTrue(a.claimed);
-        a.inventory.setItem(0,ItemStack.EMPTY); a.inventory.setItem(2,ItemStack.EMPTY);
-        k.token=k.service.open(k.player,k.vendor,10).token();
-        assertEquals(STALE_OFFER,k.service.quote(k.player,k.token,k.vendor,1,BOMB_STARTER,1,11,a.inventory,Items.BOW,a).status());
-        assertEquals(STALE_OFFER,k.service.quote(k.player,k.token,k.vendor,2,BOMB_AMMO,1,12,a.inventory,Items.BOW,a).status());
-        var otherAccount=new Account(); var other=UUID.randomUUID();
-        var token=k.service.open(other,k.vendor,13).token();
-        assertEquals(QUOTED,k.service.quote(other,token,k.vendor,1,BOMB_STARTER,1,14,
-                otherAccount.inventory,Items.BOW,otherAccount).status());
+        assertEquals(10,a.bombs()); assertEquals(1000,a.balance);
+        assertEquals(AMMO,k.quote(3,BOMB_AMMO,1).quote().kind());
+        a.inventory.setItem(0,ItemStack.EMPTY);
+        assertEquals(STALE_OFFER,k.quote(4,BOMB_STARTER,1).status());
+        quote=k.quote(5,BOMB_AMMO,1).quote();
+        assertEquals(WEAPON,quote.kind()); assertEquals(0,quote.deliveredAmmo());
+        assertEquals(PURCHASED,k.buy(6,quote.id()).status());
+        assertEquals(10,a.bombs()); assertEquals(0,a.balance);
     }
 
     @Test void distinctBoundedPaidQuotesAndIndependentSessions() {
@@ -125,6 +116,6 @@ class Rac1BombCommerceTest {
         assertEquals(PURCHASED,pda.buy(k.player,token,3,portable.id(),3,a.inventory,Items.BOW,a).status());
         assertEquals(STALE_OFFER,k.buy(4,kiosk.id()).status());
         assertEquals(40,a.bombs()); assertEquals(64,a.inventory.getItem(2).getCount());
-        assertEquals(5,a.balance); assertFalse(a.claimed);
+        assertEquals(5,a.balance);
     }
 }

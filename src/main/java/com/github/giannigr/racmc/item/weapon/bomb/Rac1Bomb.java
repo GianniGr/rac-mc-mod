@@ -40,7 +40,7 @@ public final class Rac1Bomb extends Projectile {
             Rac1Bomb.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<CompoundTag> COMMITTED_THROW = SynchedEntityData.defineId(
             Rac1Bomb.class, EntityDataSerializers.COMPOUND_TAG);
-    private static final float DAMAGE = 2;
+    private static final float DAMAGE = 3;
     private final Set<UUID> hit = new HashSet<>();
     private final Set<BlockPos> hitBlocks = new HashSet<>();
     private int flightTicks;
@@ -176,6 +176,15 @@ public final class Rac1Bomb extends Projectile {
         return entity instanceof LivingEntity living && super.canHitEntity(entity) && mayDamage(living);
     }
 
+    /** Only the player bound to an admitted and paid throw may arm a secondary fuse. */
+    public @Nullable ServerPlayer acceptedOwner() {
+        if (phase()!=Phase.BLAST || committedThrow==null || !(getOwner() instanceof ServerPlayer player)
+                || !player.isAlive() || player.isRemoved() || player.isSpectator() || player.level()!=level()
+                || !player.getUUID().equals(committedThrow.key().owner())
+                || !level().dimension().location().equals(committedThrow.key().dimension())) return null;
+        return player;
+    }
+
     boolean mayDamage(LivingEntity target) {
         Entity owner = getOwner();
         if (!target.isAlive() || target.isSpectator() || target == owner) return false;
@@ -215,7 +224,7 @@ public final class Rac1Bomb extends Projectile {
         for (BlockPos pos : BlockPos.betweenClosed(BlockPos.containing(area.minX, area.minY, area.minZ),
                 BlockPos.containing(area.maxX, area.maxY, area.maxZ))) {
             if (isRemoved()) return;
-            if (hitBlocks.contains(pos) || !RangedCrateHits.ordinary(level.getBlockState(pos))) continue;
+            if (hitBlocks.contains(pos) || !RangedCrateHits.eligible(level.getBlockState(pos))) continue;
             Vec3 point = nearest(new AABB(pos));
             if (point.distanceToSqr(position()) <= radius * radius
                     && unoccluded(level, Vec3.atCenterOf(pos), pos)) grounded(pos.immutable());
@@ -223,15 +232,13 @@ public final class Rac1Bomb extends Projectile {
     }
 
     private void grounded(BlockPos pos) {
-        // Existing TNT crate fuses do not carry the thrower. Don't bypass owner/PvP policy
-        // by arming a secondary, unattributed blast through this lane.
-        if (RangedCrateHits.ordinary(level().getBlockState(pos)) && hitBlocks.add(pos))
-            RangedCrateHits.grounded(this, pos);
+        if (RangedCrateHits.eligible(level().getBlockState(pos)) && hitBlocks.add(pos))
+            RangedCrateHits.groundedBomb(this, pos);
     }
 
     private void airborne(FallingBlockEntity crate) {
-        if (RangedCrateHits.ordinary(crate.getBlockState()) && hit.add(crate.getUUID()))
-            RangedCrateHits.airborne(this, crate);
+        if (RangedCrateHits.eligible(crate.getBlockState()) && hit.add(crate.getUUID()))
+            RangedCrateHits.airborneBomb(this, crate);
     }
 
     private Vec3 nearest(AABB box) {

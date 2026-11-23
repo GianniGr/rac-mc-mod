@@ -23,11 +23,11 @@ class Rac1BeltVisualTest {
     }
 
     @Test void waistMountKeepsBackFaceOnArmorAndPreservesHandednessAndBodyUp() {
-        var fit = Rac1BeltWaist.fit(new float[]{-2, -1, -3, 2, -1, 3, -2, 1, 3});
+        var fit = Rac1BeltWaist.fit(new float[]{1, -1, -2, 5, -1, 4, 1, 1, 4});
         for (var host : Rac1BeltWaist.Clearance.values()) {
             var transform = fit.local(host);
             assertTrue(transform.determinant() > 0);
-            var frontNormal = transform.transformDirection(new Vector3f(0, 0, 1)).normalize();
+            var frontNormal = transform.transformDirection(new Vector3f(0, 0, -1)).normalize();
             assertEquals(-1, frontNormal.z, .0001f);
             assertEquals(-1, transform.transformDirection(new Vector3f(0, 1, 0)).normalize().y, .0001f);
             float expect = switch (host) {
@@ -36,11 +36,13 @@ class Rac1BeltVisualTest {
                 case LEGGINGS -> 2.5f;
                 case CHESTPLATE -> 3f;
             };
-            var back = transform.transformPosition(new Vector3f(0, 0, -3));
+            var back = transform.transformPosition(new Vector3f(3, 0, 4));
             assertEquals(0, back.x, .0001f);
             assertEquals(10f / 16, back.y, .0001f);
             assertEquals((-expect + .08f) / 16, back.z, .0001f);
-            assertTrue(back.z - transform.transformPosition(new Vector3f(0, 0, 3)).z <= 1.8001f / 16);
+            var front = transform.transformPosition(new Vector3f(3, 0, -2));
+            assertTrue(front.z < back.z);
+            assertTrue(back.z - front.z <= 1.8001f / 16);
         }
         assertThrows(IllegalArgumentException.class, () -> Rac1BeltWaist.fit(new float[9]));
     }

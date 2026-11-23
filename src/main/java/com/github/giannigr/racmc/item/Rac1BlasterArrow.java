@@ -143,7 +143,7 @@ public class Rac1BlasterArrow extends Arrow {
         boolean enderman = victim.getType() == EntityType.ENDERMAN;
         int oldFire = victim.getRemainingFireTicks();
         if (isOnFire() && !enderman) victim.igniteForSeconds(5);
-        if (!victim.hurt(damage, amount)) {
+        if (!victim.hurt(damage, 1.5f * amount)) {
             victim.setRemainingFireTicks(oldFire);
             deflect(net.minecraft.world.entity.projectile.ProjectileDeflection.REVERSE, victim, owner, false);
             setDeltaMovement(getDeltaMovement().scale(.2));

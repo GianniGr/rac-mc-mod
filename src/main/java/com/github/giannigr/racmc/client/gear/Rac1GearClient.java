@@ -40,11 +40,10 @@ public final class Rac1GearClient {
         return VIEW.state(current());
     }
 
-    static void requestBack(boolean worn) {
+    static void requestBack(Rac1GearState shown, boolean worn) {
         var player = Minecraft.getInstance().player;
         if (player == null || player.isSpectator() || !player.isAlive()) return;
-        selfState().filter(state -> state.clankUnlocked() && state.back().worn() != worn
-                        && (!worn || (state.clankInInventory() && !state.returnPending())))
+        selfState().filter(state -> state.equals(shown) && state.allowsBackRequest(worn))
                 .ifPresent(state -> PacketDistributor.sendToServer(
                         new Rac1GearNetwork.EquipBack(state.epoch(), state.revision(), worn)));
     }

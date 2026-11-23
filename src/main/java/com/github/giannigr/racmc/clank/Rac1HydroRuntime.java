@@ -11,7 +11,7 @@ import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-/** Hydro defaults on only for worn test fixtures; never writes durable equipment/entitlement. */
+/** Hydro is a session-only test capability; never writes durable equipment/entitlement. */
 public final class Rac1HydroRuntime {
     private static final Map<UUID,Control> CONTROLS=new HashMap<>();
     private static long nextEpoch;
@@ -38,7 +38,7 @@ public final class Rac1HydroRuntime {
     }
     private static boolean testAccess(ServerPlayer p) {
         return p.isAlive()&&!p.isRemoved()&&p.connection.isAcceptingMessages()
-                &&Rac1ClankServer.session(p).testHydro()&&Rac1ClankServer.session(p).equipment().worn();
+                &&Rac1ClankServer.session(p).hydroAvailable(p.isCreative());
     }
     private static boolean accessValid(Control c) {return !c.disabled&&testAccess(c.player);}
     private static Control control(ServerPlayer player) {

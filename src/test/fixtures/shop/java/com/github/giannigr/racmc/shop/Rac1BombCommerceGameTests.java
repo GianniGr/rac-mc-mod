@@ -48,7 +48,7 @@ public final class Rac1BombCommerceGameTests {
     private Rac1BombCommerceGameTests() {}
 
     @GameTest(template="empty",batch="r19_claim")
-    public static void nativeClaimOnceAndPlayerDataSurvivesProcessRestart(GameTestHelper h) {
+    public static void nativePaidGloveAndLegacyMarkerSurviveProcessRestart(GameTestHelper h) {
         String stage=System.getProperty("racmc.r19NativeStage","");
         h.assertTrue(stage.equals("write") || stage.equals("read"),"Explicit private run stage required");
         var save=h.getLevel().getServer().getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(RESTART_PLAYER+".dat");
@@ -60,36 +60,44 @@ public final class Rac1BombCommerceGameTests {
             var shop=Rac1ShopTransactionServer.get(p.server);
             var ledger=Rac1BoltLedger.get(level);
             if (stage.equals("read")) {
-                h.assertTrue(gloves(p)==1 && bombs(p)==10 && !Rac1StarterClaim.available(p),
-                        "PlayerList login after process restart lost saved inventory/claim");
+                 h.assertTrue(gloves(p)==1 && bombs(p)==10 && p.getExistingData(Rac1StarterClaim.CLAIMED).orElse(false)
+                                 && ledger.balance(p.getUUID())==1000,
+                         "PlayerList login after restart lost paid inventory, balance or legacy marker");
                 var token=shop.open(p,vendor(h,p)).orElseThrow().token(); // vendor fixture clears inventory
-                h.assertTrue(kiosk(p,token,1,BOMB_STARTER,1).status()==STALE_OFFER,"Lost glove reset persisted claim");
-                h.assertTrue(gloves(p)==0 && bombs(p)==0,"Denied starter granted on restart");
-                // Leave the evidence save in the committed configuration after closing the read probe.
-                inv.setItem(0,new ItemStack(RacMcItems.BOMB_GLOVE.get()));
-                inv.setItem(1,new ItemStack(RacMcItems.BOMB_GLOVE_AMMO.get(),10));
+                 h.assertTrue(kiosk(p,token,1,BOMB_STARTER,1).status()==STALE_OFFER,"Retired free claim accepted");
+                 h.assertTrue(gloves(p)==0 && bombs(p)==0,"Denied retired claim granted on restart");
+                 var reacquire=kiosk(p,token,2,BOMB_AMMO,1).quote();
+                 h.assertTrue(reacquire!=null && reacquire.price()==1000
+                                 && confirm(p,token,3,reacquire.id()).status()==PURCHASED
+                                 && gloves(p)==1 && bombs(p)==10 && ledger.balance(p.getUUID())==0,
+                         "Legacy marker prevented paid reacquisition after losing the Glove");
+                 shop.close(p,token);
             } else {
-                var pos=vendor(h,p); var token=shop.open(p,pos).orElseThrow().token();
-                long balance=ledger.balance(p.getUUID()), revision=ledger.revision(p.getUUID());
+                 var pos=vendor(h,p); var token=shop.open(p,pos).orElseThrow().token();
+                 fund(h,p,2000);
+                 p.setData(Rac1StarterClaim.CLAIMED,true); // Simulate an old save's inert attachment.
+                 long balance=ledger.balance(p.getUUID()), revision=ledger.revision(p.getUUID());
                 for(int i=1;i<36;i++) inv.setItem(i,new ItemStack(Items.STONE,64));
-                h.assertTrue(kiosk(p,token,1,BOMB_STARTER,1).status()==FULL,"One empty slot accepted both items");
-                h.assertTrue(inv.getItem(0).isEmpty() && Rac1StarterClaim.available(p),"Failed fit mutated inventory/claim");
+                 h.assertTrue(kiosk(p,token,1,BOMB_AMMO,1).status()==FULL,"One empty slot accepted both items");
+                 h.assertTrue(inv.getItem(0).isEmpty() && ledger.balance(p.getUUID())==balance,"Failed fit mutated inventory or funds");
                 inv.setItem(1,ItemStack.EMPTY);
-                var q=kiosk(p,token,2,BOMB_STARTER,1).quote();
-                h.assertTrue(q!=null && q.offer()==BOMB_STARTER && q.deliveredAmmo()==10 && q.price()==0,"Wrong starter facts");
+                 var q=kiosk(p,token,2,BOMB_AMMO,1).quote();
+                 h.assertTrue(q!=null && q.offer()==BOMB_AMMO && q.deliveredAmmo()==10 && q.price()==1000,"Wrong weapon facts");
                 inv.setItem(1,new ItemStack(Items.STONE,64));
-                h.assertTrue(confirm(p,token,3,q.id()).status()==STALE_OFFER && Rac1StarterClaim.available(p),
-                        "Stale full inventory consumed claim");
+                 h.assertTrue(confirm(p,token,3,q.id()).status()==STALE_OFFER && ledger.balance(p.getUUID())==balance,
+                         "Stale full inventory charged account");
                 inv.setItem(1,ItemStack.EMPTY);
-                q=kiosk(p,token,4,BOMB_STARTER,1).quote();
+                 inv.setItem(40,new ItemStack(RacMcItems.BOMB_GLOVE_AMMO.get(),4));
+                 q=kiosk(p,token,4,BOMB_AMMO,1).quote();
+                 h.assertTrue(q!=null && q.currentAmmo()==4 && q.deliveredAmmo()==6,"Offhand top-up was not exact");
                 h.assertTrue(confirm(p,token,5,q.id()).status()==PURCHASED && gloves(p)==1 && bombs(p)==10,
-                        "Real free grant wasn’t one item plus exactly ten bombs");
+                         "Paid Glove did not top up ammo to ten");
                 h.assertTrue(confirm(p,token,5,q.id()).replay() && confirm(p,token,6,q.id()).status()==STALE_QUOTE
                                 && kiosk(p,token,7,BOMB_STARTER,1).status()==STALE_OFFER,
                         "Repeat got grant authority");
-                h.assertTrue(gloves(p)==1 && bombs(p)==10 && !Rac1StarterClaim.available(p)
-                                && ledger.balance(p.getUUID())==balance && ledger.revision(p.getUUID())==revision,
-                        "Repeat, inventory or ledger changed on the free commit");
+                 h.assertTrue(gloves(p)==1 && bombs(p)==10 && p.getExistingData(Rac1StarterClaim.CLAIMED).orElse(false)
+                                 && ledger.balance(p.getUUID())==balance-1000 && ledger.revision(p.getUUID())==revision+1,
+                         "Replay changed inventory, old claim marker or ledger on the paid commit");
                 for(int i=2;i<36;i++) inv.setItem(i,ItemStack.EMPTY);
                 shop.close(p,token);
             }
@@ -129,7 +137,7 @@ public final class Rac1BombCommerceGameTests {
             h.assertTrue(portable(p,portable,5,BUY,0,q.id(),BLASTER).status()==PURCHASED
                     && portable(p,portable,5,BUY,0,q.id(),BLASTER).replay(),"PDA commit or replay failed");
             h.assertTrue(confirm(p,kiosk,4,k.id()).status()==STALE_OFFER,"Stale inventory snapshot still committed");
-            h.assertTrue(bombs(p)==40 && inv.getItem(7).getCount()==64 && Rac1StarterClaim.available(p)
+             h.assertTrue(bombs(p)==40 && inv.getItem(7).getCount()==64 && p.getExistingData(Rac1StarterClaim.CLAIMED).isEmpty()
                     && Rac1BoltLedger.get(h.getLevel()).balance(p.getUUID())==75,"PDA changed unrelated inventory/claim/value");
             h.assertTrue(portable(p,portable,6,QUOTE,1,null,BOMB_AMMO).status()==STOCK_CAP,"Full cap accepted");
             inv.getItem(6).grow(1);

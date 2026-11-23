@@ -28,17 +28,28 @@ class Rac1BombOfferBindingTest {
         assertFalse(flow.receive(new Rac1PdaNetwork.Reply(token,2,new Result(Status.PURCHASED,ammo(id,Rac1ShopOffer.BLASTER,true),false))));
         assertTrue(flow.receive(new Rac1PdaNetwork.Reply(token,2,new Result(Status.PURCHASED,quote,false))));
     }
-    @Test void kioskFreeClaimConfirmationShowsZeroAndExactTenAndCannotSwapReceiptRow() {
+    @Test void kioskPaidWeaponQuoteCannotSwapKindOrReceiptRow() {
         UUID token=UUID.randomUUID(),id=UUID.randomUUID();
         var flow=new Rac1ShopClientFlow(token);
-        assertEquals(Rac1ShopOffer.BOMB_STARTER,flow.request(1,Rac1ShopOffer.BOMB_STARTER).offer());
-        var quote=new Quote(id,Rac1ShopDelivery.Kind.WEAPON,1,0,0,10,200,Rac1ShopOffer.BOMB_STARTER);
-        assertFalse(flow.receive(new Rac1ShopNetwork.Reply(token,1,new Result(Status.QUOTED,ammo(id,Rac1ShopOffer.BOMB_AMMO,false),false))));
+        assertEquals(Rac1ShopOffer.BOMB_AMMO,flow.request(1,Rac1ShopOffer.BOMB_AMMO).offer());
+        var quote=new Quote(id,Rac1ShopDelivery.Kind.WEAPON,1,1000,4,6,200,Rac1ShopOffer.BOMB_AMMO);
+        assertFalse(flow.receive(new Rac1ShopNetwork.Reply(token,1,new Result(Status.QUOTED,ammo(id,Rac1ShopOffer.BLASTER,false),false))));
         assertTrue(flow.receive(new Rac1ShopNetwork.Reply(token,1,new Result(Status.QUOTED,quote,false))));
-        assertEquals(0,flow.quote().price()); assertEquals(10,flow.quote().deliveredAmmo());
+        assertEquals(1000,flow.quote().price()); assertEquals(6,flow.quote().deliveredAmmo());
         flow.presented(id); assertEquals(id,flow.confirm().quote());
         assertFalse(flow.receive(new Rac1ShopNetwork.Reply(token,2,new Result(Status.PURCHASED,ammo(id,Rac1ShopOffer.BOMB_AMMO,false),false))));
         assertTrue(flow.receive(new Rac1ShopNetwork.Reply(token,2,new Result(Status.PURCHASED,quote,false))));
+    }
+    @Test void ammoRequoteCannotBecomeAWeaponPurchaseWhenOwnershipChanges() {
+        var flow=new Rac1ShopClientFlow(UUID.randomUUID());
+        var offer=Rac1ShopOffer.BOMB_AMMO;
+        flow.beginBuy(offer);
+        flow.receive(new Rac1ShopNetwork.Reply(flow.token(),1,new Result(Status.QUOTED,ammo(UUID.randomUUID(),offer,false),false)));
+        flow.request(1,offer);
+        var weapon=new Quote(UUID.randomUUID(),Rac1ShopDelivery.Kind.WEAPON,1,1000,0,10,200,offer);
+        assertTrue(flow.receive(new Rac1ShopNetwork.Reply(flow.token(),2,new Result(Status.QUOTED,weapon,false))));
+        flow.presented(weapon.id());
+        assertEquals(Status.STALE_OFFER,flow.outcome()); assertNull(flow.confirm());
     }
     @Test void bothPendingBuysKeepExactRetryIdentityAndRejectReselectionThroughUncertainty() {
         UUID token=UUID.randomUUID(),id=UUID.randomUUID();

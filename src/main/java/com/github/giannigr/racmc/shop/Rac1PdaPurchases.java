@@ -107,7 +107,7 @@ public final class Rac1PdaPurchases {
     private Rac1ShopDelivery.Staged stage(Inventory inventory,Item weapon,Rac1ShopOffer offer,int quantity) {
         if (!offer.permitted(true)) return new Rac1ShopDelivery.Staged(null,Rac1ShopDelivery.Failure.STALE_OFFER);
         return offer==Rac1ShopOffer.BLASTER ? planner.stage(inventory,weapon,quantity)
-                : selectedPlanner.stage(inventory,offer,quantity,true,false);
+                : selectedPlanner.stage(inventory,offer,quantity,true);
     }
     public boolean active(UUID owner,UUID token,long tick) {
         check(tick); var s=owners.get(owner);

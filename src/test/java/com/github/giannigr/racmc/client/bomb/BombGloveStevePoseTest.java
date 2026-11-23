@@ -15,6 +15,18 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BombGloveStevePoseTest {
+    @Test void palmContactUsesMeshSupportNotItsBoundingSphere() {
+        float[] vertices={-.15f,-.02f,0,.25f,.02f,0,0,.09f,.04f};
+        assertEquals(.02f,BombGloveStevePose.palmSupport(vertices,new Vector3f(0,1,0)),1e-6);
+        for (var axis:new Vector3f[]{new Vector3f(1,1,0).normalize(),new Vector3f(-1,1,0).normalize()}) {
+            float support=BombGloveStevePose.palmSupport(vertices,axis);
+            float nearest=Float.POSITIVE_INFINITY;
+            for (int i=0;i<vertices.length;i+=3)
+                nearest=Math.min(nearest,new Vector3f(vertices[i],vertices[i+1],vertices[i+2])
+                        .fma(support,axis).dot(axis));
+            assertEquals(0,nearest,1e-6,"Closest visible point is flush with the palm plane");
+        }
+    }
     private static final long START = 100;
     private static final long RELEASE = START + BombGlovePose.WINDUP_TICKS - 1;
     private static final BombGloveStevePose.Motion IDLE = new BombGloveStevePose.Motion(0, 0, 0);

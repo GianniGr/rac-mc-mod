@@ -39,8 +39,29 @@ class Rac1GearNetworkTest {
             assertThrows(IllegalArgumentException.class, () -> Rac1GearNetwork.EquipBack.CODEC.decode(buf));
             buf.clear().writeLong(1).writeLong(1).writeBytes(new byte[7]).writeByte(0);
             assertThrows(IllegalArgumentException.class, () -> Rac1GearNetwork.Snapshot.CODEC.decode(buf));
-            buf.clear().writeLong(1).writeLong(1).writeBytes(Rac1ClankEquipment.EMPTY.save()).writeByte(8);
+            buf.clear().writeLong(1).writeLong(1).writeBytes(Rac1ClankEquipment.EMPTY.save()).writeByte(24);
             assertThrows(IllegalArgumentException.class, () -> Rac1GearNetwork.Snapshot.CODEC.decode(buf));
+        } finally {
+            buf.release();
+        }
+    }
+
+    @Test void fixtureRoundTripDoesNotProjectANonexistentPhysicalClank() {
+        var buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+        try {
+            for (var module : new Rac1ClankEquipment.Module[]{
+                    Rac1ClankEquipment.Module.HELI, Rac1ClankEquipment.Module.THRUSTER}) {
+                var snapshot = new Rac1GearNetwork.Snapshot(new Rac1GearState(
+                        2, 10, Rac1ClankEquipment.EMPTY, false, false, false, module));
+                Rac1GearNetwork.Snapshot.CODEC.encode(buf, snapshot);
+                assertEquals(24, buf.readableBytes());
+                var received = Rac1GearNetwork.Snapshot.CODEC.decode(buf);
+                assertEquals(snapshot, received);
+                assertFalse(received.state().clankUnlocked());
+                assertFalse(received.state().allowsBackRequest(true));
+                assertTrue(received.state().allowsBackRequest(false));
+                buf.clear();
+            }
         } finally {
             buf.release();
         }

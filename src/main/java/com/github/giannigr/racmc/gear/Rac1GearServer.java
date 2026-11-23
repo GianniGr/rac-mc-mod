@@ -2,6 +2,7 @@ package com.github.giannigr.racmc.gear;
 
 import com.github.giannigr.racmc.RacMcConstants;
 import com.github.giannigr.racmc.clank.Rac1ClankEquipment;
+import com.github.giannigr.racmc.clank.Rac1ClankEquipment.Module;
 import com.github.giannigr.racmc.clank.Rac1ClankServer;
 import com.github.giannigr.racmc.item.Rac1ClankItem;
 import com.github.giannigr.racmc.item.Rac1ClankItem.Stamp;
@@ -76,6 +77,12 @@ public final class Rac1GearServer {
         Rac1GearLedger ledger = Rac1GearLedger.get(player.serverLevel());
         publish(scope, ledger);
         if (scope.last == null || request.revision() != scope.last.revision()) return;
+        if (!scope.last.allowsBackRequest(request.worn())) return;
+        if (scope.last.fixture() != Module.NONE) {
+            // Dismiss the overlay only. A physical token beneath it stays in escrow.
+            Rac1ClankServer.clearFixture(player);
+            return;
+        }
         if (request.worn()) {
             int slot = looseSlot(player.getInventory(), ledger);
             if (slot < 0 || takeIntoEscrow(player.getInventory(), player.getUUID(), ledger, slot, false)
@@ -205,12 +212,19 @@ public final class Rac1GearServer {
         boolean carried = looseSlot(player.getInventory(), ledger) >= 0;
         boolean rescue = ledger.pendingRescue(player.getUUID()) != null;
         boolean returning = ledger.pendingReturn(player.getUUID()) != null;
+        Module fixture = Rac1ClankServer.fixture(player);
         var previous = scope.last;
         if (previous != null && previous.back().equals(record.back()) && previous.clankInInventory() == carried
-                && previous.rewardPending() == rescue && previous.returnPending() == returning) return;
+                && previous.rewardPending() == rescue && previous.returnPending() == returning
+                && previous.fixture() == fixture) return;
         scope.last = new Rac1GearState(scope.epoch, nextRevision = Math.incrementExact(nextRevision),
-                record.back(), carried, rescue, returning);
+                record.back(), carried, rescue, returning, fixture);
         PacketDistributor.sendToPlayer(player, new Rac1GearNetwork.Snapshot(scope.last));
+    }
+
+    /** Publish native fixture changes using the same revision guard as physical Back changes. */
+    public static void fixtureChanged(ServerPlayer player) {
+        if (eligible(player)) publish(scope(player), Rac1GearLedger.get(player.serverLevel()));
     }
 
     @SubscribeEvent

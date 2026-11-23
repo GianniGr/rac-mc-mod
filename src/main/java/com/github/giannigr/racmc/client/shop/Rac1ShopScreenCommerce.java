@@ -8,9 +8,9 @@ public final class Rac1ShopScreenCommerce {
     private final Rac1ShopClientFlow flow;
     private final Rac1CommerceSelection catalog;
     private final Rac1ShopQuantity quantity=new Rac1ShopQuantity();
-    public Rac1ShopScreenCommerce(UUID token,boolean bombRegistered,boolean starterAvailable) {
+    public Rac1ShopScreenCommerce(UUID token,boolean bombRegistered) {
         flow=new Rac1ShopClientFlow(token);
-        catalog=new Rac1CommerceSelection(false,bombRegistered,starterAvailable);
+        catalog=new Rac1CommerceSelection(false,bombRegistered);
     }
     public Rac1ShopClientFlow flow() { return flow; }
     public Rac1CommerceSelection catalog() { return catalog; }
@@ -37,8 +37,7 @@ public final class Rac1ShopScreenCommerce {
         return requested==0 ? null:flow.request(requested,catalog.offer());
     }
     public boolean adjust(int delta) {
-        return catalog.offer()!=Rac1ShopOffer.BOMB_STARTER
-                && (flow.mode()==Rac1ShopClientFlow.Mode.CONFIRM || flow.mode()==Rac1ShopClientFlow.Mode.WAIT_QUOTE)
+        return (flow.mode()==Rac1ShopClientFlow.Mode.CONFIRM || flow.mode()==Rac1ShopClientFlow.Mode.WAIT_QUOTE)
                 && quantity.adjust(delta);
     }
 }

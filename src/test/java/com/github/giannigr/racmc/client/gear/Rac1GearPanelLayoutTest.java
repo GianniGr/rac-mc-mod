@@ -49,6 +49,22 @@ class Rac1GearPanelLayoutTest {
         assertEquals("screen.racmc.gear.worn", wornText.getKey()); // Not the Aerial reservation label.
     }
 
+    @Test
+    void fixtureUsesSelectedPackNameAndOffersDismissEvenWithoutProgression() {
+        for (var module : new Rac1ClankEquipment.Module[]{
+                Rac1ClankEquipment.Module.HELI, Rac1ClankEquipment.Module.THRUSTER}) {
+            var state = new Rac1GearState(1, 2, Rac1ClankEquipment.EMPTY, false, false, false, module);
+            assertFalse(state.clankUnlocked());
+            assertTrue(state.wearingClank());
+            assertTrue(Rac1GearInventory.backEnabled(state, true));
+            assertFalse(Rac1GearInventory.backEnabled(state, false));
+            var text = (TranslatableContents) Rac1GearInventory.backStatus(state).getContents();
+            var packName = (net.minecraft.network.chat.Component) text.getArgs()[0];
+            assertEquals(module == Rac1ClankEquipment.Module.HELI ? "item.racmc.clank_heli_pack"
+                    : "item.racmc.clank_thruster_pack", ((TranslatableContents) packName.getContents()).getKey());
+        }
+    }
+
     private static void assertSectionsDoNotOverlap(Rac1GearPanelLayout layout, int backLines) {
         int statusEnd = layout.back().y() + Rac1GearPanelLayout.BACK_STATUS_OFFSET + backLines * LINE;
         assertTrue(statusEnd < layout.backButton().y());

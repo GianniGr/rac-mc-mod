@@ -32,8 +32,6 @@ public final class Rac1ShopPurchases {
         long balance();
         long revision();
         boolean commit(Rac1ShopDelivery delivery,long expectedBalance,long expectedRevision);
-        default boolean starterAvailable() { return false; }
-        default boolean commitStarter(Rac1ShopDelivery delivery) { return false; }
     }
     private record Request(boolean buy,UUID quote,int quantity,Rac1ShopOffer offer) {}
     private record Receipt(Request request,Result result) {}
@@ -53,7 +51,7 @@ public final class Rac1ShopPurchases {
     }
     private final Planner planner;
     @FunctionalInterface interface SelectedPlanner {
-        Rac1ShopDelivery.Staged stage(Inventory inventory,Rac1ShopOffer offer,int quantity,boolean portable,boolean starterAvailable);
+        Rac1ShopDelivery.Staged stage(Inventory inventory,Rac1ShopOffer offer,int quantity,boolean portable);
     }
     private final SelectedPlanner selectedPlanner;
     public Rac1ShopPurchases() { this(Rac1ShopDelivery::stage); }
@@ -110,11 +108,11 @@ public final class Rac1ShopPurchases {
             s.quote=null; s.delivery=null;
             var staged=stage(inventory,weapon,request.offer,request.quantity,account);
             if (staged.failure()!=null) result=result(Status.valueOf(staged.failure().name()));
-            else if (request.offer!=Rac1ShopOffer.BOMB_STARTER && account.balance()<staged.delivery().price())
+            else if (account.balance()<staged.delivery().price())
                 result=result(Status.INSUFFICIENT);
             else {
                 var d=staged.delivery(); s.delivery=d;
-                if (request.offer!=Rac1ShopOffer.BOMB_STARTER) { s.balance=account.balance(); s.revision=account.revision(); }
+                s.balance=account.balance(); s.revision=account.revision();
                 s.quote=new Quote(UUID.randomUUID(),d.kind(),d.quantity(),d.price(),d.arrows(),d.grantedArrows(),
                         tick+QUOTE_TICKS,request.offer);
                 result=new Result(Status.QUOTED,s.quote,false);
@@ -124,19 +122,17 @@ public final class Rac1ShopPurchases {
         } else {
             Quote q=s.quote; var delivery=s.delivery;
             s.quote=null; s.delivery=null; // one quote can be consumed only once, even with a fresh sequence
-            boolean starter=q.offer()==Rac1ShopOffer.BOMB_STARTER;
-            if (!delivery.unchanged(inventory) || starter && !account.starterAvailable())
+            if (!delivery.unchanged(inventory))
                 result=result(Status.STALE_OFFER);
-            else if (!starter && account.balance()<q.price()) result=result(Status.INSUFFICIENT);
-            else if (!starter && (account.balance()!=s.balance || account.revision()!=s.revision)) result=result(Status.STALE_BALANCE);
+            else if (account.balance()<q.price()) result=result(Status.INSUFFICIENT);
+            else if (account.balance()!=s.balance || account.revision()!=s.revision) result=result(Status.STALE_BALANCE);
             else {
                 // Explicitly rederive the offer, cap, full delivery and original price at purchase time.
                 var fresh=stage(inventory,weapon,q.offer(),q.quantity(),account);
                 if (fresh.failure()!=null) result=result(Status.valueOf(fresh.failure().name()));
                 else if (!q.matches(fresh.delivery())) result=result(Status.STALE_OFFER);
                 else {
-                    boolean committed=starter ? account.commitStarter(fresh.delivery())
-                            : account.commit(fresh.delivery(),s.balance,s.revision);
+                    boolean committed=account.commit(fresh.delivery(),s.balance,s.revision);
                     result=new Result(committed ? Status.PURCHASED:Status.COMMIT_REJECTED,q,false);
                 }
             }
@@ -147,7 +143,7 @@ public final class Rac1ShopPurchases {
     private Rac1ShopDelivery.Staged stage(Inventory inventory,Item weapon,Rac1ShopOffer offer,int quantity,Account account) {
         return offer==Rac1ShopOffer.BLASTER
                 ? planner.stage(inventory,weapon,Rac1ShopDelivery.offer(inventory,weapon),quantity)
-                : selectedPlanner.stage(inventory,offer,quantity,false,offer==Rac1ShopOffer.BOMB_STARTER && account.starterAvailable());
+                : selectedPlanner.stage(inventory,offer,quantity,false);
     }
     public void close(UUID owner,UUID token) {
         check(); var s=owners.get(owner);
