@@ -1,0 +1,13 @@
+// Run together with shop.init.gradle. Output/world must be private and outside all worktrees.
+allprojects {
+    def root = file(project.property("r19NativeDirectory"))
+    def stage = project.property("r19NativeStage").toString()
+    if (!(stage in ["write","read"])) throw new GradleException("Use r19NativeStage=write/read")
+    layout.buildDirectory.set(new File(root,"build"))
+    afterEvaluate {
+        tasks.named("generateModMetadata").configure { into(layout.buildDirectory.dir("generated/sources/modMetadata")) }
+        neoForge.runs.gameTestServer.gameDirectory = new File(root,"runtime")
+        neoForge.runs.gameTestServer.systemProperty("neoforge.enabledGameTestNamespaces","p35shop")
+        neoForge.runs.gameTestServer.systemProperty("racmc.r19NativeStage",stage)
+    }
+}

@@ -6,6 +6,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -45,6 +46,19 @@ public record Rac1AudioSignal(Rac1AudioEvent event, double x, double y, double z
             }
         } catch (RuntimeException failure) {
             com.github.giannigr.racmc.RacMcMod.LOGGER.debug("Optional audio signal unavailable: {}",
+                    failure.toString());
+        }
+    }
+
+    /** Personal acquisition cue. Other clients receive no custom pickup packet. */
+    public static void emitTo(ServerPlayer player, Vec3 at, Rac1AudioEvent event) {
+        try {
+            var signal = new Rac1AudioSignal(event, at.x, at.y, at.z,
+                    java.util.concurrent.ThreadLocalRandom.current().nextLong(), player.level().dimension().location());
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new Rac1AudioEmittedEvent(signal));
+            PacketDistributor.sendToPlayer(player, signal);
+        } catch (RuntimeException failure) {
+            com.github.giannigr.racmc.RacMcMod.LOGGER.debug("Optional personal audio signal unavailable: {}",
                     failure.toString());
         }
     }

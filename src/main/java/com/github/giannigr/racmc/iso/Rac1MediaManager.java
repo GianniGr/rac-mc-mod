@@ -6,8 +6,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -26,7 +28,11 @@ public final class Rac1MediaManager implements Closeable {
 
     private final Rac1DiscValidator validator;
     private final Path configFile;
-    private final ExecutorService executor;
+    private final ThreadPoolExecutor executor;
+    private Future<?> verification;
+    private volatile Rac1MediaLease.Retained verified;
+    private volatile long generation, request;
+    private volatile boolean closed;
 
     private volatile Rac1MediaState state = Rac1MediaState.UNCONFIGURED;
     private volatile Rac1MediaState attemptState;
@@ -47,11 +53,11 @@ public final class Rac1MediaManager implements Closeable {
     public Rac1MediaManager(Rac1DiscValidator validator, Path configFile) {
         this.validator = Objects.requireNonNull(validator, "validator");
         this.configFile = Objects.requireNonNull(configFile, "configFile");
-        this.executor = Executors.newSingleThreadExecutor(runnable -> {
+        this.executor = new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new LinkedBlockingQueue<>(1),runnable -> {
             Thread thread = new Thread(runnable, "racmc-media-verification");
             thread.setDaemon(true);
             return thread;
-        });
+        },new ThreadPoolExecutor.AbortPolicy());
     }
 
     /**
@@ -60,7 +66,8 @@ public final class Rac1MediaManager implements Closeable {
      * <p>The state of the media is {@link Rac1MediaState#CHECKING} while the image is verified, so
      * that the game stays closed until the image is known to be good.
      */
-    public void start() {
+    public synchronized void start() {
+        requireOpen();
         Rac1MediaConfig stored;
         try {
             stored = Rac1MediaConfig.read(configFile);
@@ -68,12 +75,14 @@ public final class Rac1MediaManager implements Closeable {
             stored = null;
         }
         if (stored == null) {
+            cancelRequest(); revokeVerified(); configuredPath=null;
             state = Rac1MediaState.UNCONFIGURED;
+            attemptState=null; attemptPath=null; attemptResult=null;
             return;
         }
         configuredPath = stored.path();
         state = Rac1MediaState.CHECKING;
-        verify(stored.path(), false);
+        begin(stored.path(), false);
     }
 
     /**
@@ -84,16 +93,60 @@ public final class Rac1MediaManager implements Closeable {
      *
      * @param path the image the player chose
      */
-    public void select(Path path) {
+    public synchronized void select(Path path) {
+        requireOpen();
         if (path == null) {
             return;
         }
-        attemptPath = path;
-        attemptState = Rac1MediaState.CHECKING;
-        attemptResult = null;
-        bytesRead = 0;
-        bytesTotal = 0;
-        verify(path, true);
+        begin(path,true);
+    }
+
+    /** Memory-only invalidation for resource reload/logout or cancelled asset consumers. */
+    public synchronized void invalidateLeases() { generation++; }
+    public long generation() { return generation; }
+
+    /** Unsets this active session without deleting or rewriting the remembered configuration. */
+    public synchronized void unset() {
+        requireOpen(); cancelRequest(); revokeVerified();
+        configuredPath=null; state=Rac1MediaState.UNCONFIGURED;
+        attemptState=null; attemptPath=null; attemptResult=null; bytesRead=bytesTotal=0;
+    }
+
+    /**
+     * Only an already fully verified selected image can issue a lease. Arguments are match guards,
+     * never an alternate path to open or a cache-provided validation authority. Use on asset workers.
+     */
+    public synchronized Rac1MediaLease lease(Path expectedPath,String expectedDiscKey) throws IOException {
+        var source=verified;
+        if (closed || state!=Rac1MediaState.VALID || isChecking() || source==null || !source.active || source.stamp.fileKey()==null
+                || expectedPath==null || !source.image.sourcePath().equals(expectedPath.toAbsolutePath().normalize())
+                || !source.key.equals(expectedDiscKey))
+            throw new IOException("No fully verified current media selection matches the requested lease");
+        long epoch=generation;
+        return new Rac1MediaLease(source,epoch,() -> !closed && generation==epoch && verified==source
+                && state==Rac1MediaState.VALID && !isChecking());
+    }
+
+    private void requireOpen() { if (closed) throw new IllegalStateException("Media manager closed"); }
+    private void cancelRequest() {
+        request++; generation++;
+        if (verification!=null) verification.cancel(true);
+        executor.purge();
+    }
+    private void revokeVerified() {
+        var previous=verified; verified=null;
+        if (previous!=null) previous.revoke();
+    }
+    private void begin(Path path,boolean replaceOnSuccess) {
+        cancelRequest();
+        // Retain an unchanged different prior selection if a replacement attempt fails. Same-path
+        // revalidation must never leave the old ready gate or old leases usable.
+        if (!replaceOnSuccess || configuredPath!=null && configuredPath.equals(path.toAbsolutePath().normalize())) {
+            revokeVerified(); state=Rac1MediaState.CHECKING;
+        }
+        attemptPath=path; attemptState=Rac1MediaState.CHECKING; attemptResult=null; bytesRead=bytesTotal=0;
+        long ticket=request;
+        verification=executor.submit(() -> verify(path,replaceOnSuccess,ticket));
     }
 
     /**
@@ -189,12 +242,28 @@ public final class Rac1MediaManager implements Closeable {
         return completedAttempts.get();
     }
 
-    private void verify(Path path, boolean replaceOnSuccess) {
-        executor.submit(() -> {
-            try (Rac1IsoSelectionResult outcome = validator.inspect(path, this::reportProgress)) {
-                attemptResult = outcome.result();
+    private void verify(Path path, boolean replaceOnSuccess,long ticket) {
+            Rac1IsoSelectionResult outcome=null;
+            boolean adopted=false;
+            try {
+                Rac1MediaLease.Stamp before=null;
+                try { before=Rac1MediaLease.Stamp.read(path); } catch (IOException ignored) { /* Validator retains its detailed refusal. */ }
+                outcome=validator.inspect(path,(read,total) -> reportProgress(ticket,read,total));
+                Rac1MediaLease.Stamp after=outcome.isSupported() ? Rac1MediaLease.Stamp.read(path):null;
+                if (outcome.isSupported() && (before==null || !before.equals(after)))
+                    throw new IOException("Selected media changed while it was being verified");
+                synchronized (this) {
+                if (closed || ticket!=request) return;
+                attemptResult=outcome.result();
                 if (outcome.isSupported()) {
-                    configuredPath = path;
+                    var image=outcome.image();
+                    var profile=validator.catalog().profiles().stream().filter(p -> p.revision()==image.revision())
+                            .findFirst().orElseThrow(() -> new IOException("Verified media profile missing"));
+                    String key=image.revision().label()+"|"+profile.productCode()+"|"+profile.imageSha1();
+                    revokeVerified();
+                    verified=new Rac1MediaLease.Retained(image,key,after,() -> sourceChanged(image));
+                    adopted=true; generation++;
+                    configuredPath = image.sourcePath();
                     state = Rac1MediaState.VALID;
                     attemptState = Rac1MediaState.VALID;
                     if (replaceOnSuccess) {
@@ -202,27 +271,44 @@ public final class Rac1MediaManager implements Closeable {
                     }
                 } else {
                     attemptState = Rac1MediaState.INVALID;
-                    if (!replaceOnSuccess) {
+                    if (!replaceOnSuccess || verified==null) {
                         // The image that is configured could not be verified any more.
                         state = Rac1MediaState.INVALID;
                     }
                 }
+                }
+            } catch (CancellationException cancelled) {
+                // A newer request/unset/close owns diagnostics. Never publish an obsolete completion.
             } catch (IOException exception) {
+                synchronized (this) {
+                if (closed || ticket!=request) return;
                 attemptResult = IsoValidationResult.failed(IsoValidationStatus.IO_ERROR,
                         "The selected file could not be read: " + exception.getMessage(), path);
                 attemptState = Rac1MediaState.INVALID;
-                if (!replaceOnSuccess) {
+                if (!replaceOnSuccess || verified==null) {
                     state = Rac1MediaState.INVALID;
                 }
+                }
             } finally {
+                if (!adopted && outcome!=null) try { outcome.close(); } catch (IOException ignored) { }
                 completedAttempts.incrementAndGet();
             }
-        });
     }
 
-    private void reportProgress(long read, long total) {
+    private synchronized void reportProgress(long ticket,long read, long total) {
+        if (closed || ticket!=request || Thread.currentThread().isInterrupted()) throw new CancellationException("Obsolete media verification");
         bytesRead = read;
         bytesTotal = total;
+    }
+    private synchronized void sourceChanged(Rac1DiscImage image) {
+        if (verified==null || verified.image!=image) return;
+        revokeVerified(); generation++;
+        state=Rac1MediaState.INVALID;
+        if (!isChecking()) {
+            attemptState=Rac1MediaState.INVALID;
+            attemptResult=IsoValidationResult.failed(IsoValidationStatus.CORRUPT_IMAGE,
+                    "Selected media changed; verify it again before reading assets.",image.sourcePath());
+        }
     }
 
     private void save(Path path, IsoValidationResult result) {
@@ -238,7 +324,7 @@ public final class Rac1MediaManager implements Closeable {
         } catch (IOException exception) {
             // The image stays configured for this session, it is only not remembered for the next
             // start of the game.
-            state = Rac1MediaState.VALID;
+            // The already published valid selection remains valid.
         }
     }
 
@@ -260,6 +346,10 @@ public final class Rac1MediaManager implements Closeable {
 
     @Override
     public void close() {
+        synchronized (this) {
+            if (closed) return;
+            closed=true; cancelRequest(); revokeVerified(); state=Rac1MediaState.UNCONFIGURED;
+        }
         executor.shutdownNow();
         try {
             executor.awaitTermination(2, TimeUnit.SECONDS);

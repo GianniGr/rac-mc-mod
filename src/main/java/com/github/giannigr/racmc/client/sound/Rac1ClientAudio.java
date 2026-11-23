@@ -24,6 +24,7 @@ public final class Rac1ClientAudio {
     private static Path cacheRoot;
     private static Object world;
     private static long lastBoltTick = Long.MIN_VALUE;
+    private static long lastAmmoPickupTick = Long.MIN_VALUE;
     private record Loop(java.util.UUID session, Rac1PcmSound sound) {}
     private static final java.util.Map<java.util.UUID, Loop> LOOPS = new java.util.HashMap<>();
     private static final FireLoopState LOOP_STATE = new FireLoopState();
@@ -35,6 +36,8 @@ public final class Rac1ClientAudio {
         stopAll();
         path = iso; cacheRoot = cacheDirectory;
         long token = IMPORT.invalidate();
+        boolean hasBombGlove = net.minecraft.core.registries.BuiltInRegistries.ITEM.getOptional(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(RacMcConstants.MOD_ID, "bomb_glove")).isPresent();
         CompletableFuture.supplyAsync(() -> {
             try (var inspected = new Rac1DiscValidator().inspect(iso)) {
                 if (!inspected.isSupported()) throw new java.io.IOException("Sound source no longer verified");
@@ -42,15 +45,14 @@ public final class Rac1ClientAudio {
                         .filter(p -> p.revision() == inspected.result().revision()).findFirst().orElseThrow();
                 var store = new Rac1SoundCache(cacheDirectory.resolve("sound"));
                 String hash = profile.imageSha1();
+                var shared = sharedCatalog(store, hash, inspected.image());
+                if (!hasBombGlove) return shared;
                 try {
-                    var cached = store.read(hash);
-                    if (cached.isPresent()) return cached.get();
-                } catch (java.io.IOException corrupt) {
-                    RacMcMod.LOGGER.warn("Sound sidecar invalid; rebuilding from verified local media.");
+                    return shared.withDryBomb(inspected.image());
+                } catch (Exception unavailable) {
+                    RacMcMod.LOGGER.warn("Original Bomb Glove dry cue unavailable: {}", unavailable.toString());
+                    return shared;
                 }
-                var built = Rac1AudioCatalog.extract(inspected.image());
-                store.write(hash, built);
-                return built;
             } catch (Exception failure) {
                 RacMcMod.LOGGER.warn("Original audio unavailable; gameplay continues silently: {}", failure.toString());
                 return null;
@@ -58,6 +60,19 @@ public final class Rac1ClientAudio {
         }).thenAccept(built -> Minecraft.getInstance().execute(() -> {
             IMPORT.publish(token, built);
         }));
+    }
+
+    private static Rac1AudioCatalog sharedCatalog(Rac1SoundCache store, String hash, Rac1DiscImage image)
+            throws Exception {
+        try {
+            var cached = store.read(hash);
+            if (cached.isPresent()) return cached.get();
+        } catch (java.io.IOException corrupt) {
+            RacMcMod.LOGGER.warn("Sound sidecar invalid; rebuilding from verified local media.");
+        }
+        var built = Rac1AudioCatalog.extract(image);
+        store.write(hash, built);
+        return built;
     }
     public static void stopAll() {
         var manager = Minecraft.getInstance().getSoundManager();
@@ -68,6 +83,7 @@ public final class Rac1ClientAudio {
         var level = Minecraft.getInstance().level;
         minimumFireTick = level == null ? Long.MIN_VALUE : level.getGameTime();
         lastBoltTick = Long.MIN_VALUE;
+        lastAmmoPickupTick = Long.MIN_VALUE;
     }
     private static void receive(Rac1AudioSignal signal) {
         if (signal.event() == Rac1AudioEvent.BLASTER_FIRE_LOOP) return; // never one intro per shot
@@ -84,8 +100,13 @@ public final class Rac1ClientAudio {
         }
         // Short one-shots share scarce vanilla streaming channels; drop audio under pressure.
         if (ACTIVE.size() + LOOPS.size() >= 4) return;
-        var clip = catalog.clips().get(signal.event());
+        var clip = catalog.clip(signal.event());
         if (clip == null) return;
+        if (signal.event().ammoPickup()) {
+            // One personal cue for simultaneous gains, never a delayed or replayed request.
+            if (lastAmmoPickupTick == tick) return;
+            lastAmmoPickupTick = tick;
+        }
         var sound = new Rac1PcmSound(signal, clip);
         ACTIVE.add(sound);
         mc.getSoundManager().play(sound);

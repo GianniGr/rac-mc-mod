@@ -110,6 +110,17 @@ public final class Rac1AssetExtractor {
      */
     public static Rac1AnimatedAsset readAnimatedAsset(Rac1LevelAssets assets, int classNumber)
             throws AssetFormatException {
+        return readAnimatedAsset(assets, classNumber, null);
+    }
+
+    /**
+     * Explicit external sequence source. The decoded stream starts with sixteen little-endian
+     * offsets; sequence key pointers are relative to each sequence block, not the whole stream.
+     * No resident or hero fallback is used when this overload is selected.
+     */
+    public static Rac1AnimatedAsset readAnimatedAsset(Rac1LevelAssets assets, int classNumber,
+                                                      byte[] externalSequences)
+            throws AssetFormatException {
         Rac1CoreIndex index = assets.coreIndex();
         Rac1ClassEntry entry = index.mobyClass(classNumber);
         if (entry == null || entry.offset() <= 0) {
@@ -142,7 +153,9 @@ public final class Rac1AssetExtractor {
         }
 
         Rac1Skeleton converted = convert(skeleton, classScale * UNIT_SCALE);
-        List<Rac1Animation> animations = animations(assets, reader, classNumber, classScale * UNIT_SCALE);
+        List<Rac1Animation> animations = externalSequences == null
+                ? animations(assets, reader, classNumber, classScale * UNIT_SCALE)
+                : externalAnimations(externalSequences, reader.jointCount(), classScale * UNIT_SCALE);
         Rac1Texture[] textures = textures(assets, entry, index.mobyTextures(),
                 entry.textureCount());
         Rac1SkinnedMesh skinned = new Rac1SkinnedMesh(positions, normals, uvs, mesh.indices(),
@@ -166,6 +179,17 @@ public final class Rac1AssetExtractor {
      */
     public static Rac1AnimatedAsset readGadgetAsset(Rac1LevelAssets assets, int classNumber)
             throws AssetFormatException {
+        return readGadgetAsset(assets, classNumber, true);
+    }
+
+    /** Local gadget geometry and bind skeleton only, with no animation or attachment-list reads. */
+    public static Rac1AnimatedAsset readGadgetBindAsset(Rac1LevelAssets assets, int classNumber)
+            throws AssetFormatException {
+        return readGadgetAsset(assets, classNumber, false);
+    }
+
+    private static Rac1AnimatedAsset readGadgetAsset(Rac1LevelAssets assets, int classNumber,
+                                                     boolean readAnimations) throws AssetFormatException {
         Rac1CoreIndex index = assets.coreIndex();
         byte[] blob;
         try {
@@ -200,7 +224,7 @@ public final class Rac1AssetExtractor {
 
         Rac1Skeleton converted = convert(skeleton, classScale * UNIT_SCALE);
         List<Rac1Animation> animations = new ArrayList<>();
-        for (int slot = 0; slot < reader.sequenceCount(); slot++) {
+        for (int slot = 0; readAnimations && slot < reader.sequenceCount(); slot++) {
             int offset = reader.sequenceOffset(slot);
             if (offset <= 0) {
                 continue;
@@ -221,7 +245,8 @@ public final class Rac1AssetExtractor {
         Rac1SkinnedMesh skinned = new Rac1SkinnedMesh(positions, normals, uvs, mesh.indices(),
                 mesh.materials(), mesh.joints(), mesh.weights());
         return new Rac1AnimatedAsset(classNumber, "gadget_" + classNumber, skinned, converted,
-                animations.toArray(new Rac1Animation[0]), textures, attachmentChains(reader));
+                animations.toArray(new Rac1Animation[0]), textures,
+                readAnimations ? attachmentChains(reader) : new int[0][]);
     }
 
     /**
@@ -355,6 +380,39 @@ public final class Rac1AssetExtractor {
             animations.add(convert("ratchet_sequence_" + slot, keys, reader.jointCount(), scale));
         }
         return animations;
+    }
+
+    static List<Rac1Animation> externalAnimations(byte[] stream, int joints, float scale)
+            throws AssetFormatException {
+        if (stream.length < 64 || stream.length > 8 * 1024 * 1024 || joints < 1 || joints > 256
+                || !Float.isFinite(scale) || scale <= 0) {
+            throw new AssetFormatException("Invalid external animation stream bounds.");
+        }
+        var table = java.nio.ByteBuffer.wrap(stream).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        int[] offsets = new int[16];
+        for (int slot = 0; slot < offsets.length; slot++) {
+            offsets[slot] = table.getInt(slot * 4);
+            if (offsets[slot] != 0 && (offsets[slot] < 64 || offsets[slot] >= stream.length)) {
+                throw new AssetFormatException("External sequence offset outside stream.");
+            }
+            for (int previous = 0; previous < slot; previous++) {
+                if (offsets[slot] != 0 && offsets[slot] == offsets[previous]) {
+                    throw new AssetFormatException("Duplicate external sequence offset.");
+                }
+            }
+        }
+        List<Rac1Animation> result = new ArrayList<>();
+        for (int slot = 0; slot < offsets.length; slot++) {
+            int start = offsets[slot];
+            if (start == 0) continue;
+            int end = stream.length;
+            for (int offset : offsets) if (offset > start) end = Math.min(end, offset);
+            byte[] block = java.util.Arrays.copyOfRange(stream, start, end);
+            result.add(convert("sequence_" + slot, MobySequenceReader.read(block, 0, joints),
+                    joints, scale));
+        }
+        if (result.isEmpty()) throw new AssetFormatException("Empty external animation stream.");
+        return result;
     }
 
     /**

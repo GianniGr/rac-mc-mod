@@ -87,8 +87,10 @@ public class Rac1CrateBlock extends FallingBlock implements EntityBlock {
             if (explosive()) {
                 if (level.getBlockEntity(pos) instanceof Rac1CrateBlockEntity crate) crate.arm(true);
             } else {
-                com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(server, pos, state,
-                        explosion.getDirectSourceEntity());
+                var cause = definition.classNumber() == com.github.giannigr.racmc.asset.Rac1Crates.AMMO.classNumber()
+                        && explosion.getIndirectSourceEntity() instanceof net.minecraft.server.level.ServerPlayer player
+                        ? player : explosion.getDirectSourceEntity();
+                com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(server, pos, state, cause);
             }
         }
     }

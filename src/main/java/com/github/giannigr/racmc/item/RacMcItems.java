@@ -35,6 +35,18 @@ public final class RacMcItems {
     public static final DeferredItem<BlasterItem> BLASTER =
             ITEMS.registerItem("blaster", BlasterItem::new, new Item.Properties().stacksTo(1));
 
+    public static final DeferredItem<Item> BLASTER_AMMO =
+            ITEMS.registerItem("blaster_ammo", Item::new, new Item.Properties().stacksTo(64));
+
+    /** P38 loot contract: ordinary count-one stack, no required custom components. */
+    public static final DeferredItem<Rac1PdaItem> PDA =
+            ITEMS.registerItem("pda", Rac1PdaItem::new, new Item.Properties().stacksTo(1));
+
+    public static final DeferredItem<BombGloveItem> BOMB_GLOVE =
+            ITEMS.registerItem("bomb_glove", BombGloveItem::new, new Item.Properties().stacksTo(1));
+    public static final DeferredItem<Item> BOMB_GLOVE_AMMO =
+            ITEMS.registerItem("bomb_glove_ammo", Item::new, new Item.Properties().stacksTo(64));
+
     public static final DeferredItem<Rac1WrenchItem> OMNIWRENCH =
             ITEMS.registerItem("omniwrench", Rac1WrenchItem::new, new Item.Properties());
     public static final DeferredItem<Rac1ClankPackItem> CLANK_HELI_PACK =

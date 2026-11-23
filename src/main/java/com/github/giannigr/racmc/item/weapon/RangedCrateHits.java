@@ -3,19 +3,19 @@ package com.github.giannigr.racmc.item.weapon;
 import com.github.giannigr.racmc.block.Rac1CrateBlock;
 import com.github.giannigr.racmc.block.Rac1CrateBlockEntity;
 import com.github.giannigr.racmc.block.RacMcBlocks;
-import com.github.giannigr.racmc.item.Rac1BlasterArrow;
 import com.github.giannigr.racmc.loot.Rac1CrateRewards;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.FallingBlockEntity;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.level.BlockEvent;
 
-/** ProjectileImpactEvent has already authorized the real collision. This seam separately
- * authorizes crate mutation, never melee harvest or generic tagged terrain destruction.
+/** Authorizes projectile-driven crate mutation, independently of direct impact admission
+ * or a verified blast-wave query. Never melee harvest or generic tagged terrain destruction.
  * Owner must be online/alive in this dimension. Launch payment is not refunded on impact veto.
  */
 public final class RangedCrateHits {
@@ -33,7 +33,7 @@ public final class RangedCrateHits {
         return RacMcBlocks.crates().values().stream().anyMatch(holder -> holder.get() == block);
     }
 
-    private static ServerPlayer owner(Rac1BlasterArrow projectile, BlockPos pos) {
+    private static ServerPlayer owner(Projectile projectile, BlockPos pos) {
         if (!(projectile.level() instanceof ServerLevel level) || projectile.isRemoved()
                 || !(projectile.getOwner() instanceof ServerPlayer player)
                 || !player.isAlive() || player.isRemoved() || player.level() != level
@@ -44,7 +44,7 @@ public final class RangedCrateHits {
         return player;
     }
 
-    public static boolean grounded(Rac1BlasterArrow projectile, BlockPos pos) {
+    public static boolean grounded(Projectile projectile, BlockPos pos) {
         var player = owner(projectile, pos);
         if (player == null) return false;
         var level = player.serverLevel();
@@ -63,7 +63,7 @@ public final class RangedCrateHits {
         return level.getBlockEntity(pos) != crate;
     }
 
-    public static boolean airborne(Rac1BlasterArrow projectile, FallingBlockEntity carrier) {
+    public static boolean airborne(Projectile projectile, FallingBlockEntity carrier) {
         var pos = carrier.blockPosition();
         var player = owner(projectile, pos);
         if (player == null || carrier.level() != projectile.level() || carrier.isRemoved()) return false;

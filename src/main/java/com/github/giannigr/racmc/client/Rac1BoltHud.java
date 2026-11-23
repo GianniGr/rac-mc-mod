@@ -26,6 +26,8 @@ public final class Rac1BoltHud {
                 (graphics, delta) -> {
                     var mc = Minecraft.getInstance();
                     if (mc.player == null || mc.options.hideGui) return;
+                    if (mc.screen instanceof com.github.giannigr.racmc.client.pda.Rac1PdaOriginalScreen pda
+                            && pda.ownsPinnedBolts()) return; // The original remote menu pins its private counter.
                     var data = mc.player.getPersistentData();
                     if (!Rac1BoltHudTime.visible(data.getLong("racmcBoltPickupNanos"), System.nanoTime())) return;
                     var content = RacMcClient.assets().content().orElse(null);

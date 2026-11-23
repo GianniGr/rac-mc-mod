@@ -25,6 +25,12 @@ config="racmc.wrench-actions.mixins.json"
 [[mixins]]
 config="racmc.clank-moveset.mixins.json"
 
+[[mixins]]
+config="racmc.blaster-ammo-pickup.mixins.json"
+
+[[mixins]]
+config="racmc.bomb-glove.mixins.json"
+
 # A list of mods - how many allowed here is determined by the individual mod loader.
 [[mods]] #mandatory
 

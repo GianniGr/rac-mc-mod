@@ -44,6 +44,7 @@ public class RacMcMod {
                 modContainer.getModInfo().getVersion().toString());
         // The items of the mod are registered with the event bus of the mod.
         RacMcItems.register(modEventBus);
+        com.github.giannigr.racmc.shop.Rac1StarterClaim.register(modEventBus);
         // The blocks of the mod are registered with the same bus.
         RacMcBlocks.register(modEventBus);
         // The kinds of block entity of the mod are registered with the same bus.

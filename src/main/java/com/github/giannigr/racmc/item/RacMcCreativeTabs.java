@@ -51,6 +51,8 @@ public final class RacMcCreativeTabs {
                     .icon(() -> new ItemStack(RacMcItems.TAB_ICON.get()))
                     .displayItems((parameters, output) -> {
                         output.accept(RacMcItems.BLASTER.get());
+                        output.accept(RacMcItems.BLASTER_AMMO.get());
+                        output.accept(RacMcItems.PDA.get());
                         output.accept(RacMcItems.VENDOR.get());
                         RacMcItems.BOLTS.values().forEach(item -> output.accept(item.get()));
                         output.accept(RacMcItems.OMNIWRENCH.get());

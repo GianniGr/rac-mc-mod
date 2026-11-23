@@ -20,17 +20,21 @@ public final class Rac1VendorDrawing {
 
     public static void drawInBlock(Rac1CacheContent content, PoseStack pose,
                                     MultiBufferSource buffers, int light, float growth, float seconds) {
-        draw(content, pose, buffers, light, growth, seconds, true);
+        drawInBlock(content,pose,buffers,light,growth,seconds,null);
+    }
+    public static void drawInBlock(Rac1CacheContent content,PoseStack pose,MultiBufferSource buffers,
+                                   int light,float growth,float seconds,Rac1VendorPose.Mesh physical) {
+        draw(content,pose,buffers,light,growth,seconds,true,physical);
     }
 
     /** Items fit their main enclosure; antenna tips may protrude just like other item details. */
     public static void drawAsItem(Rac1CacheContent content, PoseStack pose,
                                    MultiBufferSource buffers, int light) {
-        draw(content, pose, buffers, light, 0, 0, false);
+        draw(content, pose, buffers, light, 0, 0, false,null);
     }
 
     private static void draw(Rac1CacheContent content, PoseStack pose, MultiBufferSource buffers,
-                             int light, float growth, float seconds, boolean inWorld) {
+                             int light, float growth, float seconds, boolean inWorld,Rac1VendorPose.Mesh physical) {
         Rac1VendorAsset vendor = content.vendor();
         if (vendor == null) {
             return;
@@ -47,8 +51,9 @@ public final class Rac1VendorDrawing {
             // Translate BEFORE scaling: the half-block cube origin must not itself be scaled.
             place(pose, inWorld ? fit.inWorld() : itemFit);
             boolean close = buffers instanceof MultiBufferSource.BufferSource;
-            Rac1MeshRenderer.render(pose, buffers, vendor.body().mesh(), closed.positions(),
-                    closed.normals(), textures.body().toArray(ResourceLocation[]::new), light, close);
+            var body=inWorld && physical!=null ? physical:closed;
+            Rac1MeshRenderer.render(pose, buffers, vendor.body().mesh(), body.positions(),
+                    body.normals(), textures.body().toArray(ResourceLocation[]::new), light, close);
             if (growth > 0) {
                 pose.translate(0, Rac1VendorPose.HOLOGRAM_HEIGHT, 0);
                 float scale = Rac1VendorPose.HOLOGRAM_SCALE * Math.min(1, growth);

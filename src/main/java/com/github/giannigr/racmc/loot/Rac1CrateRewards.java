@@ -1,11 +1,14 @@
 package com.github.giannigr.racmc.loot;
 
+import com.github.giannigr.racmc.asset.Rac1Crates;
 import com.github.giannigr.racmc.block.Rac1CrateBlock;
 import com.github.giannigr.racmc.block.Rac1CrateBlockEntity;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
 /** One genuine destruction entry point. Falling/removal callbacks must not award separately. */
@@ -27,7 +30,7 @@ public final class Rac1CrateRewards {
         }
         // Spawn admission/retries and collection are owned by a single saved ledger.
         award(level, pos, net.minecraft.world.phys.Vec3.atBottomCenterOf(pos), id, base,
-                ((Rac1CrateBlock) expectedState.getBlock()).definition().classNumber());
+                ((Rac1CrateBlock) expectedState.getBlock()).definition().classNumber(), cause);
         sound(level, net.minecraft.world.phys.Vec3.atCenterOf(pos),
                 ((Rac1CrateBlock) expectedState.getBlock()).definition().classNumber());
         com.github.giannigr.racmc.effect.Rac1EffectTriggers.crateBreak(level, id,
@@ -52,20 +55,32 @@ public final class Rac1CrateRewards {
         var id = data.getUUID("BoltRewardId");
         int base = Math.max(0, data.getInt("BoltRewardBase"));
         falling.discard();
-        award(level, falling.blockPosition(), falling.position(), id, base, block.definition().classNumber());
+        award(level, falling.blockPosition(), falling.position(), id, base, block.definition().classNumber(), cause);
         sound(level, falling.position(), block.definition().classNumber());
         com.github.giannigr.racmc.effect.Rac1EffectTriggers.crateBreak(level, id, falling.position(),
                 block.definition().classNumber());
     }
 
     private static void award(ServerLevel level, BlockPos pos, net.minecraft.world.phys.Vec3 position,
-                              java.util.UUID id, int base, int classId) {
+                              java.util.UUID id, int base, int classId, @Nullable Entity cause) {
         if (classId == 501) {
             Rac1NanotechLedger.get(level).release(id, level, position);
             return; // one cluster, never a bolt reward (including zero-value currency tombstones)
         }
-        Rac1BoltLedger.get(level).reward(id, level, pos,
+        boolean first = Rac1BoltLedger.get(level).rewardOnce(id, level, pos,
                 Rac1BoltPayout.roll(base, new java.util.Random(level.random.nextLong())));
+        if (first && classId == Rac1Crates.AMMO.classNumber()) {
+            int pickups = BlasterAmmoCratePolicy.pickups(level.random.nextInt(BlasterAmmoCratePolicy.ROLL_BOUND));
+            var stock = Rac1AmmoCrateRouting.forCause(level, cause);
+            var ammo = stock.ammo().orElseThrow(); // Blaster is always registered; candidates were checked.
+            for (int i = 0; i < pickups; i++) {
+                // Vanilla pickup; no shop cap, direct inventory grant, or retry after a spawn veto.
+                var drop = new ItemEntity(level, position.x, position.y, position.z,
+                        new ItemStack(ammo, stock.pickupUnits()));
+                drop.setDefaultPickUpDelay();
+                level.addFreshEntity(drop);
+            }
+        }
     }
 
     private static void sound(ServerLevel level, net.minecraft.world.phys.Vec3 position, int classId) {
