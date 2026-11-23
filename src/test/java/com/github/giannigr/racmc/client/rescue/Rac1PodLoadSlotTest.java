@@ -7,10 +7,12 @@ import com.github.giannigr.racmc.asset.Rac1Skeleton;
 import com.github.giannigr.racmc.asset.Rac1SkinnedMesh;
 import com.github.giannigr.racmc.asset.Rac1Texture;
 import com.github.giannigr.racmc.asset.rescue.Rac1PodAssets;
+import com.github.giannigr.racmc.asset.rescue.Rac1PodPresentation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 class Rac1PodLoadSlotTest {
@@ -77,6 +79,50 @@ class Rac1PodLoadSlotTest {
                 released::add, errors::add);
         assertNull(slot.lookup(key -> key == epoch.get()));
         assertEquals(List.of("obsolete"), released);
+    }
+
+    @Test
+    void itemAndPlacedDecorativeHullUseOneReadyPreparationAndTextureSet() throws Exception {
+        var assets = new Rac1PodAssets("synthetic", posed(1515, 2172, 2004, 4), posed(1365, 2432, 2500, 2));
+        var prepared = Rac1PodClientResources.Prepared.of(assets);
+        var textures = new ResourceLocation[]{ResourceLocation.withDefaultNamespace("hull")};
+        var ready = new Rac1PodClientResources.Art(prepared, textures, new ResourceLocation[0]);
+        var slot = new Rac1PodLoadSlot<Integer, Rac1PodClientResources.Prepared, Rac1PodClientResources.Art>();
+        assertNull(slot.lookup(key -> true));
+        slot.tick(1, key -> true, key -> CompletableFuture.completedFuture(prepared),
+                art -> fail("first tick only submits"), art -> fail(), failure -> fail(failure));
+        slot.tick(1, key -> true, key -> fail("duplicate preparation"),
+                art -> ready, art -> fail(), failure -> fail(failure));
+
+        var item = slot.lookup(key -> key == 1);
+        var placed = slot.lookup(key -> key == 1);
+        assertSame(item, placed);
+        assertSame(textures, item.hullTextures());
+        assertSame(prepared.legacy(), item.presentation(false));
+        assertSame(prepared.full(), placed.presentation(true));
+        assertTrue(Rac1PodViewer.canShowOriginalHull(false, true));
+        assertFalse(Rac1PodViewer.showOccupant(false, false));
+        assertFalse(Rac1PodViewer.canShowOriginalHull(false, false));
+        assertEquals(46, item.presentation(false).canopy().triangleCount());
+        assertHullMount(item.presentation(false), Rac1PodPresentation.LEGACY_SPAN);
+        assertHullMount(placed.presentation(true), Rac1PodPresentation.FULL_SPAN);
+        assertNull(slot.lookup(key -> false), "both consumers reject the old generation immediately");
+    }
+
+    private static void assertHullMount(Rac1PodPresentation mounted, float span) {
+        var xyz = mounted.hull().positions();
+        float minX = Float.POSITIVE_INFINITY, maxX = Float.NEGATIVE_INFINITY;
+        float minY = Float.POSITIVE_INFINITY, maxY = Float.NEGATIVE_INFINITY;
+        for (int i = 0; i < xyz.length; i += 3) {
+            minX = Math.min(minX, xyz[i]);
+            maxX = Math.max(maxX, xyz[i]);
+            minY = Math.min(minY, xyz[i + 1]);
+            maxY = Math.max(maxY, xyz[i + 1]);
+        }
+        assertEquals(.5f, (minX + maxX) / 2, 1e-5);
+        assertEquals(span, maxX - minX, 1e-5);
+        assertEquals(0, minY, 1e-5);
+        assertEquals((minY + maxY) / 2, mounted.hullCenterY(), 1e-5);
     }
 
     @Test

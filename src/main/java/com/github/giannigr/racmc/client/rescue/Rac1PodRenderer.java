@@ -50,7 +50,7 @@ public final class Rac1PodRenderer implements BlockEntityRenderer<Rac1PodMarker>
                        int light, int overlay) {
         if (marker.getLevel() == null) return;
         boolean full = Rac1PodFootprint.full(marker.getBlockState());
-        boolean intact = (marker.isNatural() || marker.isDecorative())
+        boolean intact = Rac1PodViewer.canShowOriginalHull(marker.isNatural(), marker.isDecorative())
                 && (!full || Rac1PodFootprint.complete(marker.getLevel(), marker.getBlockPos()));
         var art = intact ? Rac1PodClientResources.get() : null;
         if (art != failed) failed = null;
@@ -67,7 +67,7 @@ public final class Rac1PodRenderer implements BlockEntityRenderer<Rac1PodMarker>
             return;
         }
         try {
-            var meshes = full ? art.prepared().full() : art.prepared().legacy();
+            var meshes = art.presentation(full);
             var hullTextures = art.hullTextures();
             boolean flush = buffers instanceof MultiBufferSource.BufferSource;
             Rac1MeshRenderer.render(poses, buffers, meshes.hull(), hullTextures, light, flush);
@@ -104,8 +104,8 @@ public final class Rac1PodRenderer implements BlockEntityRenderer<Rac1PodMarker>
         }
     }
 
-    private static void drawCanopy(PoseStack poses, MultiBufferSource buffers, Rac1Mesh mesh,
-                                   ResourceLocation texture, int light) {
+    static void drawCanopy(PoseStack poses, MultiBufferSource buffers, Rac1Mesh mesh,
+                           ResourceLocation texture, int light) {
         var type = RenderType.entityTranslucent(texture);
         var sink = buffers.getBuffer(type);
         // 27% Minecraft glass opacity on the genuine window pocket; no polygons moved or opened.

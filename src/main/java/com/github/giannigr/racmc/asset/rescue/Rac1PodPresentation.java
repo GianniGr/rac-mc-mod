@@ -5,7 +5,7 @@ import com.github.giannigr.racmc.asset.Rac1Mesh;
 import java.util.Arrays;
 
 /** Minecraft mounting and glass treatment, not an original landed pose or hatch animation. */
-public record Rac1PodPresentation(Rac1Mesh hull, Rac1Mesh canopy, Rac1Mesh occupant) {
+public record Rac1PodPresentation(Rac1Mesh hull, Rac1Mesh canopy, Rac1Mesh occupant, float hullCenterY) {
     static final int CANOPY_FIRST = 1570;
     static final int CANOPY_END = 1616;
     public static final float FULL_SPAN = 2.94f;
@@ -46,7 +46,7 @@ public record Rac1PodPresentation(Rac1Mesh hull, Rac1Mesh canopy, Rac1Mesh occup
         }
         return new Rac1PodPresentation(fittedHull, fittedCanopy,
                 new Rac1Mesh(mountedOccupant, normals, occupantMesh.uvs(), occupantMesh.indices(),
-                        occupantMesh.materials()));
+                        occupantMesh.materials()), centerY);
     }
 
     static boolean isCanopy(int triangle) {

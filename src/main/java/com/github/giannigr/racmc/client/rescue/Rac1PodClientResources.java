@@ -29,7 +29,11 @@ public final class Rac1PodClientResources {
         }
     }
 
-    record Art(Prepared prepared, ResourceLocation[] hullTextures, ResourceLocation[] occupantTextures) {}
+    record Art(Prepared prepared, ResourceLocation[] hullTextures, ResourceLocation[] occupantTextures) {
+        Rac1PodPresentation presentation(boolean full) {
+            return full ? prepared.full() : prepared.legacy();
+        }
+    }
 
     private record Request(Path path, Rac1CacheContent owner, long generation) {}
 
@@ -75,7 +79,7 @@ public final class Rac1PodClientResources {
         var media = RacMcClient.media();
         // The shared hook advances the generation on reload/logout; reselection does so before
         // validating. A new login can keep already-prepared art for the same selection because
-        // this data contains no viewer state (that comes from the live Gear self snapshot).
+        // this data contains no viewer state.
         return request.generation == media.generation() && !media.isChecking() && RacMcClient.allowsWorldEntry()
                 && RacMcClient.assets().content().orElse(null) == request.owner;
     }
