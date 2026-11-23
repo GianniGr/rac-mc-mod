@@ -11,7 +11,7 @@ import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-/** Worn-Clank test default + optional session suppression; never writes durable equipment/entitlement. */
+/** Hydro defaults on only for worn test fixtures; never writes durable equipment/entitlement. */
 public final class Rac1HydroRuntime {
     private static final Map<UUID,Control> CONTROLS=new HashMap<>();
     private static long nextEpoch;
@@ -24,6 +24,7 @@ public final class Rac1HydroRuntime {
         boolean wet,controlled,handoff,disabled;
         Rac1HydroWater.Mode water=Rac1HydroWater.Mode.DRY;
         Rac1HydroWire.Stream input;
+        Rac1HydroBoost boost=Rac1HydroBoost.BLOCKED;
         final Rac1HydroMotion motion=new Rac1HydroMotion();
         final Rac1HydroVisual visual=new Rac1HydroVisual();
         Vec3 expected;
@@ -31,17 +32,17 @@ public final class Rac1HydroRuntime {
         void reset() {
             world=player.level();clankEpoch=Rac1ClankServer.session(player).epoch();epoch=epoch();
             tick=-1;wet=false;controlled=false;handoff=false;water=Rac1HydroWater.Mode.DRY;expected=null;
+            boost=Rac1HydroBoost.BLOCKED;
             input=new Rac1HydroWire.Stream(epoch);motion.restore(new Rac1HydroMotion().state());visual.clear();
         }
     }
-    private static boolean wornSession(ServerPlayer p) {
+    private static boolean testAccess(ServerPlayer p) {
         return p.isAlive()&&!p.isRemoved()&&p.connection.isAcceptingMessages()
-                &&Rac1ClankServer.session(p).equipment().worn();
+                &&Rac1ClankServer.session(p).testHydro()&&Rac1ClankServer.session(p).equipment().worn();
     }
-    private static boolean accessValid(Control c) {return !c.disabled&&wornSession(c.player);}
-    /** Both existing equip paths call equipmentChanged; tick fallback covers already-worn sessions. */
+    private static boolean accessValid(Control c) {return !c.disabled&&testAccess(c.player);}
     private static Control control(ServerPlayer player) {
-        if(!wornSession(player)){forget(player);return null;}
+        if(!testAccess(player)){forget(player);return null;}
         var c=CONTROLS.get(player.getUUID());
         if(c==null||c.player!=player) {
             c=new Control(player);CONTROLS.put(player.getUUID(),c);
@@ -64,8 +65,7 @@ public final class Rac1HydroRuntime {
         if(c!=null&&c.player==player){c.reset();broadcast(player);}
     }
     public static void equipmentChanged(ServerPlayer player) {
-        if(!Rac1ClankServer.session(player).equipment().worn())forget(player);
-        else {var c=control(player);if(c!=null){c.reset();broadcast(player);}}
+        var c=control(player);if(c!=null){c.reset();broadcast(player);}
     }
     public static void forget(ServerPlayer player) {
         var removed=CONTROLS.remove(player.getUUID());
@@ -88,8 +88,23 @@ public final class Rac1HydroRuntime {
                 &&(water.mode()==Rac1HydroWater.Mode.SURFACE||water.mode()==Rac1HydroWater.Mode.SUBMERGED);
         boolean diveEntry=c.water==Rac1HydroWater.Mode.SURFACE&&water.mode()==Rac1HydroWater.Mode.SUBMERGED;
         c.wet=wet;c.water=water.mode();c.visual.target(wet);
-        var frame=c.input.consume(now);
-        if(!wet||!water.propulsion()||teleporting(player)) {
+        boolean eligible=wet&&water.propulsion();
+        var samples=c.input.consume(now);
+        if(!eligible||!c.input.live(now))c.boost=Rac1HydroBoost.BLOCKED;
+        else for(var sample:samples)c.boost=c.boost.sample(sample,true);
+        var keys=samples.isEmpty()?Rac1HydroBoost.Controls.INACTIVE:samples.getLast();
+        var frame=c.boost.drive(keys);
+        if(Rac1HydroTrace.LOG.enabled()) {
+            String decision=c.epoch+":"+c.boost+":"+keys.sprintDown()+":"+frame.thrust()+":"+keys.forward()+":"+frame.rise()+":"+frame.dive()
+                    +":"+water.mode()+":"+water.propulsion()+":"+water.lowAir()+":"+player.getPose()+":"+player.isSwimming();
+            Rac1HydroTrace.LOG.transition("server-input:"+player.getUUID(),decision,()->"tick="+now
+                    +" boost="+c.boost+" physicalSprint="+keys.sprintDown()+" acceptedThrust="+frame.thrust()
+                    +" forward="+keys.forward()+" rise="+frame.rise()+" dive="+frame.dive()
+                    +" water="+water.mode()+" propulsion="+water.propulsion()+" lowAir="+water.lowAir()
+                    +" air="+player.getAirSupply()+" lookPitch="+player.getXRot()+" pose="+player.getPose()
+                    +" swimming="+player.isSwimming()+" vanillaSprint="+player.isSprinting());
+        }
+        if(!eligible) {
             c.motion.cancel();c.expected=null;
         }else if(c.expected!=null&&player.getDeltaMovement().distanceToSqr(c.expected)>.0025) {
             c.motion.cancel();c.expected=null; // Native external force takes priority for this tick.
@@ -99,7 +114,9 @@ public final class Rac1HydroRuntime {
             else for(int i=0;i<3;i++) {
                 long episode=c.epoch;
                 var current=Rac1HydroWater.observe(player);
-                if(!current.propulsion()){c.motion.cancel();c.handoff=c.controlled&&current.compatible();break;}
+                if(!current.propulsion()){
+                    c.boost=Rac1HydroBoost.BLOCKED;c.motion.cancel();c.handoff=c.controlled&&current.compatible();break;
+                }
                 var step=c.motion.step(frame,nativeVelocity,diveEntry&&frame.dive(),current.lowAir(),player.getXRot());
                 c.steps++;
                 if(!step.controlled())continue;
@@ -121,7 +138,7 @@ public final class Rac1HydroRuntime {
                 // Crossing a surface/current boundary on the final substep still consumed travel
                 // this tick. Never run a second native move after that collision-checked handoff.
                 if(!Rac1HydroWater.observe(player).propulsion()) {
-                    c.handoff=true;c.motion.cancel();
+                    c.handoff=true;c.boost=Rac1HydroBoost.BLOCKED;c.motion.cancel();
                 }
             }else c.expected=null;
         }
@@ -155,16 +172,19 @@ public final class Rac1HydroRuntime {
         var c=CONTROLS.get(player.getUUID());if(c==null||c.player!=player||c.disabled)return off(player);
         return new Rac1HydroWire.Snapshot(player.getUUID(),c.epoch,c.clankEpoch,player.serverLevel().getGameTime(),
                 c.input.acknowledged(),true,c.wet,c.controlled,Rac1ClankServer.session(player).equipment().selected(),
-                c.water,c.visual.phase(),c.visual.time(),vector(player.position()),c.motion.state());
+                c.water,c.visual.phase(),c.visual.time(),vector(player.position()),c.motion.state(),c.boost);
     }
     private static Rac1HydroWire.Snapshot off(ServerPlayer player) {
         return new Rac1HydroWire.Snapshot(player.getUUID(),epoch(),Rac1ClankServer.session(player).epoch(),
                 player.serverLevel().getGameTime(),-1,false,false,false,
                 Rac1ClankServer.session(player).equipment().selected(),Rac1HydroWater.Mode.DRY,
-                Rac1HydroVisual.Phase.DRY,0,vector(player.position()),new Rac1HydroMotion().state());
+                Rac1HydroVisual.Phase.DRY,0,vector(player.position()),new Rac1HydroMotion().state(),Rac1HydroBoost.BLOCKED);
     }
     private static void broadcast(ServerPlayer player) {
-        PacketDistributor.sendToPlayersTrackingEntityAndSelf(player,new Rac1HydroNetwork.Snapshot(snapshot(player)));
+        var state=snapshot(player);
+        Rac1HydroTrace.snapshot("server-state:"+player.getUUID(),state,player.getPose()+"/swimming="+player.isSwimming()
+                +"/vanillaSprint="+player.isSprinting());
+        PacketDistributor.sendToPlayersTrackingEntityAndSelf(player,new Rac1HydroNetwork.Snapshot(state));
     }
     public static void tracking(ServerPlayer observer,ServerPlayer target) {
         // Include an off tombstone: an observer may have stopped tracking during off/cleanup.

@@ -5,9 +5,13 @@ import com.github.giannigr.racmc.clank.Rac1ClankMotion.Vector;
 /** Independent source60 submerged propulsion, not vanilla surface swimming or a new acquisition policy. */
 public final class Rac1HydroMotion {
     public static final double DT=1.0/60;
+    private static final double BRAKE=48*DT; // 7 blocks/s to zero in 9 source updates (3 native ticks).
     public enum Stage { NATIVE, THRUST, DRIFT }
-    public record Input(boolean thrust,boolean rise,boolean dive,double left,double forward,double yaw) {
+    public record Input(boolean thrust,boolean armed,boolean rise,boolean dive,double left,double forward,double yaw) {
         public static final Input RELEASED=new Input(false,false,false,0,0,0);
+        public Input(boolean thrust,boolean rise,boolean dive,double left,double forward,double yaw) {
+            this(thrust,thrust,rise,dive,left,forward,yaw);
+        }
         public Input {
             var normalized=new Rac1ClankInput(rise,false,dive,left,forward,yaw);
             left=normalized.left();forward=normalized.forward();yaw=normalized.yawDegrees();
@@ -34,30 +38,33 @@ public final class Rac1HydroMotion {
     public Step step(Input input,Vector nativeVelocity,boolean enteredByDive,boolean lowAir) {
         return step(input,nativeVelocity,enteredByDive,lowAir,0);
     }
-    /** Native Minecraft look pitch is positive down. It only targets pitch during held thrust. */
+    /** Native Minecraft look pitch is positive down. It only targets pitch during forward thrust. */
     public Step step(Input input,Vector nativeVelocity,boolean enteredByDive,boolean lowAir,double nativeLookPitch) {
         if(unresolved)throw new IllegalStateException("Unresolved Hydro collision");
+        boolean vertical=input.armed()&&(input.rise()||input.dive());
         if(stage==Stage.NATIVE) {
             if(input.magnitude()>.15&&nativeVelocity.length()>.1)stroke=Math.min(36000,stroke+1);
             else stroke=0;
-            if(!input.thrust()||!enteredByDive&&stroke>0&&stroke<=20)return new Step(false,Vector.ZERO);
-            stage=Stage.THRUST;phase=0;speed=Math.min(32,nativeVelocity.length());
+            if(!input.thrust())return new Step(false,Vector.ZERO);
+            stage=Stage.THRUST;phase=0;speed=Math.min(7,nativeVelocity.length());
             yaw=Math.toRadians(input.yaw());yawRate=0;
             if(enteredByDive)diveIn=0;
         } else if(stage==Stage.THRUST&&!input.thrust()) {
-            if(input.magnitude()>.5){cancel();return new Step(false,Vector.ZERO);}
-            if(!input.rise()&&!input.dive()&&input.magnitude()<.7&&(diveIn<0||diveIn>40)) {
-                stage=Stage.DRIFT;phase=0;speed=effective.length();
-            }
+            stage=Stage.DRIFT;phase=0;diveIn=-1;
         } else if(stage==Stage.DRIFT) {
             if(input.thrust()){stage=Stage.THRUST;phase=0;}
-            else if(input.magnitude()>.5||input.rise()||input.dive()){cancel();return new Step(false,Vector.ZERO);}
+            else if(!vertical&&effective.length()<1e-9){cancel();return new Step(false,Vector.ZERO);}
         }
         phase=Math.min(36000,phase+1);
         if(stage==Stage.DRIFT) {
-            double previous=effective.length();speed=Math.max(0,previous-8*DT);
-            if(speed<.02){cancel();return new Step(false,Vector.ZERO);}
-            effective=effective.scale(speed/Math.max(previous,1e-9));
+            // Brake only the last collision-resolved Hydro carry, never reconstruct it from W or look.
+            double horizontal=Math.hypot(effective.x(),effective.z());
+            double scale=horizontal<=BRAKE?0:1-BRAKE/horizontal;
+            pitchToward(vertical?input.rise()||lowAir?-Math.toRadians(78):Math.toRadians(78):0);
+            double targetY=vertical?-Math.sin(pitch)*2.8:0;
+            double y=effective.y()+Math.clamp(targetY-effective.y(),-BRAKE,BRAKE);
+            effective=new Vector(effective.x()*scale,y,effective.z()*scale);
+            speed=effective.length();
         } else {
             boolean diving=diveIn>=0&&diveIn<=40;
             if(diveIn>=0)diveIn=Math.min(41,diveIn+1);
@@ -69,18 +76,19 @@ public final class Rac1HydroMotion {
             double targetPitch=input.rise()||lowAir?-Math.toRadians(78):
                     input.dive()?Math.toRadians(78):input.thrust()?Math.toRadians(boundedLookPitch(nativeLookPitch)):0;
             if(diving)targetPitch=Math.max(Math.toRadians(78)*.35,targetPitch);
-            pitchRate=Math.clamp(pitchRate+(targetPitch-pitch)*.015-pitchRate*.2,
-                    -Math.toRadians(70)*DT,Math.toRadians(70)*DT);
-            pitch=Math.clamp(pitch+pitchRate,-Math.toRadians(78),Math.toRadians(78));
-            double factor=Math.max(input.magnitude(),input.rise()||input.dive()||diving?1:0);
-            if(factor>.15)factor=Math.max(.4,factor);
-            double target=diving?6:input.thrust()?7:2.8*factor;
+            pitchToward(targetPitch);
+            double target=diving?6:7;
             speed+=Math.clamp(target-speed,-8*DT,13*DT);
             effective=new Vector(-Math.sin(yaw)*Math.cos(pitch)*speed,-Math.sin(pitch)*speed,
                     Math.cos(yaw)*Math.cos(pitch)*speed);
         }
         unresolved=true;
         return new Step(true,effective.scale(DT));
+    }
+    private void pitchToward(double targetPitch) {
+        pitchRate=Math.clamp(pitchRate+(targetPitch-pitch)*.015-pitchRate*.2,
+                -Math.toRadians(70)*DT,Math.toRadians(70)*DT);
+        pitch=Math.clamp(pitch+pitchRate,-Math.toRadians(78),Math.toRadians(78));
     }
     public void resolved(Vector actual) {
         if(!unresolved)throw new IllegalStateException("No Hydro collision pending");

@@ -4,6 +4,9 @@ import com.github.giannigr.racmc.RacMcConstants;
 import com.github.giannigr.racmc.asset.Rac1CrateDefinition;
 import com.github.giannigr.racmc.asset.Rac1Crates;
 import com.github.giannigr.racmc.block.RacMcBlocks;
+import com.github.giannigr.racmc.rescue.Rac1PodRegistration;
+import com.github.giannigr.racmc.ship.Rac1Ships;
+import java.util.List;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
@@ -11,6 +14,7 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
+import net.neoforged.neoforge.registries.DeferredItem;
 
 /**
  * The tab of the creative mode of the mod.
@@ -37,6 +41,11 @@ public final class RacMcCreativeTabs {
     public static final DeferredRegister<CreativeModeTab> TABS =
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, RacMcConstants.MOD_ID);
 
+    static List<DeferredItem<?>> weaponRows() {
+        return List.of(RacMcItems.BLASTER, RacMcItems.BLASTER_AMMO,
+                RacMcItems.BOMB_GLOVE, RacMcItems.BOMB_GLOVE_AMMO);
+    }
+
     /**
      * The tab of the mod.
      *
@@ -50,12 +59,16 @@ public final class RacMcCreativeTabs {
                     .title(Component.translatable(TITLE_KEY))
                     .icon(() -> new ItemStack(RacMcItems.TAB_ICON.get()))
                     .displayItems((parameters, output) -> {
-                        output.accept(RacMcItems.BLASTER.get());
+                        weaponRows().forEach(item -> output.accept(item.get()));
+                        output.accept(RacMcItems.PDA.get());
                         output.accept(RacMcItems.VENDOR.get());
                         RacMcItems.BOLTS.values().forEach(item -> output.accept(item.get()));
                         output.accept(RacMcItems.OMNIWRENCH.get());
                         output.accept(RacMcItems.CLANK_HELI_PACK.get());
                         output.accept(RacMcItems.CLANK_THRUSTER_PACK.get());
+                        output.accept(RacMcItems.BOLT_GRABBER.get());
+                        output.accept(Rac1PodRegistration.DECORATIVE.get());
+                        output.accept(Rac1Ships.PLACEMENT_ITEM.get());
                         // Every crate of the game is in the tab, in the order of the table of
                         // the crates.
                         for (Rac1CrateDefinition definition : Rac1Crates.definitions()) {

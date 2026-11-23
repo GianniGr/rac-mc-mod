@@ -42,7 +42,13 @@ public final class Rac1ClankPlayback {
             seconds=authoredSeconds(clip,heroFrame(view.action(),phase));
         else {
             // Converted key seconds retain the original interval/override rates, not flat FPS.
-            double time=view.action()==Action.IDLE?serverTime/20:
+            // Thruster long keeps the SAME601/608 idle clip. Rebasing that running clip
+            // to phase0 on entry produced a first-frame pack/nozzle jump even with no ghosts.
+            // Long-only correction: leave approved high/glide and all Heli clocks untouched.
+            boolean continuousLong=view.equipment().selected()==Module.THRUSTER
+                    &&view.action()==Action.LONG_JUMP&&sequence==1
+                    &&(role==Role.CLANK||role==Role.THRUSTER);
+            double time=view.action()==Action.IDLE||continuousLong?serverTime/20:
                     Math.max(0,phase-selected.packBlendSteps())/60;
             double duration=clip.times()[clip.keyCount()-1];
             seconds=(float)(clip.loop()&&duration>0?time%duration:Math.min(time,duration));
@@ -82,4 +88,8 @@ public final class Rac1ClankPlayback {
     }
     public static void forget(UUID player){CHANNELS.keySet().removeIf(k->k.player().equals(player));}
     public static void clear(){CHANNELS.clear();}
+    public static float[] chain(UUID player,Role role,Rac1AnimatedAsset model) {
+        var channel=CHANNELS.get(new Key(player,role));
+        return channel==null||channel.model!=model?null:Rac1ClankPoseBlend.chain(model,channel.last);
+    }
 }

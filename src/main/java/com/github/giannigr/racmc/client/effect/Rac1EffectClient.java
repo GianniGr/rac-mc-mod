@@ -2,9 +2,14 @@ package com.github.giannigr.racmc.client.effect;
 
 import com.github.giannigr.racmc.RacMcConstants;
 import com.github.giannigr.racmc.RacMcMod;
+import com.github.giannigr.racmc.asset.BombGloveArt;
+import com.github.giannigr.racmc.asset.Rac1AnimatedAsset;
 import com.github.giannigr.racmc.asset.effect.*;
 import com.github.giannigr.racmc.cache.effect.Rac1EffectCacheStore;
 import com.github.giannigr.racmc.client.RacMcClient;
+import com.github.giannigr.racmc.client.bomb.BombGloveFlightRenderer;
+import com.github.giannigr.racmc.client.bomb.BombGloveItemDrawing;
+import com.github.giannigr.racmc.client.bomb.BombGloveWornDrawing;
 import com.github.giannigr.racmc.disc.Rac1LevelAssets;
 import com.github.giannigr.racmc.effect.*;
 import com.github.giannigr.racmc.iso.*;
@@ -26,7 +31,31 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 @EventBusSubscriber(modid = RacMcConstants.MOD_ID, value = Dist.CLIENT)
 public final class Rac1EffectClient {
     private record Cpu(String sha1, EffectClock.Profile profile, List<EffectGpuCatalog.CpuTexture> textures,
-                       List<EffectMeshAsset> meshes, NanotechTables nanotech, Rac1BlastTables blast) {}
+                       List<EffectMeshAsset> meshes, NanotechTables nanotech, Rac1BlastTables blast,
+                       EffectMeshAsset ammoPickup, Rac1AnimatedAsset bombGlove,
+                       EffectMeshAsset bomb, EffectMeshAsset bombAmmo, ParticleFrameLists definitions,
+                       int shipExhaustTexture) {}
+    /** Read-only local presentation capability; generation invalidates every consumer handle. */
+    public record LocalPresentation(long generation,String sha1,ParticleFrameLists definitions,EffectClock.Profile profile) {
+        public EffectAssetRef particle(int type) {
+            if(type<0||type>=definitions.count())return null;
+            byte[] bytes=definitions.bytes();int at=16+type*4;
+            if((bytes[at]|bytes[at+1]|bytes[at+2]|bytes[at+3])==0)return null;
+            byte[] span=definitions.storedSpan(type);
+            return span.length==0?null:new EffectAssetRef(sha1,1,EffectAssetRef.Bank.PARTICLE,span[0]&255);
+        }
+        public EffectAssetRef fx(int id){return new EffectAssetRef(sha1,1,EffectAssetRef.Bank.FX,id);}
+    }
+    private static LocalPresentation local;
+    public static LocalPresentation localPresentation(){return local;}
+    public static net.minecraft.client.renderer.RenderType localType(long token,EffectAssetRef ref,EffectMaterial material) {
+        return catalog==null||token!=generation?null:catalog.type(ref,material);
+    }
+    public static void renderLocal(long token,PoseStack pose,java.util.List<EffectRuntime.Draw> draws,
+            EffectSignal.Point camera,org.joml.Quaternionf orientation) {
+        if(catalog!=null&&token==generation)
+            EffectWorldRenderer.render(pose,Minecraft.getInstance().renderBuffers().bufferSource(),catalog,draws,camera,orientation);
+    }
     private static CompletableFuture<Cpu> loading;
     private static Path selected;
     private static long generation;
@@ -39,6 +68,11 @@ public final class Rac1EffectClient {
     private static boolean projectileUnavailableReported;
     private static NanotechTables nanotech;
     private static String discSha1;
+    private static EffectMeshAsset ammoPickup;
+    private static Rac1AnimatedAsset bombGlove;
+    private static EffectMeshAsset bomb;
+    private static EffectMeshAsset bombAmmo;
+    private static int shipExhaustTexture = -1;
     private static final Map<net.minecraft.core.BlockPos, Long> health = new HashMap<>();
     private static long nanoStep = -1;
     private record Nano(UUID id, EffectSignal.Point base, long seed, boolean intact,
@@ -86,7 +120,15 @@ public final class Rac1EffectClient {
                 catalog = new EffectGpuCatalog(generation, cpu.textures(), cpu.meshes());
                 nanotech = cpu.nanotech();
                 discSha1 = cpu.sha1();
+                ammoPickup = cpu.ammoPickup();
+                bombGlove = cpu.bombGlove();
+                bomb = cpu.bomb();
+                bombAmmo = cpu.bombAmmo();
+                local=new LocalPresentation(generation,cpu.sha1(),cpu.definitions(),cpu.profile());
+                shipExhaustTexture = cpu.shipExhaustTexture();
                 session = new EffectPlaybackSession(cpu.sha1(), cpu.profile(), 2048);
+                session.bombFlashReady(cpu.meshes().stream()
+                        .anyMatch(mesh -> mesh.source().sourceId() == BombGloveDryVisuals.FLASH_CLASS));
                 if (cpu.blast() != null) session.blastTables(cpu.blast());
                 if (minecraft.level != null)
                     session.beginWorld(minecraft.level.dimension().location().toString(), generation);
@@ -119,6 +161,8 @@ public final class Rac1EffectClient {
             List<EffectMeshAsset> meshes = new ArrayList<>();
             for (int id : new int[]{112, 348, 349, 357, 358, 363, 364})
                 meshes.add(Rac1EffectMeshImporter.read(assets, sha1, id));
+            var bombFlash = optionalBombArt(BombGloveDryVisuals.FLASH_CLASS, () -> verifiedBombFlash(assets, sha1));
+            if (bombFlash != null) meshes.add(bombFlash);
             NanotechTables tables = null;
             try { tables = Rac1NanotechImporter.read(image); }
             catch (Exception unavailable) {
@@ -127,16 +171,66 @@ public final class Rac1EffectClient {
             Rac1BlastTables blast = null;
             try { blast = Rac1BlastTables.read(image); }
             catch (Exception unavailable) { RacMcMod.LOGGER.warn("Original blast tables unavailable: {}", unavailable.toString()); }
+            // Read the verified rigid pickup from the core already in memory. Failure must not
+            // disable other effects or force a cache-schema change.
+            EffectMeshAsset pickup = null;
+            try { pickup = com.github.giannigr.racmc.asset.BlasterAmmoPickupArt.read(assets, sha1); }
+            catch (Exception unavailable) {
+                RacMcMod.LOGGER.warn("Original Blaster Ammo pickup art unavailable: {}", unavailable.toString());
+            }
+            var definitions = banks.definitions();
+            byte[] exhaustFrames = definitions.count() > 23 ? definitions.storedSpan(23) : new byte[0];
+            int exhaust = exhaustFrames.length > 0 ? Byte.toUnsignedInt(exhaustFrames[0]) : -1;
             return new Cpu(sha1, ntsc ? EffectClock.Profile.NTSC : EffectClock.Profile.PAL,
-                    EffectGpuCatalog.decode(banks), List.copyOf(meshes), tables, blast);
+                    EffectGpuCatalog.decode(banks), List.copyOf(meshes), tables, blast, pickup,
+                    optionalBombArt(192, () -> BombGloveArt.glove(assets)),
+                    optionalBombArt(121, () -> BombGloveArt.bomb(assets, sha1)),
+                    optionalBombArt(226, () -> BombGloveArt.ammo(assets, sha1)), definitions, exhaust);
         } catch (Exception failure) { throw new CompletionException(failure); }
+    }
+    private static EffectMeshAsset verifiedBombFlash(Rac1LevelAssets assets, String sha1)
+            throws com.github.giannigr.racmc.asset.AssetFormatException {
+        var row = assets.coreIndex().mobyClass(BombGloveDryVisuals.FLASH_CLASS);
+        if (assets.level() != 1 || row == null || row.textureCount() != 1
+                || (row.textureSlots()[0] & 255) != 211) {
+            throw new com.github.giannigr.racmc.asset.AssetFormatException("Unverified Novalis class-1192 texture binding");
+        }
+        var flash = Rac1EffectMeshImporter.read(assets, sha1, BombGloveDryVisuals.FLASH_CLASS);
+        if (flash.mesh().triangleCount() != 320 || flash.textures().size() != 1
+                || Arrays.stream(flash.mesh().materials()).anyMatch(slot -> slot != 0)) {
+            throw new com.github.giannigr.racmc.asset.AssetFormatException("Unverified Novalis class-1192 material or mesh");
+        }
+        byte[] argb = flash.textures().getFirst().pixels();
+        for (int i = 0; i < argb.length; i += 4) {
+            if ((argb[i] & 255) != 255) {
+                throw new com.github.giannigr.racmc.asset.AssetFormatException("Unexpected class-1192 texture alpha");
+            }
+        }
+        return flash;
+    }
+    private static <T> T optionalBombArt(int id, Callable<T> load) {
+        try {
+            return load.call();
+        } catch (Exception unavailable) {
+            RacMcMod.LOGGER.warn("Original Bomb Glove class {} unavailable: {}", id, unavailable.toString());
+            return null;
+        }
     }
     private static void invalidate() {
         generation++;
+        local=null;
         if (session != null) session.clear();
         session = null;
         if (catalog != null) catalog.close();
         catalog = null;
+        ammoPickup = null;
+        bombGlove = null;
+        bomb = null;
+        bombAmmo = null;
+        BombGloveItemDrawing.clearTextures();
+        BombGloveFlightRenderer.clearTextures();
+        BombGloveWornDrawing.clearTextures();
+        shipExhaustTexture = -1;
         nanotech = null;
         health.clear();
         nanoStep = -1;
@@ -147,6 +241,46 @@ public final class Rac1EffectClient {
     public static void reload() {
         invalidate();
         failed = false;
+    }
+
+    /** Client-local CPU mesh from the current verified media generation, or null. */
+    public static EffectMeshAsset ammoPickup() {
+        return currentMedia() ? ammoPickup : null;
+    }
+
+    public static Rac1AnimatedAsset bombGlove() { return currentMedia() ? bombGlove : null; }
+    public static EffectMeshAsset bomb() { return currentMedia() ? bomb : null; }
+    public static EffectMeshAsset bombAmmo() { return currentMedia() ? bombAmmo : null; }
+
+    private static boolean currentMedia() {
+        var media = RacMcClient.media();
+        return media.isReady() && Objects.equals(selected, media.configuredPath().orElse(null));
+    }
+
+    public enum ShipArt { FLAME, GLASS, EXHAUST }
+
+    /** Borrow ready level-01 materials only. This neither initiates I/O nor owns a texture. */
+    public static net.minecraft.client.renderer.RenderType shipMaterial(ShipArt art) {
+        var media = RacMcClient.media();
+        if (catalog == null || discSha1 == null || !media.isReady() || media.isChecking()
+                || selected == null || media.configuredPath().filter(selected::equals).isEmpty()) {
+            return null;
+        }
+        var revision = media.attemptResult().map(IsoValidationResult::revision).orElse(null);
+        boolean sameDisc = Rac1DiscCatalog.supported().profiles().stream()
+                .anyMatch(profile -> profile.revision() == revision && profile.imageSha1().equals(discSha1));
+        if (!sameDisc) {
+            return null;
+        }
+        return switch (art) {
+            case FLAME -> catalog.type(new EffectAssetRef(discSha1, 1, EffectAssetRef.Bank.FX, 5),
+                    EffectMaterial.ADDITIVE);
+            case GLASS -> catalog.type(new EffectAssetRef(discSha1, 1, EffectAssetRef.Bank.FX, 21),
+                    EffectMaterial.NORMAL);
+            case EXHAUST -> shipExhaustTexture < 0 ? null : catalog.type(
+                    new EffectAssetRef(discSha1, 1, EffectAssetRef.Bank.PARTICLE, shipExhaustTexture),
+                    EffectMaterial.NORMAL);
+        };
     }
     private static void receive(EffectSignal signal) {
         var minecraft = Minecraft.getInstance();

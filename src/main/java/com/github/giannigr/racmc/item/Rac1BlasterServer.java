@@ -1,5 +1,6 @@
 package com.github.giannigr.racmc.item;
 
+import com.github.giannigr.racmc.item.weapon.BlasterAmmo;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
@@ -11,7 +12,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -26,7 +26,7 @@ import net.minecraft.world.phys.Vec3;
  * trigger, the item is used, and the shots are fired while the item is used.
  *
  * <p>The rules of the weapon are the rules of {@link Rac1FirePolicy}: the creative mode fires
- * without ammunition, the survival mode and the adventure mode need one ordinary arrow for every
+ * without ammunition, the survival mode and the adventure mode need one Blaster Ammo item for every
  * shot, and the spectator mode never fires. A weapon without ammunition clicks instead of firing.
  *
  * <p>The weapon is fired with the main hand only. The shot leaves the mouth of the Blaster in the
@@ -111,7 +111,7 @@ public final class Rac1BlasterServer {
         input.putLong(LAST_ATTEMPT, now);
         state.beginPull();
         boolean fired;
-        switch (Rac1FirePolicy.evaluate(modeOf(player), countArrows(player),
+        switch (Rac1FirePolicy.evaluate(modeOf(player), BlasterAmmo.count(player),
                 Rac1FirePolicy.Hand.MAIN)) {
             case FIRE_WITHOUT_AMMO -> fired = fire(level, player, state, now, false);
             case FIRE_WITH_AMMO -> fired = fire(level, player, state, now, true);
@@ -155,7 +155,7 @@ public final class Rac1BlasterServer {
         if (!state.shotDue(now)) {
             return;
         }
-        switch (Rac1FirePolicy.evaluate(modeOf(player), countArrows(player),
+        switch (Rac1FirePolicy.evaluate(modeOf(player), BlasterAmmo.count(player),
                 Rac1FirePolicy.Hand.MAIN)) {
             case FIRE_WITHOUT_AMMO -> fire(level, player, state, now, false);
             case FIRE_WITH_AMMO -> fire(level, player, state, now, true);
@@ -241,26 +241,13 @@ public final class Rac1BlasterServer {
     }
 
     /**
-     * The number of ordinary arrows a player carries.
-     *
-     * <p>Only the ordinary arrows of the game count: the tipped arrows and the spectral arrows
-     * of the game are not ammunition of the Blaster.
-     *
-     * @param player the player
-     * @return the number of ordinary arrows
-     */
-    public static int countArrows(Player player) {
-        return com.github.giannigr.racmc.item.weapon.BlasterAmmo.count(player);
-    }
-
-    /**
      * Fires a shot of the Blaster.
      *
      * @param level the level the player is in
      * @param player the player that fires
      * @param state the bookkeeping of the burst
      * @param now the tick of the shot
-     * @param withAmmo whether an ordinary arrow is consumed for the shot
+     * @param withAmmo whether one Blaster Ammo item is consumed for the shot
      * @return {@code true} when the shot was made
      */
     private static boolean fire(Level level, Player player, Rac1BurstState state, long now,
@@ -271,7 +258,7 @@ public final class Rac1BlasterServer {
             return false;
         }
         boolean fired = com.github.giannigr.racmc.item.weapon.FireService.fire(
-                () -> validOwner(level, player) ? reserveArrow(player, withAmmo) : null,
+                () -> validOwner(level, player) ? reserveAmmo(player, withAmmo) : null,
                 new com.github.giannigr.racmc.item.weapon.FireService.ProjectileFactory<Rac1BlasterArrow>() {
                     public Rac1BlasterArrow prepare() {
                         return validOwner(level, player) ? spawnArrow(level, player) : null;
@@ -464,16 +451,8 @@ public final class Rac1BlasterServer {
         return !state.isAir() && state.blocksMotion();
     }
 
-    /**
-     * Consumes one ordinary arrow of a player.
-     *
-     * <p>The arrow of the other hand is used first, and then the arrows of the inventory of the
-     * player. Only the ordinary arrows of the game are used.
-     *
-     * @param player the player that fires
-     * @return {@code true} when an arrow was consumed
-     */
-    private static com.github.giannigr.racmc.item.weapon.FireService.AmmoReservation reserveArrow(
+    /** Reserve exactly one Blaster Ammo item offhand-first, or a no-op for Creative. */
+    private static com.github.giannigr.racmc.item.weapon.FireService.AmmoReservation reserveAmmo(
             Player player, boolean withAmmo) {
         ItemStack reserved = ItemStack.EMPTY;
         int selected = -1;
@@ -482,12 +461,12 @@ public final class Rac1BlasterServer {
             public void refund() {}
         };
         ItemStack offhand = player.getOffhandItem();
-        if (offhand.is(Items.ARROW) && offhand.getCount() > 0) {
+        if (BlasterAmmo.matches(offhand)) {
             reserved = offhand.split(1);
         } else {
             for (int index = 0; index < player.getInventory().items.size(); index++) {
                 ItemStack stack = player.getInventory().items.get(index);
-                if (stack.is(Items.ARROW) && stack.getCount() > 0) {
+                if (BlasterAmmo.matches(stack)) {
                     reserved = stack.split(1);
                     selected = index;
                     break;

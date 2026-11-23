@@ -33,6 +33,7 @@ public final class ClankWorldGameTests {
         Rac1ClankMovementWire.Correction lastCorrection;
         Rac1ClankSession.Snapshot lastSnapshot;
         Rac1HydroWire.Snapshot lastHydro;
+        final java.util.List<com.github.giannigr.racmc.sound.Rac1ClankActionEvent> reachedSounds=new java.util.ArrayList<>();
         private static Connection fixtureConnection() {
             return new Connection(PacketFlow.SERVERBOUND) {
                 private final io.netty.channel.embedded.EmbeddedChannel fixtureChannel=
@@ -45,6 +46,9 @@ public final class ClankWorldGameTests {
                     CommonListenerCookie.createInitial(profile,false));
         }
         @Override public void send(Packet<?> packet) {
+            if(packet instanceof net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket custom
+                    &&custom.payload() instanceof Rac1ClankActionAudioNetwork.Event sound&&sound.value().local()!=0)
+                reachedSounds.add(sound.value());
             if(packet instanceof net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket custom
                     &&custom.payload() instanceof Rac1HydroNetwork.Snapshot hydro)
                 lastHydro=hydro.value();
@@ -170,10 +174,13 @@ public final class ClankWorldGameTests {
     private static void hydro(GameTestHelper h,ServerPlayer p,boolean on) {
         equip(h,p,"hydro "+(on?"on":"off"));
     }
-    private static void hydroFrame(ServerPlayer p,long serial,boolean thrust,boolean rise,boolean dive) {
+    private static void hydroFrame(ServerPlayer p,long serial,boolean sprint,boolean rise,boolean dive) {
+        hydroFrame(p,serial,sprint,sprint,rise,dive);
+    }
+    private static void hydroFrame(ServerPlayer p,long serial,boolean sprint,boolean forward,boolean rise,boolean dive) {
         var s=Rac1HydroRuntime.snapshot(p);
         Rac1HydroRuntime.input(p,new Rac1HydroWire.Input(s.epoch(),serial,
-                new Rac1HydroMotion.Input(thrust,rise,dive,0,0,0)));
+                new Rac1HydroBoost.Controls(true,sprint,rise,dive,0,forward?1:0,0)));
         p.doTick();
     }
     @GameTest(template="empty",batch="clank_20_hydro_gate",timeoutTicks=50)
@@ -216,6 +223,43 @@ public final class ClankWorldGameTests {
             System.out.println("HYDRO_GATE surface/submerged/wading/restore PASS");done(h,p);
         });
     }
+    @GameTest(template="empty",batch="clank_20b_hydro_bubbles",timeoutTicks=30)
+    public static void hydroAutoEquipAuthoritativeThrustFeedsDeepBubblesButIdleDoesNot(GameTestHelper h) {
+        var base=pool(h);var p=player(h,base.add(5,9,5));
+        equip(h,p,"thruster"); // Deliberately no separate Hydro grant/equip command.
+        p.setPos(base.add(5,2,5));p.setOnGround(false);p.setDeltaMovement(Vec3.ZERO);
+        var zero=new com.github.giannigr.racmc.effect.EffectSignal.Point(0,0,0);
+        var runtime=new com.github.giannigr.racmc.effect.EffectRuntime(
+                com.github.giannigr.racmc.effect.EffectClock.Profile.NTSC,64);
+        var jets=new com.github.giannigr.racmc.client.clank.Rac1ClankJets(runtime,
+                type->new com.github.giannigr.racmc.asset.effect.EffectAssetRef("a".repeat(40),1,
+                        com.github.giannigr.racmc.asset.effect.EffectAssetRef.Bank.PARTICLE,type));
+        h.runAtTickTime(1,()->{
+            hydroFrame(p,1,false,false,false);
+            var hydro=Rac1HydroRuntime.snapshot(p);
+            var clank=Rac1ClankServer.session(p).snapshot(hydro.tick());
+            h.assertTrue(hydro.access()&&hydro.wet()&&hydro.water()==Rac1HydroWater.Mode.SUBMERGED,
+                    "Automatic worn-Clank Hydro did not enter submerged state");
+            h.assertTrue(!Rac1ClankAv.select(clank,hydro,true,0).hydroJets(),
+                    "Submerged idle incorrectly emitted thrust bubbles");
+        });
+        h.runAtTickTime(2,()->{
+            hydroFrame(p,2,true,false,false);
+            var hydro=Rac1HydroRuntime.snapshot(p);
+            var clank=Rac1ClankServer.session(p).snapshot(hydro.tick());
+            var selected=Rac1ClankAv.select(clank,hydro,true,p.getDeltaMovement().y);
+            h.assertTrue(hydro.controlled()&&selected.hydroJets(),"Real accepted thrust failed cosmetic selection");
+            // Synthetic attachment endpoints/sprite exercise semantic dispatch, not GPU/nozzle acceptance.
+            jets.step(java.util.Map.of(p.getUUID(),new com.github.giannigr.racmc.client.clank.Rac1ClankJets.Request(
+                    hydro.epoch(),selected,java.util.List.of(zero,zero),java.util.List.of(),hydro.motion().speed(),
+                     hydro.motion().yaw(),hydro.motion().pitch(),zero,Double.NaN)),zero);
+            h.assertTrue(jets.emitted(34)==4,"Unknown surface suppressed accepted native thrust bubble batch");
+            h.assertTrue(Rac1ClankServer.session(p).equipment().selected()==Rac1ClankEquipment.Module.THRUSTER,
+                    "Cosmetic sampling changed the dry module");
+            System.out.println("HYDRO_BUBBLES auto-equip/submerged idle/thrust/unknown-surface PASS");
+            jets.clear();done(h,p);
+        });
+    }
     @GameTest(template="empty",batch="clank_21_hydro_permission",timeoutTicks=30)
     public static void hydroPermissionRemoteSnapshotAndSessionCleanup(GameTestHelper h) {
         var base=pool(h);var p=player(h,base.add(2,9,2));var observer=player(h,base.add(12,9,12));
@@ -238,7 +282,7 @@ public final class ClankWorldGameTests {
             h.assertTrue(reset.access()&&!reset.controlled()&&!reset.wet()&&reset.epoch()>granted,
                     "Teleport did not invalidate transient Hydro episode");
             Rac1HydroRuntime.input(p,new Rac1HydroWire.Input(granted,999,
-                    new Rac1HydroMotion.Input(true,false,false,0,0,0)));
+                    new Rac1HydroBoost.Controls(true,true,false,false,0,1,0)));
             equip(h,p,"thruster");
             h.assertTrue(Rac1HydroRuntime.snapshot(p).access(),"Wet dry-selection change lost session access");
             hydro(h,p,false);h.assertTrue(!Rac1HydroRuntime.snapshot(p).access(),"Off failed");
@@ -264,12 +308,12 @@ public final class ClankWorldGameTests {
             final int t=tick;
             h.runAtTickTime(t,()->{
                 for(var p:players) {
-                    hydroFrame(p,t,true,p==up,p==down);
+                    hydroFrame(p,t,t>=2,t>=2,p==up,p==down);
                     h.assertTrue(Rac1HydroRuntime.sourceSteps(p)==t*3,"Hydro not exactly three source60 steps/tick");
                     h.assertTrue(h.getLevel().noCollision(p,p.getBoundingBox().deflate(1e-6)),"Hydro penetrated blocks");
                     long count=Rac1HydroRuntime.sourceSteps(p);Rac1HydroRuntime.stepTick(p);
                     h.assertTrue(count==Rac1HydroRuntime.sourceSteps(p),"Duplicate tick advanced Hydro");
-                    h.assertTrue(Rac1ClankRuntime.ownsTravel(p),"Native travel owner missing during thrust");
+                    h.assertTrue(Rac1ClankRuntime.ownsTravel(p)==(t>=2),"Wrong native travel owner");
                 }
                 if(t==12) {
                     h.assertTrue(up.getY()>base.y+2&&down.getY()<base.y+2,"Jump/Sneak did not pitch up/down");
@@ -327,7 +371,7 @@ public final class ClankWorldGameTests {
         for(int tick=1;tick<=22;tick++) {
             final int t=tick;
             h.runAtTickTime(t,()->{
-                hydroFrame(p,t,true,false,false);
+                hydroFrame(p,t,t>=2,false,false);
                 h.assertTrue(p.getZ()<=base.z+7-.8+1e-5,
                         "Controlled Hydro crossed native wall: "+p.position());
                 if(t==22) {
@@ -420,7 +464,7 @@ public final class ClankWorldGameTests {
         for(int tick=1;tick<=12;tick++) {
             final int t=tick;
             h.runAtTickTime(t,()->{
-                for(var p:players)hydroFrame(p,t,true,false,false);
+                for(var p:players)hydroFrame(p,t,t>=2,false,false);
                 if(t==12) {
                     h.assertTrue(up.getY()>neutral.getY()&&down.getY()<neutral.getY(),
                             "Authoritative native look up/down failed to steer");
@@ -1074,6 +1118,139 @@ public final class ClankWorldGameTests {
                     h.assertTrue(voidDamage.hurt(voidDamage.damageSources().fellOutOfWorld(),2)
                             &&voidDamage.getHealth()==18,"Held glide granted void immunity");
                     done(h,high,longer,hazard,voidDamage);
+                }
+            });
+        }
+    }
+    @GameTest(template="empty",batch="clank_20c_hydro_live_gate",timeoutTicks=58)
+    public static void authoritativeToggleBrakeResumeAndReleaseFeedTheActualPresentationGate(GameTestHelper h) {
+        var base=pool(h);var p=player(h,base.add(5,9,5));equip(h,p,"thruster");
+        p.setPos(base.add(5,2,5));p.setOnGround(false);p.setDeltaMovement(Vec3.ZERO);p.setAirSupply(250);
+        var views=new com.github.giannigr.racmc.client.clank.Rac1ClankViews();
+        int[] counts={0,0,0},bubbleTotals={0,0};boolean[] sawStaleThrust={false};
+        double[] brakeAt={0};
+        var life=new com.github.giannigr.racmc.sound.Rac1HydroAudioLifecycle(
+                new com.github.giannigr.racmc.sound.Rac1HydroAudioLifecycle.Backend() {
+                    public Object start(UUID id,com.github.giannigr.racmc.effect.EffectSignal.Point at){counts[0]++;return new Object();}
+                    public void position(Object v,com.github.giannigr.racmc.effect.EffectSignal.Point at){}
+                    public void release(Object v){counts[1]++;}
+                    public void abort(Object v){counts[2]++;}
+                    public boolean finished(Object v){return false;}
+                });
+        var zero=new com.github.giannigr.racmc.effect.EffectSignal.Point(0,0,0);
+        var effects=new com.github.giannigr.racmc.effect.EffectRuntime(
+                com.github.giannigr.racmc.effect.EffectClock.Profile.NTSC,128);
+        var jets=new com.github.giannigr.racmc.client.clank.Rac1ClankJets(effects,
+                type->new com.github.giannigr.racmc.asset.effect.EffectAssetRef("a".repeat(40),1,
+                        com.github.giannigr.racmc.asset.effect.EffectAssetRef.Bank.PARTICLE,type));
+        for(int tick=1;tick<=47;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                boolean sprint=t<=2||t>=9&&t<=11||t==33||t==34||t>=36&&t<=40
+                        ||t>=42&&t<=44||t==46;
+                boolean forward=t>=13&&t<=24||t>=29&&t<=34||t>=36&&t<=44||t==46;
+                // The fixture varies vanilla flags separately from the raw configured-key samples.
+                p.setSprinting(forward);
+                if(t==25)brakeAt[0]=p.getZ();
+                if(t==37) {
+                    p.setSwimming(false);p.setPose(net.minecraft.world.entity.Pose.STANDING);
+                    p.setPos(base.add(5,5.6,5));p.setDeltaMovement(Vec3.ZERO);
+                }
+                if(t==38||t==40){p.setPos(base.add(5,2,5));p.setDeltaMovement(Vec3.ZERO);p.setOnGround(false);}
+                if(t==39){p.setPos(base.add(5,9,5));p.setDeltaMovement(Vec3.ZERO);}
+                if(t==47)p.setDeltaMovement(new Vec3(.2,0,0));
+                hydroFrame(p,t,sprint,forward,false,false);
+                if(t==43)Rac1HydroRuntime.invalidate(p);
+                var hydro=((Sink)p.connection).lastHydro;
+                var clank=((Sink)p.connection).lastSnapshot;
+                h.assertTrue(hydro!=null&&clank!=null,"Missing actual transmitted snapshots");
+                long now=h.getLevel().getGameTime();views.accept(clank,now);
+                boolean legacy=views.serverTime(p.getUUID(),now)-clank.serverTick()<=4;
+                boolean fresh=Rac1HydroPresentation.fresh(clank,hydro,now,now);
+                var selected=Rac1ClankAv.select(clank,hydro,fresh,p.getDeltaMovement().y);
+                if(fresh) {
+                    life.retain(java.util.Set.of(p.getUUID()));
+                    life.update(p.getUUID(),hydro.epoch(),hydro.tick(),selected.hydroJets(),hydro.motion().phase(),true,zero);
+                }else life.retain(java.util.Set.of());
+                jets.step(java.util.Map.of(p.getUUID(),new com.github.giannigr.racmc.client.clank.Rac1ClankJets.Request(
+                        hydro.epoch(),selected,java.util.List.of(zero,zero),java.util.List.of(),hydro.motion().speed(),
+                         hydro.motion().yaw(),hydro.motion().pitch(),zero,Double.NaN)),zero);
+                bubbleTotals[0]+=jets.emitted(34);
+                boolean powered=t>=13&&t<=24||t>=29&&t<=32||t==36||t==42||t==46;
+                if(powered) {
+                    h.assertTrue(hydro.water()==Rac1HydroWater.Mode.SUBMERGED&&hydro.controlled()
+                            &&hydro.motion().stage()==Rac1HydroMotion.Stage.THRUST&&hydro.boost().armed(),
+                            "Fresh armed W was not admitted: "+hydro);
+                    h.assertTrue(selected.hydroJets(),"Fresh accepted thrust lost emitter gate");
+                    if(!legacy) {
+                        sawStaleThrust[0]=true;
+                        h.assertTrue(!Rac1ClankAv.select(clank,hydro,legacy,0).hydroJets(),"Legacy failure was not reproduced");
+                    }
+                }else {
+                    h.assertTrue(!selected.hydroJets()&&jets.emitted(34)==0,"Idle/braking emitted new bubbles at "+t);
+                }
+                if(t<=2||t==34||t==38||t==40||t==44)
+                    h.assertTrue(!hydro.boost().armed(),"Held Sprint reengaged across a boundary: "+t);
+                if(t>=9&&t<=12)h.assertTrue(hydro.boost().armed()&&!hydro.controlled()&&counts[0]==0,
+                        "Ctrl without W did not arm silently");
+                if(t==24) {
+                    h.assertTrue(p.getAirSupply()<250,"Presentation correction changed native air drain");
+                    h.assertTrue(hydro.motion().effective().z()>6.9&&bubbleTotals[0]>0,"Full W thrust did not ramp");
+                }
+                if(t>=25&&t<=28) {
+                    h.assertTrue(counts[1]==1&&hydro.boost().armed(),"W release must release once but remain armed");
+                    if(t==27)h.assertTrue(Math.abs(hydro.motion().effective().z())<1e-6
+                            &&p.getZ()-brakeAt[0]<.5,"W release failed bounded brake: "+hydro.motion());
+                }
+                if(t==29)h.assertTrue(counts[0]==2,"W resume did not start a fresh voice");
+                if(t==33)h.assertTrue(!hydro.boost().armed()&&counts[1]==2,"Second Ctrl press failed ordinary release");
+                if(t==37)h.assertTrue(hydro.water()==Rac1HydroWater.Mode.SURFACE&&!hydro.boost().armed()
+                        &&counts[1]==3,"Surface did not reset and ordinarily release: "+hydro);
+                if(t==39)h.assertTrue(counts[2]>0&&!hydro.wet(),"Dry exit failed owned abort");
+                if(t==43)h.assertTrue(counts[1]==3&&counts[2]>=3&&!hydro.boost().armed(),
+                        "Epoch invalidation did not hard abort or synthesized a release");
+                if(t==47) {
+                    h.assertTrue(hydro.motion().stage()==Rac1HydroMotion.Stage.NATIVE
+                            &&p.getDeltaMovement().x>.04,"W brake erased injected native impulse");
+                    h.assertTrue(sawStaleThrust[0]&&counts[0]==5&&counts[1]==4,"Wrong start/release lifetime");
+                    System.out.println("HYDRO_LIVE_GATE actual snapshots: fresh Ctrl toggles, bounded W brake/resume, water/session resets, native impulse;"
+                            +" starts="+counts[0]+" releases="+counts[1]+" aborts="+counts[2]
+                            +" emitted34="+bubbleTotals[0]+" pose="+p.getPose());
+                    life.clear();jets.clear();done(h,p);
+                }
+            });
+        }
+    }
+
+    @GameTest(template="empty",batch="clank_09_reached_audio",timeoutTicks=32)
+    public static void collisionAcceptedThreeStepProducerEmitsLongAndRetimedFactsOnceWithoutChangingMovement(GameTestHelper h) {
+        Vec3 base=platform(h);
+        var players=new ServerPlayer[]{player(h,base),player(h,base.add(8,0,0)),
+                player(h,base.add(0,0,8)),player(h,base.add(8,0,8)),player(h,base.add(20,0,8))};
+        for(int i=0;i<players.length;i++)equip(h,players[i],i==1||i==3?"thruster":"heli");
+        for(int tick=1;tick<=24;tick++) {
+            final int t=tick;
+            h.runAtTickTime(t,()->{
+                for(int i=0;i<players.length;i++) {
+                    var p=players[i];boolean longer=i<2;
+                    if(longer&&t<=4)p.move(MoverType.SELF,new Vec3(0,0,.12));
+                    frame(p,t,t==4,t<=4,longer);
+                    var sink=(Sink)p.connection;int count=sink.reachedSounds.size();
+                    Rac1ClankRuntime.stepTick(p);
+                    h.assertTrue(sink.reachedSounds.size()==count,"Duplicate tick replayed reached audio");
+                    if(i==4&&t==5)Rac1ClankServer.cancelEpisode(p);
+                }
+                if(t==24) {
+                    int[] expected={43,1,46,62};
+                    for(int i=0;i<4;i++) {
+                        var events=((Sink)players[i].connection).reachedSounds;
+                        h.assertTrue(events.size()==1&&events.getFirst().local()==expected[i],
+                                "Missing/duplicate/substituted reached cue index="+i+" events="+events);
+                        h.assertTrue(events.getFirst().sourceStep()>5,"Sound fired inside entry blend");
+                    }
+                    h.assertTrue(((Sink)players[4].connection).reachedSounds.isEmpty(),
+                            "Interrupted high windup emitted a later retimed cue");
+                    done(h,players);
                 }
             });
         }

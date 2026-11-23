@@ -2,8 +2,9 @@ package com.github.giannigr.racmc.loot;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.random.RandomGenerator;
 import java.util.function.DoubleSupplier;
+import java.util.function.Supplier;
+import java.util.random.RandomGenerator;
 
 /** Independent, asset-free NTSC 60 Hz translation. Velocities are units per virtual frame. */
 public final class Rac1BoltMotion {
@@ -28,8 +29,10 @@ public final class Rac1BoltMotion {
     @FunctionalInterface public interface Collision {
         Movement move(V from, V displacement, double radius);
     }
-    /** Candidate chosen by the server; foot position is used for range, body for homing. */
-    public record Hero(UUID id, V feet, V body) {}
+    /** Eligible server player; foot position is used for range, body for homing. */
+    public record Hero(UUID id, V feet, V body, boolean boltGrabber) {
+        public Hero(UUID id, V feet, V body) { this(id, feet, body, false); }
+    }
     public record Step(State state, boolean collect) {}
 
     public static double radius(int value) {
@@ -59,8 +62,12 @@ public final class Rac1BoltMotion {
                 0, 0, 30, 10, 0, 0, 1, 0, null);
     }
     public static boolean inRange(V position, V feet) {
+        return inRange(position, feet, false);
+    }
+    private static boolean inRange(V position, V feet, boolean boltGrabber) {
         V d = feet.sub(position);
-        return d.x * d.x + d.z * d.z < 9 && Math.abs(d.y) < 1.75;
+        return d.x * d.x + d.z * d.z < (boltGrabber ? 144 : 9)
+                && Math.abs(d.y) < (boltGrabber ? 4.5 : 1.75);
     }
     public static V reflect(V velocity, V separation) {
         V n = separation.unit();
@@ -94,6 +101,41 @@ public final class Rac1BoltMotion {
     }
 
     public static Step step(State s, int value, Collision world, Hero hero, DoubleSupplier random) {
+        return stepCandidates(s, value, world, () -> hero == null ? List.of() : List.of(hero), random);
+    }
+
+    private static boolean fellBelow(V position, double startY, Hero hero) {
+        return position.y < startY - 2 && position.y < hero.feet.y - 2;
+    }
+
+    private static Hero select(V position, List<Hero> heroes, boolean proximity, boolean lowFall, double startY) {
+        Hero best = null, fallback = null;
+        double bestDistance = Double.POSITIVE_INFINITY, fallbackDistance = Double.POSITIVE_INFINITY;
+        for (Hero hero : heroes) {
+            V offset = hero.feet.sub(position);
+            double distance = offset.dot(offset);
+            if (proximity && inRange(position, hero.feet, hero.boltGrabber)) {
+                if (closer(hero, distance, best, bestDistance)) {
+                    best = hero;
+                    bestDistance = distance;
+                }
+            } else if (lowFall && fellBelow(position, startY, hero)
+                    && closer(hero, distance, fallback, fallbackDistance)) {
+                fallback = hero;
+                fallbackDistance = distance;
+            }
+        }
+        return best != null ? best : fallback;
+    }
+
+    private static boolean closer(Hero hero, double distance, Hero current, double currentDistance) {
+        // Keep the existing canonical UUID text order (not UUID's signed long order).
+        return current == null || distance < currentDistance
+                || (distance == currentDistance && hero.id.toString().compareTo(current.id.toString()) < 0);
+    }
+
+    static Step stepCandidates(State s, int value, Collision world, Supplier<List<Hero>> candidates,
+                               DoubleSupplier random) {
         V p = s.position, v = s.velocity, rest = s.rest, up = s.up;
         Phase phase = s.phase;
         int total = s.total, remaining = s.remaining;
@@ -107,12 +149,14 @@ public final class Rac1BoltMotion {
             for (Contact contact : move.contacts) {
                 v = reflect(v, contact.separation);
             }
-            boolean fallen = hero != null && p.y < s.startY - 2 && p.y < hero.feet.y - 2;
-            if (hero != null && (fallen || (!move.contacts.isEmpty() && inRange(p, hero.feet)))) {
+            boolean touched = !move.contacts.isEmpty(), lowFall = p.y < s.startY - 2;
+            // One collision result, shared by selection and the accepted trajectory.
+            Hero hero = touched || lowFall ? select(p, candidates.get(), touched, lowFall, s.startY) : null;
+            if (hero != null) {
                 phase = Phase.ATTRACTING;
                 target = hero.id;
                 speed = 0;
-                if (!fallen) v = v.unit().mul((3 + random.getAsDouble() * 4) / 60);
+                if (!fellBelow(p, s.startY, hero)) v = v.unit().mul((3 + random.getAsDouble() * 4) / 60);
             } else {
                 for (Contact contact : move.contacts) {
                     if (ground(contact.separation, contact.normal)) {
@@ -126,7 +170,8 @@ public final class Rac1BoltMotion {
             }
         } else if (phase == Phase.SETTLING || phase == Phase.IDLE) {
             // Idle range test precedes its visual hop. Settling has no proximity test.
-            if (phase == Phase.IDLE && hero != null && inRange(p, hero.feet)) {
+            Hero hero = phase == Phase.IDLE ? select(p, candidates.get(), true, false, s.startY) : null;
+            if (hero != null) {
                 phase = Phase.ATTRACTING;
                 target = hero.id;
                 speed = 0;
@@ -148,24 +193,32 @@ public final class Rac1BoltMotion {
                     if (remaining > 0) remaining--;
                 }
             }
-        } else if (hero != null && (target == null || target.equals(hero.id))) {
-            target = hero.id;
-            double length = v.length(), drag = 10.0 / 3600;
-            if (length > drag) v = v.mul((length - drag) / length);
-            speed = Math.min(48.0 / 60, speed + 16.0 / 3600);
-            p = p.add(v);
-            V to = hero.body.sub(p);
-            collect = to.length() <= speed;
-            if (!collect) p = p.add(to.unit().mul(speed));
         } else {
-            // Lost/disconnected target: retain value and resume eligibility, not a stuck lock.
-            phase = Phase.IDLE;
-            target = null;
-            rest = p;
-            up = V.UP;
-            total = remaining = 0;
-            speed = 0;
-            v = V.ZERO;
+            Hero hero = null;
+            for (Hero candidate : candidates.get()) {
+                if (candidate.id.equals(target)) {
+                    hero = candidate;
+                    break;
+                }
+            }
+            if (hero != null) {
+                double length = v.length(), drag = 10.0 / 3600;
+                if (length > drag) v = v.mul((length - drag) / length);
+                speed = Math.min(48.0 / 60, speed + 16.0 / 3600);
+                p = p.add(v);
+                V to = hero.body.sub(p);
+                collect = to.length() <= speed;
+                if (!collect) p = p.add(to.unit().mul(speed));
+            } else {
+                // Lost/disconnected target: retain value and resume eligibility, not a stuck lock.
+                phase = Phase.IDLE;
+                target = null;
+                rest = p;
+                up = V.UP;
+                total = remaining = 0;
+                speed = 0;
+                v = V.ZERO;
+            }
         }
         return new Step(new State(p, v, phase, s.startY, rest, up, total, remaining,
                 s.settleFrames, s.idleFrames, spin, secondary, s.direction, speed, target), collect);

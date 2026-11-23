@@ -1,0 +1,25 @@
+// Opt-in real-server transaction fixtures; never launches a server by itself.
+allprojects {
+    afterEvaluate {
+        project.sourceSets.main.java.srcDir(new File(project.projectDir, "src/test/fixtures/shop/java"))
+        def generated = project.layout.buildDirectory.dir("generated/p35-shop-fixtures")
+        def structure = tasks.register("generateP35ShopTestStructure") {
+            outputs.dir(generated)
+            doLast {
+                def target = generated.get().file("data/p35shop/structure/empty.nbt").asFile
+                target.parentFile.mkdirs()
+                new DataOutputStream(new java.util.zip.GZIPOutputStream(new FileOutputStream(target))).withCloseable { out ->
+                    out.writeByte(10); out.writeUTF("")
+                    out.writeByte(3); out.writeUTF("DataVersion"); out.writeInt(3955)
+                    out.writeByte(9); out.writeUTF("size"); out.writeByte(3); out.writeInt(3)
+                    [5,5,5].each { out.writeInt(it) }
+                    out.writeByte(9); out.writeUTF("palette"); out.writeByte(10); out.writeInt(1)
+                    out.writeByte(8); out.writeUTF("Name"); out.writeUTF("minecraft:air"); out.writeByte(0)
+                    ["blocks","entities"].each { name -> out.writeByte(9); out.writeUTF(name); out.writeByte(10); out.writeInt(0) }
+                    out.writeByte(0)
+                }
+            }
+        }
+        tasks.named("processResources").configure { dependsOn(structure); from(generated) }
+    }
+}

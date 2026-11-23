@@ -6,9 +6,11 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParser;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.github.giannigr.racmc.actions.WrenchActionGeometry;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import net.minecraft.client.renderer.block.model.ItemTransform;
+import net.minecraft.world.item.ItemDisplayContext;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,48 @@ class Rac1WrenchItemTransformTest {
                 .getAsJsonObject("display");
         assertTrue(display.has(context));
         return GSON.fromJson(display.get(context), ItemTransform.class);
+    }
+
+    @Test
+    void allHandDisplaysScaleAfterCubeCorrectionAndWristAdjustmentAboutUnchangedGrip() throws Exception {
+        for (var context : new ItemDisplayContext[] {ItemDisplayContext.FIRST_PERSON_LEFT_HAND,
+                ItemDisplayContext.FIRST_PERSON_RIGHT_HAND, ItemDisplayContext.THIRD_PERSON_LEFT_HAND,
+                ItemDisplayContext.THIRD_PERSON_RIGHT_HAND, ItemDisplayContext.GUI,
+                ItemDisplayContext.GROUND, ItemDisplayContext.FIXED}) {
+            PoseStack poses = new PoseStack();
+            poses.translate(2, 3, 4);
+            boolean left = context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND
+                    || context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
+            transform(context.getSerializedName()).apply(left, poses);
+            poses.translate(-0.5, -0.5, -0.5);
+            Rac1ImportedItemDrawing.restoreSocketOrigin(poses);
+            boolean held = context != ItemDisplayContext.GUI && context != ItemDisplayContext.GROUND
+                    && context != ItemDisplayContext.FIXED;
+            Matrix4f adjustment = held ? new Matrix4f().rotateY(.41F) : null;
+            Matrix4f baseline = new Matrix4f(poses.last().pose());
+            if (adjustment != null) baseline.mul(adjustment);
+            Rac1WrenchItemRenderer.applyItemSocket(poses, context, adjustment);
+            Matrix4f actual = poses.last().pose();
+            assertTrue(actual.getTranslation(new Vector3f()).equals(
+                    baseline.getTranslation(new Vector3f()), 1.0e-6F));
+            float scale = held ? WrenchActionGeometry.STEVE_MESH_SCALE : 1;
+            assertTrue(actual.equals(baseline.scale(scale), 1.0e-6F), context.name());
+        }
+    }
+
+    @Test
+    void managedMeshEnlargesAllAxesUniformlyInsideCallerScope() {
+        PoseStack poses = new PoseStack();
+        poses.translate(3, 7, 4);
+        Matrix4f socket = new Matrix4f(poses.last().pose()).rotateY(0.71F).scale(0.9375F);
+        poses.mulPose(new Matrix4f().rotateY(0.71F).scale(0.9375F));
+        poses.pushPose();
+        Rac1WrenchItemRenderer.scaleSteveMesh(poses);
+        assertTrue(poses.last().pose().equals(new Matrix4f(socket).scale(1.18F), 1.0e-6F));
+        assertTrue(poses.last().pose().getTranslation(new Vector3f())
+                .equals(socket.getTranslation(new Vector3f()), 1.0e-6F));
+        poses.popPose();
+        assertTrue(poses.last().pose().equals(socket, 1.0e-6F));
     }
 
     @Test

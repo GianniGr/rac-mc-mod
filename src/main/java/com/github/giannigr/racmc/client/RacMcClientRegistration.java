@@ -105,6 +105,25 @@ public final class RacMcClientRegistration {
      */
     @SubscribeEvent
     public static void onRegisterClientExtensions(RegisterClientExtensionsEvent event) {
+        event.registerItem(new IClientItemExtensions() {
+            private com.github.giannigr.racmc.client.render.BlasterAmmoItemRenderer ammo;
+
+            @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() {
+                if (ammo == null) ammo = new com.github.giannigr.racmc.client.render.BlasterAmmoItemRenderer();
+                return ammo;
+            }
+        }, RacMcItems.BLASTER_AMMO.get());
+        event.registerItem(new IClientItemExtensions() {
+            private BlockEntityWithoutLevelRenderer shipRenderer;
+
+            @Override
+            public BlockEntityWithoutLevelRenderer getCustomRenderer() {
+                if (shipRenderer == null) {
+                    shipRenderer = new com.github.giannigr.racmc.client.ship.GreenShipItemRenderer();
+                }
+                return shipRenderer;
+            }
+        }, com.github.giannigr.racmc.ship.Rac1Ships.PLACEMENT_ITEM.get());
         RacMcItems.BOLTS.values().forEach(item -> event.registerItem(new IClientItemExtensions() {
             @Override public BlockEntityWithoutLevelRenderer getCustomRenderer() {
                 if (boltRenderer == null) boltRenderer =

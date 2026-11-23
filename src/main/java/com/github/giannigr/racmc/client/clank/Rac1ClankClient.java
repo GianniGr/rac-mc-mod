@@ -18,9 +18,16 @@ import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 public final class Rac1ClankClient {
     static final Rac1ClankViews VIEWS = new Rac1ClankViews();
     private Rac1ClankClient() {}
+    /** Read-only presentation access; does not expose the mutable observer store. */
+    public static com.github.giannigr.racmc.clank.Rac1ClankSession.Snapshot view(java.util.UUID actor) {
+        return VIEWS.get(actor);
+    }
+    public static boolean fresh(java.util.UUID actor,long localTick) {
+        var view=VIEWS.get(actor);
+        return view!=null&&VIEWS.serverTime(actor,localTick)-view.serverTick()<=4;
+    }
     @SubscribeEvent public static void tick(ClientTickEvent.Post event) {
-        if (Minecraft.getInstance().level == null) return;
-        Rac1ClankResources.update(VIEWS.anyWorn());
+        Rac1ClankResources.update(true); // Optional prewarm only after the existing verified-asset gate.
     }
     @SubscribeEvent public static void logout(ClientPlayerNetworkEvent.LoggingOut event) {
         VIEWS.clear(); Rac1ClankResources.clear(); Rac1ClankPrediction.clear();Rac1ClankPlayback.clear();
@@ -57,15 +64,16 @@ public final class Rac1ClankClient {
             });
         }
         @SubscribeEvent public static void layers(EntityRenderersEvent.AddLayers event) {
+            Rac1HydroAttachmentSampler.install(event.getContext());
             for (var skin : event.getSkins()) {
                 net.minecraft.client.renderer.entity.player.PlayerRenderer renderer = event.getSkin(skin);
                 if (renderer != null) renderer.addLayer(new Rac1ClankLayer(renderer));
             }
         }
         @SubscribeEvent public static void reload(RegisterClientReloadListenersEvent event) {
-            event.registerReloadListener((ResourceManagerReloadListener) manager -> {
+            event.registerReloadListener((ResourceManagerReloadListener) manager -> Minecraft.getInstance().execute(() -> {
                 Rac1ClankResources.reload();Rac1ClankPlayback.clear();
-            });
+            }));
         }
     }
 }

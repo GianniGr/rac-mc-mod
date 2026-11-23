@@ -33,7 +33,7 @@ public final class RangedOwnerGameTests {
         };
         player.setGameMode(GameType.SURVIVAL);
         player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(RacMcItems.BLASTER.get()));
-        player.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.ARROW, 8));
+        player.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(RacMcItems.BLASTER_AMMO.get(), 8));
         var pos = h.absolutePos(new BlockPos(4, 4, 4));
         player.teleportTo(pos.getX() + .5, pos.getY(), pos.getZ() + .5);
         return player;

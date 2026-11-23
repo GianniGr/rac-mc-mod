@@ -46,7 +46,7 @@ public final class Rac1FirePolicy {
         /** The shot is fired and no ammunition is consumed. */
         FIRE_WITHOUT_AMMO,
 
-        /** The shot is fired and one ordinary arrow is consumed. */
+        /** The shot is fired and one Blaster Ammo item is consumed. */
         FIRE_WITH_AMMO,
 
         /**
@@ -67,11 +67,11 @@ public final class Rac1FirePolicy {
      * Decides what one pull of the trigger does.
      *
      * @param mode the way of play of the player
-     * @param ordinaryArrows the number of ordinary arrows the player carries
+     * @param ammo the number of Blaster Ammo items the player carries
      * @return the outcome of the pull
      */
-    public static Outcome evaluate(Rac1GameMode mode, int ordinaryArrows) {
-        return evaluate(mode, ordinaryArrows, Hand.MAIN);
+    public static Outcome evaluate(Rac1GameMode mode, int ammo) {
+        return evaluate(mode, ammo, Hand.MAIN);
     }
 
     /**
@@ -82,17 +82,17 @@ public final class Rac1FirePolicy {
      * no ammunition is used and the weapon is not used at all.
      *
      * @param mode the way of play of the player
-     * @param ordinaryArrows the number of ordinary arrows the player carries
+     * @param ammo the number of Blaster Ammo items the player carries
      * @param hand the hand the trigger was pulled with
      * @return the outcome of the pull
      */
-    public static Outcome evaluate(Rac1GameMode mode, int ordinaryArrows, Hand hand) {
+    public static Outcome evaluate(Rac1GameMode mode, int ammo, Hand hand) {
         if (hand == Hand.OFF) {
             return Outcome.BLOCKED;
         }
         return switch (mode) {
             case CREATIVE -> Outcome.FIRE_WITHOUT_AMMO;
-            case SURVIVAL, ADVENTURE -> ordinaryArrows > 0
+            case SURVIVAL, ADVENTURE -> ammo > 0
                     ? Outcome.FIRE_WITH_AMMO
                     : Outcome.DRY_FIRE;
             case SPECTATOR -> Outcome.BLOCKED;
@@ -120,12 +120,12 @@ public final class Rac1FirePolicy {
     }
 
     /**
-     * Whether the outcome consumes an ordinary arrow.
+     * Whether the outcome consumes a Blaster Ammo item.
      *
      * @param outcome the outcome of a pull of the trigger
-     * @return {@code true} when one ordinary arrow is consumed
+     * @return {@code true} when one Blaster Ammo item is consumed
      */
-    public static boolean consumesArrow(Outcome outcome) {
+    public static boolean consumesAmmo(Outcome outcome) {
         return outcome == Outcome.FIRE_WITH_AMMO;
     }
 

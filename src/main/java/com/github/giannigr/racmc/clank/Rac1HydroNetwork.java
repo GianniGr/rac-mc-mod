@@ -19,7 +19,7 @@ public final class Rac1HydroNetwork {
     private Rac1HydroNetwork() {}
     public static void receiver(Consumer<Rac1HydroWire.Snapshot> consumer){receiver=java.util.Objects.requireNonNull(consumer);}
     @SubscribeEvent public static void register(RegisterPayloadHandlersEvent event) {
-        var registrar=event.registrar("clank-hydro-test-1");
+        var registrar=event.registrar("clank-hydro-test-2");
         registrar.playToServer(Input.TYPE,Input.CODEC,(packet,context)->{
             if(context.player() instanceof ServerPlayer player)Rac1HydroRuntime.input(player,packet.value());
         });

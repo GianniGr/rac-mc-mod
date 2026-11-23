@@ -1,6 +1,7 @@
 package com.github.giannigr.racmc.item;
 
 import com.github.giannigr.racmc.RacMcConstants;
+import com.github.giannigr.racmc.item.weapon.bomb.Rac1Bomb;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -47,6 +48,10 @@ public final class RacMcEntities {
                     .clientTrackingRange(4)
                     .updateInterval(1) // short twelve-tick flight must not outlive its update interval
                     .build("blaster_arrow"));
+
+    public static final DeferredHolder<EntityType<?>, EntityType<Rac1Bomb>> BOMB =
+            ENTITIES.register("bomb", () -> EntityType.Builder.<Rac1Bomb>of(Rac1Bomb::new, MobCategory.MISC)
+                    .sized(.24F, .24F).clientTrackingRange(6).updateInterval(1).fireImmune().build("bomb"));
 
     private RacMcEntities() {
         throw new UnsupportedOperationException("Utility class");

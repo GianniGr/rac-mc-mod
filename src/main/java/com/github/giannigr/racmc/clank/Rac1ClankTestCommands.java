@@ -33,7 +33,8 @@ public final class Rac1ClankTestCommands {
         for(boolean on:new boolean[]{true,false})hydro.then(Commands.literal(on?"on":"off").executes(context->{
             var player=EntityArgument.getPlayer(context,"player");
             if(!Rac1HydroRuntime.configure(context.getSource(),player,on)) {
-                context.getSource().sendFailure(Component.literal("Hydro test access denied: permission2 and worn Clank required."));
+                context.getSource().sendFailure(Component.literal(
+                        "Hydro test access denied: permission 2 and a worn temporary Clank fixture are required."));
                 return 0;
             }
             context.getSource().sendSuccess(()->Component.literal("Automatic Hydro test availability "

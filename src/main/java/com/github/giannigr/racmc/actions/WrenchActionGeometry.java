@@ -7,12 +7,18 @@ import java.util.Arrays;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
-/** One local geometry deformation for drawing AND authority; no edits to imported/cache assets. */
+/** Original local geometry plus an explicit Steve-only presentation scale. */
 public final class WrenchActionGeometry {
     // Authentic source amplitude until an explicit owner presentation-size decision.
     public static final float SLAM_DEFORMATION = 1.0F;
+    public static final float STEVE_MESH_SCALE = 1.18F;
     private WrenchActionGeometry() {}
     public record Mesh(float[] positions, float[] normals) {}
+
+    /** The native socket is the grip pivot; scaling never moves it or the legacy contact head. */
+    public static ActionVector visiblePoint(ActionVector grip, ActionVector originalPoint) {
+        return grip.add(originalPoint.subtract(grip).multiply(STEVE_MESH_SCALE));
+    }
 
     public static Mesh mesh(Rac1AnimatedAsset asset, int sequence, float seconds) {
         Mesh original = raw(asset, sequence, seconds);

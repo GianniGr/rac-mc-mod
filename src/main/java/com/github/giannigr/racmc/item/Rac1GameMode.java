@@ -14,7 +14,7 @@ public enum Rac1GameMode {
     CREATIVE,
 
     /**
-     * The survival mode. The Blaster needs one ordinary arrow and consumes it.
+     * The survival mode. The Blaster consumes one Blaster Ammo item.
      */
     SURVIVAL,
 

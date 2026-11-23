@@ -36,8 +36,23 @@ public final class Rac1BoltLedger extends SavedData {
     public long revision(UUID player) { return revisions.getOrDefault(player, 0L); }
     public Pickup pickup(UUID id) { return pickups.get(id); }
 
+    /** Main server thread only. Administrative credits use the same saved account as pickups. */
+    boolean credit(UUID player, long amount) {
+        long before = balance(player);
+        if (amount <= 0 || before > Long.MAX_VALUE - amount) return false;
+        balances.put(player, before + amount);
+        revisions.merge(player, 1L, Long::sum);
+        setDirty();
+        return true;
+    }
+
     public void reward(UUID incarnation, ServerLevel level, BlockPos pos, int total) {
-        if (!rewarded.add(incarnation)) return;
+        rewardOnce(incarnation, level, pos, total);
+    }
+
+    /** True only for the first accepted reward for this placement, including zero-bolt rewards. */
+    boolean rewardOnce(UUID incarnation, ServerLevel level, BlockPos pos, int total) {
+        if (!rewarded.add(incarnation)) return false;
         for (int value : Rac1BoltPayout.split(total)) {
             UUID id = UUID.randomUUID();
             // Source is crate bottom-center, not block center plus another half-block.
@@ -47,6 +62,7 @@ public final class Rac1BoltLedger extends SavedData {
             pickups.put(id, new Pickup(id, level.dimension(), p.x(), p.y(), p.z(), value, motion));
         }
         setDirty();
+        return true;
     }
 
     /** Main server thread only. Reject overflow without consuming the uncredited pickup. */

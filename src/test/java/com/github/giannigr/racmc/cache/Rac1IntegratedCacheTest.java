@@ -92,6 +92,7 @@ class Rac1IntegratedCacheTest {
                 com.github.giannigr.racmc.sound.Rac1AudioCatalog.Clip>(
                         com.github.giannigr.racmc.sound.Rac1AudioEvent.class);
         for (var event : com.github.giannigr.racmc.sound.Rac1AudioEvent.values()) {
+            if (!event.importsSample()) continue;
             clips.put(event, new com.github.giannigr.racmc.sound.Rac1AudioCatalog.Clip(
                     new byte[56], 22050, new byte[32], new byte[12], new byte[40],
                     "a".repeat(64), "b".repeat(64), 1, -1, 28, false));

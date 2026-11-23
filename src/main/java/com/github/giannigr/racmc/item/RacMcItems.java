@@ -35,8 +35,24 @@ public final class RacMcItems {
     public static final DeferredItem<BlasterItem> BLASTER =
             ITEMS.registerItem("blaster", BlasterItem::new, new Item.Properties().stacksTo(1));
 
+    public static final DeferredItem<Item> BLASTER_AMMO =
+            ITEMS.registerItem("blaster_ammo", Item::new, new Item.Properties().stacksTo(64));
+
+    /** P38 loot contract: ordinary count-one stack, no required custom components. */
+    public static final DeferredItem<Rac1PdaItem> PDA =
+            ITEMS.registerItem("pda", Rac1PdaItem::new, new Item.Properties().stacksTo(1));
+
+    public static final DeferredItem<BombGloveItem> BOMB_GLOVE =
+            ITEMS.registerItem("bomb_glove", BombGloveItem::new, new Item.Properties().stacksTo(1));
+    public static final DeferredItem<Item> BOMB_GLOVE_AMMO =
+            ITEMS.registerItem("bomb_glove_ammo", Item::new, new Item.Properties().stacksTo(64));
+
     public static final DeferredItem<Rac1WrenchItem> OMNIWRENCH =
             ITEMS.registerItem("omniwrench", Rac1WrenchItem::new, new Item.Properties());
+    public static final DeferredItem<Rac1ClankItem> CLANK =
+            ITEMS.registerItem("clank", Rac1ClankItem::new, new Item.Properties().stacksTo(1));
+    public static final DeferredItem<Item> BOLT_GRABBER =
+            ITEMS.registerItem("bolt_grabber", Rac1BeltTestItem::new, new Item.Properties().stacksTo(1));
     public static final DeferredItem<Rac1ClankPackItem> CLANK_HELI_PACK =
             ITEMS.registerItem("clank_heli_pack", properties -> new Rac1ClankPackItem(properties,
                     com.github.giannigr.racmc.clank.Rac1ClankEquipment.Module.HELI));
@@ -97,5 +113,6 @@ public final class RacMcItems {
      */
     public static void register(IEventBus modEventBus) {
         ITEMS.register(modEventBus);
+        Rac1ClankItem.register(modEventBus);
     }
 }

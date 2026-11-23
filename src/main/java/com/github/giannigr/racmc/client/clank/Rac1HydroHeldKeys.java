@@ -3,6 +3,7 @@ package com.github.giannigr.racmc.client.clank;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.neoforged.neoforge.client.settings.KeyModifier;
 import org.lwjgl.glfw.GLFW;
 
 /** Reads the current physical binding without consuming clicks or mutating vanilla toggle state. */
@@ -17,6 +18,22 @@ public final class Rac1HydroHeldKeys {
         if(!activeGameplay||!mapping.isConflictContextAndModifierActive())return false;
         var key=mapping.getKey(); // Resolve on every sample: remaps cannot leave an old key held.
         return key.getValue()>=0&&physical.down(key);
+    }
+    public enum Sample { UNAVAILABLE, UP, DOWN }
+    /** A remap is not a press, even if the newly configured key is already physically down. */
+    public static final class Sprint {
+        private InputConstants.Key key;
+        private KeyModifier modifier;
+        public Sample sample(KeyMapping mapping,boolean active) {
+            return sample(mapping,active,Rac1HydroHeldKeys::physical);
+        }
+        public Sample sample(KeyMapping mapping,boolean active,PhysicalState physical) {
+            var next=mapping.getKey();var nextModifier=mapping.getKeyModifier();
+            boolean changed=key!=null&&(!key.equals(next)||modifier!=nextModifier);
+            key=next;modifier=nextModifier;
+            if(changed||!active||key.getValue()<0||!mapping.isConflictContextAndModifierActive())return Sample.UNAVAILABLE;
+            return physical.down(key)?Sample.DOWN:Sample.UP;
+        }
     }
     private static boolean physical(InputConstants.Key key) {
         long window=Minecraft.getInstance().getWindow().getWindow();

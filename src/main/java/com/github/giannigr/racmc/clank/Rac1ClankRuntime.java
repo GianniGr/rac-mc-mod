@@ -179,6 +179,7 @@ public final class Rac1ClankRuntime {
                 cancel(c);break;
             }
             boolean landed=motion.resolved(new Vector(actual.x,actual.y,actual.z),player.onGround());
+            Rac1ClankActionAudioServer.accepted(player,c.session,step,landed);
             c.landed=landed;
             if(landed&&c.fall.active())c.fall.landingDistance(Math.max(0,player.fallDistance));
             c.proof=true;
@@ -202,6 +203,7 @@ public final class Rac1ClankRuntime {
     }
     /** Normal end of glide hands movement/debt back to vanilla without ending the airborne grace. */
     private static void cancelMotion(Control c) {
+        Rac1ClankActionAudioServer.forget(c.player.getUUID());
         if(c.fall.active())c.player.fallDistance=(float)c.fall.cancelDistance(
                 Math.max(0,c.player.fallDistance));
         c.session.motion().cancel();c.expectedDelta=null;c.proof=false;
@@ -302,7 +304,7 @@ public final class Rac1ClankRuntime {
                 :new GraceDiagnostics(c.grace.releaseTick(),c.grace.inputSerial(),c.grace.actionSerial(),
                         c.grace.covers(player.serverLevel().getGameTime()));
     }
-    static void clear(){CONTROLS.clear();}
+    static void clear(){CONTROLS.clear();Rac1ClankActionAudioServer.clear();}
     static void correct(ServerPlayer player) {
         var session=Rac1ClankServer.session(player);
         if(session.motion().action()==Action.IDLE)

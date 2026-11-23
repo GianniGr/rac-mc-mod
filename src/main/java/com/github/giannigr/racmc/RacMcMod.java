@@ -5,6 +5,7 @@ import com.github.giannigr.racmc.block.RacMcBlocks;
 import com.github.giannigr.racmc.item.RacMcCreativeTabs;
 import com.github.giannigr.racmc.item.RacMcEntities;
 import com.github.giannigr.racmc.item.RacMcItems;
+import com.github.giannigr.racmc.worldgen.StructureSupplies;
 import com.mojang.logging.LogUtils;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -44,14 +45,17 @@ public class RacMcMod {
                 modContainer.getModInfo().getVersion().toString());
         // The items of the mod are registered with the event bus of the mod.
         RacMcItems.register(modEventBus);
+        com.github.giannigr.racmc.shop.Rac1StarterClaim.register(modEventBus);
         // The blocks of the mod are registered with the same bus.
         RacMcBlocks.register(modEventBus);
         // The kinds of block entity of the mod are registered with the same bus.
         RacMcBlockEntities.register(modEventBus);
         // The kinds of entity of the mod are registered with the same bus.
         RacMcEntities.register(modEventBus);
+        com.github.giannigr.racmc.ship.Rac1Ships.register(modEventBus);
         // The tab of the creative mode of the mod is registered with the same bus.
         RacMcCreativeTabs.register(modEventBus);
+        StructureSupplies.register(modEventBus);
         com.github.giannigr.racmc.sound.Rac1Sounds.register(modEventBus);
         com.github.giannigr.racmc.item.Rac1WrenchCrateHits.install((player, pos, state) -> {
             com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(

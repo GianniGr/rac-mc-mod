@@ -21,27 +21,27 @@ class Rac1FirePolicyTest {
         Rac1FirePolicy.Outcome outcome = Rac1FirePolicy.evaluate(Rac1GameMode.CREATIVE, 0);
         assertEquals(Rac1FirePolicy.Outcome.FIRE_WITHOUT_AMMO, outcome);
         assertTrue(Rac1FirePolicy.firesShot(outcome));
-        assertFalse(Rac1FirePolicy.consumesArrow(outcome));
+        assertFalse(Rac1FirePolicy.consumesAmmo(outcome));
         assertFalse(Rac1FirePolicy.playsDryFireClick(outcome));
     }
 
     @Test
-    @DisplayName("The survival mode fires with one ordinary arrow and consumes it")
+    @DisplayName("Survival consumes one Blaster Ammo item")
     void survivalFiresWithOneArrow() {
         Rac1FirePolicy.Outcome outcome = Rac1FirePolicy.evaluate(Rac1GameMode.SURVIVAL, 3);
         assertEquals(Rac1FirePolicy.Outcome.FIRE_WITH_AMMO, outcome);
         assertTrue(Rac1FirePolicy.firesShot(outcome));
-        assertTrue(Rac1FirePolicy.consumesArrow(outcome));
+        assertTrue(Rac1FirePolicy.consumesAmmo(outcome));
         assertFalse(Rac1FirePolicy.playsDryFireClick(outcome));
     }
 
     @Test
-    @DisplayName("The adventure mode fires with one ordinary arrow and consumes it")
+    @DisplayName("Adventure consumes one Blaster Ammo item")
     void adventureFiresWithOneArrow() {
         Rac1FirePolicy.Outcome outcome = Rac1FirePolicy.evaluate(Rac1GameMode.ADVENTURE, 1);
         assertEquals(Rac1FirePolicy.Outcome.FIRE_WITH_AMMO, outcome);
         assertTrue(Rac1FirePolicy.firesShot(outcome));
-        assertTrue(Rac1FirePolicy.consumesArrow(outcome));
+        assertTrue(Rac1FirePolicy.consumesAmmo(outcome));
     }
 
     @Test
@@ -50,7 +50,7 @@ class Rac1FirePolicyTest {
         Rac1FirePolicy.Outcome outcome = Rac1FirePolicy.evaluate(Rac1GameMode.SURVIVAL, 0);
         assertEquals(Rac1FirePolicy.Outcome.DRY_FIRE, outcome);
         assertFalse(Rac1FirePolicy.firesShot(outcome));
-        assertFalse(Rac1FirePolicy.consumesArrow(outcome));
+        assertFalse(Rac1FirePolicy.consumesAmmo(outcome));
         assertTrue(Rac1FirePolicy.playsDryFireClick(outcome));
     }
 
@@ -69,7 +69,7 @@ class Rac1FirePolicyTest {
         Rac1FirePolicy.Outcome outcome = Rac1FirePolicy.evaluate(Rac1GameMode.SPECTATOR, 64);
         assertEquals(Rac1FirePolicy.Outcome.BLOCKED, outcome);
         assertFalse(Rac1FirePolicy.firesShot(outcome));
-        assertFalse(Rac1FirePolicy.consumesArrow(outcome));
+        assertFalse(Rac1FirePolicy.consumesAmmo(outcome));
         assertFalse(Rac1FirePolicy.playsDryFireClick(outcome));
     }
 
@@ -97,7 +97,7 @@ class Rac1FirePolicyTest {
                 assertEquals(Rac1FirePolicy.Outcome.BLOCKED, outcome);
                 assertTrue(Rac1FirePolicy.isBlocked(outcome));
                 assertFalse(Rac1FirePolicy.firesShot(outcome));
-                assertFalse(Rac1FirePolicy.consumesArrow(outcome));
+                assertFalse(Rac1FirePolicy.consumesAmmo(outcome));
                 assertFalse(Rac1FirePolicy.playsDryFireClick(outcome));
             }
         }

@@ -4,6 +4,10 @@ import com.github.giannigr.racmc.asset.Rac1Crates;
 import com.github.giannigr.racmc.block.*;
 import com.github.giannigr.racmc.item.*;
 import com.github.giannigr.racmc.loot.Rac1BoltLedger;
+import com.github.giannigr.racmc.sound.Rac1AudioEmittedEvent;
+import com.github.giannigr.racmc.sound.Rac1AudioEvent;
+import com.github.giannigr.racmc.sound.Rac1AudioSignal;
+import java.util.ArrayList;
 import java.util.UUID;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
@@ -52,6 +56,15 @@ public final class RangedGameTests {
                 .getList("rewarded", Tag.TAG_COMPOUND).stream()
                 .anyMatch(t -> ((CompoundTag) t).getUUID("id").equals(id));
     }
+    private static java.util.List<net.minecraft.world.entity.item.ItemEntity> ammoDrops(ServerLevel level, BlockPos pos) {
+        return level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                new AABB(pos).inflate(2), entity -> BlasterAmmo.matches(entity.getItem()));
+    }
+    private static void assertAmmoDrop(GameTestHelper h, java.util.List<net.minecraft.world.entity.item.ItemEntity> drops) {
+        h.assertTrue((drops.size() == 1 || drops.size() == 2)
+                && drops.stream().allMatch(e -> e.getItem().getCount() == 25),
+                "Accepted ammo crate must spawn one or two stacks of 25");
+    }
     private static final class Probe extends Rac1BlasterArrow {
         Probe(ServerLevel level, ServerPlayer owner) { super(RacMcEntities.BLASTER_ARROW.get(), level, owner); }
         void hit(net.minecraft.world.entity.Entity victim) { onHitEntity(new EntityHitResult(victim)); }
@@ -60,6 +73,82 @@ public final class RangedGameTests {
     private static final class BowProbe extends Arrow {
         BowProbe(ServerLevel level) { super(EntityType.ARROW, level); }
         void hit(net.minecraft.world.entity.Entity victim) { onHitEntity(new EntityHitResult(victim)); }
+    }
+
+    @GameTest(template = "empty", batch = "ranged_pickup_audio")
+    public static void nativeAmmoPickupSoundsOnlyForPositiveInventoryDelta(GameTestHelper h) {
+        var level = h.getLevel();
+        var pos = h.absolutePos(new BlockPos(4, 4, 4));
+        var player = player(level, pos);
+        var ammo = RacMcItems.BLASTER_AMMO.get();
+        var sounds = new ArrayList<Rac1AudioSignal>();
+        Consumer<Rac1AudioEmittedEvent> listener = event -> {
+            if (event.signal().event() == Rac1AudioEvent.BLASTER_AMMO_PICKUP) sounds.add(event.signal());
+        };
+        NeoForge.EVENT_BUS.addListener(listener);
+        try {
+            var pickup = new net.minecraft.world.entity.item.ItemEntity(level, pos.getX()+.5, pos.getY(),
+                    pos.getZ()+.5, new ItemStack(ammo, 25));
+            pickup.setDefaultPickUpDelay();
+            h.assertTrue(level.addFreshEntity(pickup), "Fixture spawn rejected");
+            pickup.playerTouch(player);
+            h.assertTrue(sounds.isEmpty() && BlasterAmmo.count(player) == 0, "Pickup delay emitted a cue");
+            pickup.setNoPickUpDelay();
+            Consumer<net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent.Pre> veto = event -> {
+                if (event.getItemEntity() == pickup)
+                    event.setCanPickup(net.neoforged.neoforge.common.util.TriState.FALSE);
+            };
+            NeoForge.EVENT_BUS.addListener(veto);
+            try {
+                pickup.playerTouch(player);
+                h.assertTrue(sounds.isEmpty() && BlasterAmmo.count(player) == 0, "Veto emitted or granted ammo");
+            } finally {
+                NeoForge.EVENT_BUS.unregister(veto);
+            }
+
+            var items = player.getInventory().items;
+            for (int i = 0; i < items.size(); i++) items.set(i, new ItemStack(Items.STONE, 64));
+            items.set(0, new ItemStack(ammo, 62));
+            pickup.playerTouch(player);
+            h.assertTrue(BlasterAmmo.count(player) == 64 && pickup.getItem().getCount() == 23
+                    && sounds.size() == 1, "Partial native insertion must emit exactly once for the real gain");
+            var signal = sounds.getFirst();
+            h.assertTrue(new Vec3(signal.x(), signal.y(), signal.z()).equals(pickup.position())
+                    && signal.dimension().equals(level.dimension().location()), "Cue must originate at the pickup");
+            pickup.playerTouch(player);
+            h.assertTrue(sounds.size() == 1 && pickup.getItem().getCount() == 23,
+                    "Full inventory retry emitted a cue or changed the remainder");
+            items.set(1, ItemStack.EMPTY);
+            pickup.playerTouch(player);
+            h.assertTrue(pickup.isRemoved() && BlasterAmmo.count(player) == 87 && sounds.size() == 2,
+                    "Actual later collection of the remainder must emit once");
+
+            items.set(1, new ItemStack(ammo, 63));
+            player.setGameMode(GameType.CREATIVE);
+            var creative = new net.minecraft.world.entity.item.ItemEntity(level, pos.getX(), pos.getY(), pos.getZ(),
+                    new ItemStack(ammo, 25));
+            creative.setNoPickUpDelay();
+            creative.playerTouch(player);
+            h.assertTrue(creative.isRemoved() && BlasterAmmo.count(player) == 128 && sounds.size() == 3,
+                    "Creative partial gain and discarded remainder must emit only once");
+            var discarded = new net.minecraft.world.entity.item.ItemEntity(level, pos.getX(), pos.getY(), pos.getZ(),
+                    new ItemStack(ammo));
+            discarded.setNoPickUpDelay();
+            discarded.playerTouch(player);
+            h.assertTrue(discarded.isRemoved() && BlasterAmmo.count(player) == 128 && sounds.size() == 3,
+                    "Creative full-inventory discard is not collection");
+
+            items.set(1, ItemStack.EMPTY);
+            var other = new net.minecraft.world.entity.item.ItemEntity(level, pos.getX(), pos.getY(), pos.getZ(),
+                    new ItemStack(Items.ARROW));
+            other.setNoPickUpDelay();
+            other.playerTouch(player);
+            h.assertTrue(sounds.size() == 3 && items.get(1).is(Items.ARROW),
+                    "Unrelated native pickup changed or emitted ammo cue");
+            h.succeed();
+        } finally {
+            NeoForge.EVENT_BUS.unregister(listener);
+        }
     }
     @GameTest(template = "empty", batch = "ranged_ground")
     public static void ordinaryGroundedRewardsProtectionReplacementAndVendor(GameTestHelper h) {
@@ -71,13 +160,18 @@ public final class RangedGameTests {
             h.assertTrue(level.getBlockState(pos).isAir(), "Crate remained");
             h.assertTrue(kind == 501 || paid(level, id), "Shared reward path missing");
             h.assertTrue(!RangedCrateHits.grounded(projectile, pos), "Stale collision consumed replacement");
+            var drops = ammoDrops(level, pos);
+            if (kind == 511) assertAmmoDrop(h, drops);
+            else h.assertTrue(drops.isEmpty(), "Non-ammo crate emitted ammo");
+            drops.forEach(net.minecraft.world.entity.Entity::discard);
         }
-        var denied = crate(level, pos, 500);
+        var denied = crate(level, pos, 511);
         Consumer<BlockEvent.BreakEvent> veto = e -> { if (e.getPos().equals(pos)) e.setCanceled(true); };
         NeoForge.EVENT_BUS.addListener(veto);
         try {
             h.assertTrue(!RangedCrateHits.grounded(new Probe(level, player), pos), "Protection veto bypassed");
-            h.assertTrue(!paid(level, denied.rewardId()) && level.getBlockEntity(pos) == denied, "Veto paid/removed");
+            h.assertTrue(!paid(level, denied.rewardId()) && level.getBlockEntity(pos) == denied
+                    && ammoDrops(level, pos).isEmpty(), "Veto paid/removed");
         } finally { NeoForge.EVENT_BUS.unregister(veto); }
         Consumer<BlockEvent.BreakEvent> replace = e -> {
             if (e.getPos().equals(pos)) { level.removeBlock(pos, false); crate(level, pos, 500); }
@@ -91,6 +185,7 @@ public final class RangedGameTests {
         player.setGameMode(GameType.CREATIVE);
         h.assertTrue(!RangedCrateHits.grounded(new Probe(level, player), pos), "Creative vendor destroyed");
         h.assertTrue(level.getBlockState(pos).is(RacMcBlocks.VENDOR.get()), "Vendor identity lost");
+        h.assertTrue(ammoDrops(level, pos).isEmpty(), "Vendor emitted ammo");
         h.succeed();
     }
     @GameTest(template = "empty", batch = "ranged_air")
@@ -108,6 +203,72 @@ public final class RangedGameTests {
         h.assertTrue(carrier.blockData.getUUID("BoltRewardId").equals(id), "Placement identity changed");
         h.succeed();
     }
+    @GameTest(template = "empty", batch = "ranged_ammo_reward")
+    public static void nativeMiningAndWrenchShareAmmoRewardWithProtection(GameTestHelper h) {
+        var level = h.getLevel();
+        var pos = h.absolutePos(new BlockPos(4, 3, 4));
+        var player = player(level, pos);
+        for (var tool : new Item[]{Items.IRON_PICKAXE, RacMcItems.OMNIWRENCH.get()}) {
+            player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(tool));
+            var crate = crate(level, pos, 511);
+            var id = crate.rewardId();
+            Consumer<BlockEvent.BreakEvent> veto = event -> {
+                if (event.getPos().equals(pos)) event.setCanceled(true);
+            };
+            NeoForge.EVENT_BUS.addListener(veto);
+            try {
+                h.assertTrue(!player.gameMode.destroyBlock(pos) && !paid(level, id)
+                        && ammoDrops(level, pos).isEmpty(), "Native protection veto paid ammo");
+            } finally {
+                NeoForge.EVENT_BUS.unregister(veto);
+            }
+            player.gameMode.destroyBlock(pos);
+            h.assertTrue(level.getBlockState(pos).isAir() && paid(level, id), "Native tool missed shared transaction");
+            var drops = ammoDrops(level, pos);
+            assertAmmoDrop(h, drops);
+            drops.forEach(net.minecraft.world.entity.Entity::discard);
+        }
+        h.succeed();
+    }
+
+    @GameTest(template = "empty", batch = "ranged_ammo_reward")
+    public static void ammoCrateDeduplicatesGroundAndAirByIncarnationAndUsesVanillaPickup(GameTestHelper h) {
+        var level = h.getLevel();
+        var pos = h.absolutePos(new BlockPos(4, 5, 4));
+        var player = player(level, pos);
+        var crate = crate(level, pos, 511);
+        var state = crate.getBlockState();
+        var data = crate.saveWithoutMetadata(level.registryAccess());
+        var originalId = crate.rewardId();
+        var carrier = FallingBlockEntity.fall(level, pos, state);
+        carrier.blockData = data.copy();
+        h.assertTrue(ammoDrops(level, pos).isEmpty() && !paid(level, originalId), "Transfer awarded ammo");
+        h.assertTrue(RangedCrateHits.airborne(new Probe(level, player), carrier), "Airborne ammo crate not destroyed");
+        var drops = ammoDrops(level, pos);
+        assertAmmoDrop(h, drops);
+        h.assertTrue(paid(level, originalId), "Missing shared reward tombstone");
+
+        // A stale copy of pre-destruction data must not award twice, even across representations.
+        var stale = crate(level, pos, 511);
+        stale.loadWithComponents(data, level.registryAccess());
+        h.assertTrue(stale.rewardId().equals(originalId), "Fixture did not restore the same incarnation");
+        com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(level, pos, state, player);
+        h.assertTrue(new java.util.HashSet<>(ammoDrops(level, pos)).equals(new java.util.HashSet<>(drops)),
+                "Ground/air duplicate paid ammo twice");
+
+        for (int slot = 1; slot <= 4; slot++)
+            player.getInventory().items.set(slot, new ItemStack(RacMcItems.BLASTER_AMMO.get(), 64));
+        int before = BlasterAmmo.count(player);
+        int awarded = drops.size() * 25;
+        for (var drop : drops) {
+            drop.setNoPickUpDelay();
+            drop.playerTouch(player);
+        }
+        h.assertTrue(ammoDrops(level, pos).isEmpty() && BlasterAmmo.count(player) == before + awarded,
+                "Vanilla pickup incorrectly applied the shop cap");
+        h.succeed();
+    }
+
     @GameTest(template = "empty", batch = "ranged_fuse")
     public static void groundedAndAirborneExplosiveIdleLongShortTerminalAndTransfer(GameTestHelper h) {
         var level = h.getLevel(); var pos = h.absolutePos(new BlockPos(4, 5, 4)); var player = player(level, pos);
@@ -192,8 +353,8 @@ public final class RangedGameTests {
     public static void realAcceptedDuplicateVetoAndObstructedShotsHaveAtomicAmmo(GameTestHelper h) {
         var level = h.getLevel(); var pos = h.absolutePos(new BlockPos(4, 3, 4));
         var player = player(level, pos);
-        player.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.ARROW, 2));
-        player.getInventory().items.set(1, new ItemStack(Items.ARROW, 3));
+        player.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(RacMcItems.BLASTER_AMMO.get(), 2));
+        player.getInventory().items.set(1, new ItemStack(RacMcItems.BLASTER_AMMO.get(), 3));
         h.assertTrue(Rac1BlasterServer.fireFirstShot(level, player), "Initial immediate shot rejected");
         h.assertTrue(player.getOffhandItem().getCount() == 1 && player.getInventory().items.get(1).getCount() == 3,
                 "Offhand-first payment changed");
@@ -201,32 +362,71 @@ public final class RangedGameTests {
         h.assertTrue(BlasterAmmo.count(player) == 4, "Duplicate input charged ammunition");
 
         var denied = player(level, pos);
-        denied.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.ARROW));
+        denied.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(RacMcItems.BLASTER_AMMO.get()));
         Consumer<net.neoforged.neoforge.event.entity.EntityJoinLevelEvent> veto = e -> {
             if (e.getEntity() instanceof Rac1BlasterArrow arrow && arrow.getOwner() == denied) e.setCanceled(true);
         };
         NeoForge.EVENT_BUS.addListener(veto);
         try {
             h.assertTrue(!Rac1BlasterServer.fireFirstShot(level, denied), "Spawn veto ignored");
-            h.assertTrue(denied.getOffhandItem().is(Items.ARROW) && denied.getOffhandItem().getCount() == 1,
+            h.assertTrue(BlasterAmmo.matches(denied.getOffhandItem()) && denied.getOffhandItem().getCount() == 1,
                     "Failed admission did not restore original ammo slot");
         } finally { NeoForge.EVENT_BUS.unregister(veto); }
 
         var blocked = player(level, pos);
-        blocked.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.ARROW));
+        blocked.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(RacMcItems.BLASTER_AMMO.get()));
         var muzzle = Rac1BlasterGrip.muzzle(RangedPlayerPose.of(blocked, 1, RangedSkin.server(blocked)));
         level.setBlock(BlockPos.containing(muzzle.x(), muzzle.y(), muzzle.z()), Blocks.STONE.defaultBlockState(), 3);
         h.assertTrue(!Rac1BlasterServer.fireFirstShot(level, blocked), "Obstruction allowed shot relocation");
         h.assertTrue(blocked.getOffhandItem().getCount() == 1, "Obstruction consumed ammo");
         h.succeed();
     }
+    @GameTest(template = "empty", batch = "ranged_ammo_identity")
+    public static void registeredAmmoIsUncappedAndOnlyDedicatedAmmoPays(GameTestHelper h) {
+        var level = h.getLevel();
+        var pos = h.absolutePos(new BlockPos(4, 4, 4));
+        var ammo = RacMcItems.BLASTER_AMMO.get();
+        var player = player(level, pos);
+        var bowAmmo = new ItemStack(Items.ARROW, 8);
+        player.setItemInHand(InteractionHand.OFF_HAND, bowAmmo);
+        player.getInventory().items.set(1, new ItemStack(Items.SPECTRAL_ARROW));
+        player.getInventory().items.set(2, new ItemStack(Items.TIPPED_ARROW));
+        h.assertTrue(BlasterAmmo.count(player) == 0 && !Rac1BlasterServer.fireFirstShot(level, player),
+                "Vanilla arrows must not be eligible");
+        h.assertTrue(bowAmmo.getCount() == 8 && player.getInventory().items.get(1).getCount() == 1
+                && player.getInventory().items.get(2).getCount() == 1, "Vanilla ammunition changed");
+
+        var adventure = player(level, pos);
+        adventure.setGameMode(GameType.ADVENTURE);
+        adventure.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.ARROW, 2));
+        adventure.getInventory().items.set(1, new ItemStack(ammo, 2));
+        h.assertTrue(Rac1BlasterServer.fireFirstShot(level, adventure) && BlasterAmmo.count(adventure) == 1
+                && adventure.getOffhandItem().getCount() == 2, "Adventure inventory payment changed");
+        RangedFireSessions.reject(adventure);
+
+        var creative = player(level, pos);
+        creative.setGameMode(GameType.CREATIVE);
+        h.assertTrue(Rac1BlasterServer.fireFirstShot(level, creative) && BlasterAmmo.count(creative) == 0,
+                "Creative did not fire free without ammunition");
+        RangedFireSessions.reject(creative);
+
+        var count = player(level, pos);
+        count.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ammo, 64));
+        count.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(ammo, 64));
+        count.getInventory().items.set(1, new ItemStack(ammo, 64));
+        count.getInventory().items.set(9, new ItemStack(ammo, 64));
+        h.assertTrue(new ItemStack(ammo).getMaxStackSize() == 64 && BlasterAmmo.count(count) == 256,
+                "Count must include both hands and inventory without a shop cap or duplicate main-hand count");
+        h.succeed();
+    }
+
     @GameTest(template = "empty", batch = "ranged_left_source")
-    public static void actualLeftShotUsesUprightPinnedSourceFrameAndPaysExactlyOneArrow(GameTestHelper h) {
+    public static void actualLeftShotUsesUprightPinnedSourceFrameAndPaysExactlyOneAmmo(GameTestHelper h) {
         var level = h.getLevel(); var pos = h.absolutePos(new BlockPos(4, 4, 4));
         var player = player(level, pos);
         player.setMainArm(net.minecraft.world.entity.HumanoidArm.LEFT);
         player.yBodyRot = player.yBodyRotO = player.yHeadRot = player.yHeadRotO = 0;
-        player.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.ARROW));
+        player.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(RacMcItems.BLASTER_AMMO.get()));
         boolean slim = Math.floorMod(player.getUUID().hashCode(), 18) < 9; // pinned UUID fallback
         double xRot = -(float) (Math.PI / 2) - net.minecraft.util.Mth.sin(.067f) * .05f;
         double zRot = -(net.minecraft.util.Mth.cos(.09f) * .05f + .05f);

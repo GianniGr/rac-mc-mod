@@ -58,13 +58,26 @@ public final class Rac1LevelAssets {
 
         byte[] indexBytes = image.readBytes(container.base() + container.coreIndexOffset(),
                 container.coreIndexSize());
+        return load(image, level, container, indexBytes, true);
+    }
+
+    /** Reads class blobs for sound remaps without reading the graphics-memory region. */
+    public static Rac1LevelAssets loadCore(Rac1DiscImage image, int level,
+            Rac1LevelData container, byte[] indexBytes)
+            throws IOException, DiscFormatException, WadFormatException {
+        return load(image, level, container, indexBytes, false);
+    }
+
+    private static Rac1LevelAssets load(Rac1DiscImage image, int level,
+            Rac1LevelData container, byte[] indexBytes, boolean graphics)
+            throws IOException, DiscFormatException, WadFormatException {
         Rac1CoreIndex coreIndex = Rac1CoreIndex.parse(indexBytes);
 
         byte[] compressed = image.readBytes(container.base() + container.coreDataOffset(),
                 container.coreDataSize());
         byte[] coreData = WadDecoder.decode(compressed, coreIndex.decompressedSize());
 
-        byte[] gsRam = container.gsRamSize() > 0
+        byte[] gsRam = graphics && container.gsRamSize() > 0
                 ? image.readBytes(container.base() + container.gsRamOffset(), container.gsRamSize())
                 : new byte[0];
 

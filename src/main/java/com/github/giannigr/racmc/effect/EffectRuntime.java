@@ -7,7 +7,7 @@ import static com.github.giannigr.racmc.effect.EffectSignal.Point;
 /** Pure bounded fixed-update visual pool. No world/entity references or gameplay callbacks.
  * Caller owns authoritative anchors and calls clear on world/catalog replacement. */
 public final class EffectRuntime {
-    public enum Program { DUST13, SPARK27, SMOKE23_END, FLASH112, OWNER_SPRITE, TRAIL62, OWNER_MESH }
+    public enum Program { DUST13, SPARK27, SMOKE23_END, FLASH112, OWNER_SPRITE, TRAIL62, OWNER_MESH, FLASH1192 }
     public enum Geometry { BILLBOARD, MESH }
     public record Spawn(UUID owner, EffectAssetRef asset, Geometry geometry, Program program,
                         Point position, Point velocity, float size, float growth, Point rotation,
@@ -46,8 +46,9 @@ public final class EffectRuntime {
             this.handle = handle;
             this.spec = spec;
             position = previous = spec.position();
-            size = previousSize = spec.program() == Program.FLASH112
-                    ? spec.size() * spec.fadeIn() / spec.lifetime() : spec.size();
+            size = previousSize = spec.program() == Program.FLASH1192 ? 0
+                    : spec.program() == Program.FLASH112 ? spec.size() * spec.fadeIn() / spec.lifetime()
+                    : spec.size();
             rotation = previousRotation = spec.rotation();
             alpha = spec.originalColour() >>> 24;
             colour = spec.originalColour();
@@ -142,7 +143,7 @@ public final class EffectRuntime {
                     continue;
                 }
             }
-            value.rotation = spec.program() == Program.FLASH112
+            value.rotation = (spec.program() == Program.FLASH112 || spec.program() == Program.FLASH1192)
                     ? value.rotation.add(spec.spin(), spec.spin(), spec.spin())
                     : value.rotation.add(0, 0, spec.spin());
             int startAlpha = spec.originalColour() >>> 24;
@@ -162,6 +163,12 @@ public final class EffectRuntime {
                     value.size = spec.size() * (value.age + spec.fadeIn()) / spec.lifetime();
                     value.alpha = Math.min(startAlpha, startAlpha * 2
                             * (spec.lifetime() - spec.fadeIn() - value.age) / spec.lifetime());
+                }
+                case FLASH1192 -> {
+                    int half = spec.lifetime() / 2;
+                    int left = spec.lifetime() - value.age;
+                    value.size = spec.size() * value.age / spec.lifetime();
+                    value.alpha = half > 0 && left < half ? startAlpha * left / half : startAlpha;
                 }
                 case OWNER_SPRITE, OWNER_MESH -> { }
                 case TRAIL62 -> value.alpha = startAlpha - value.age * spec.fadeIn();

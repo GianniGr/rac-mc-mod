@@ -1,0 +1,8 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.github.giannigr.racmc.loot.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["BlasterAmmoPickupMixin"],
+  "injectors": { "defaultRequire": 1 }
+}

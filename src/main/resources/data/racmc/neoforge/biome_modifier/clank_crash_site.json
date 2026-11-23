@@ -1,0 +1,6 @@
+{
+  "type": "neoforge:add_features",
+  "biomes": "#racmc:clank_crash_site",
+  "features": "racmc:clank_crash_site",
+  "step": "top_layer_modification"
+}

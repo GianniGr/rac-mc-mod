@@ -11,7 +11,7 @@ class Rac1HydroContractTest {
         var path=java.nio.file.Path.of(System.getProperty("racmc.projectDir"),
                 "src/main/java/com/github/giannigr/racmc/client/clank/Rac1HydroClient.java");
         String code=java.nio.file.Files.readString(path);
-        assertTrue(code.contains("Rac1HydroHeldKeys.down(minecraft.options.keySprint,active)"));
+        assertTrue(code.contains("SPRINT.sample(minecraft.options.keySprint,"));
         assertTrue(code.contains("Rac1HydroHeldKeys.down(minecraft.options.keyJump,active)"));
         assertTrue(code.contains("Rac1HydroHeldKeys.down(minecraft.options.keyShift,active)"));
         assertTrue(code.contains("minecraft.isWindowActive()"));
@@ -35,21 +35,40 @@ class Rac1HydroContractTest {
         assertEquals(Rac1HydroWater.Mode.WADING,Rac1HydroWater.classify(true,false,true,false,.3,.5));
         assertEquals(Rac1HydroWater.Mode.SUBMERGED,Rac1HydroWater.classify(true,true,false,true,2,0));
     }
-    @Test void source60RampWithoutForwardAndLinearReleaseBraking() {
-        var m=new Rac1HydroMotion();var thrust=input(true,false,false,0,0,0);
+    @Test void armedForwardRampsAndWReleaseBrakesToZeroInThreeTicks() {
+        var m=new Rac1HydroMotion();
+        var thrust=Rac1HydroBoost.ARMED_UP.drive(keys(false,1));
+        var idle=Rac1HydroBoost.ARMED_UP.drive(keys(false,0));
+        assertFalse(m.step(idle,Vector.ZERO,false,false).controlled(),"Armed idle must stay native");
         for(int i=0;i<33;i++)step(m,thrust);
         assertEquals(7,m.velocity().z(),1e-9);assertEquals(0,m.velocity().y(),1e-9);
-        step(m,Rac1HydroMotion.Input.RELEASED);
+        step(m,idle);
         assertEquals(Rac1HydroMotion.Stage.DRIFT,m.state().stage());
-        assertEquals(7-8.0/60,m.velocity().length(),1e-9);
-        for(int i=0;i<60;i++)step(m,Rac1HydroMotion.Input.RELEASED);
+        assertEquals(6.2,m.velocity().length(),1e-9);
+        double travel=m.velocity().length()/60;
+        for(int i=1;i<9;i++){step(m,idle);travel+=m.velocity().length()/60;}
+        assertEquals(0,m.velocity().length(),1e-9);
+        assertTrue(travel<.5);
+        step(m,idle);
         assertFalse(m.controlled());
+        step(m,thrust);
+        assertEquals(Rac1HydroMotion.Stage.THRUST,m.state().stage());
     }
-    @Test void source60StrokeThresholdStrictlyGreaterThan20() {
+    @Test void freshToggleAcceptsWWhileAlreadyMovingNatively() {
         var m=new Rac1HydroMotion();var swim=input(true,false,false,0,1,0);
-        for(int i=1;i<=20;i++)assertFalse(m.step(swim,new Vector(0,0,1),false,false).controlled(),"step "+i);
         var admitted=m.step(swim,new Vector(0,0,1),false,false);
         assertTrue(admitted.controlled());m.resolved(admitted.displacement());
+    }
+    @Test void noWJumpOrSneakWhileBrakingNeverAddsNewHorizontalDrive() {
+        for(boolean rise:new boolean[]{true,false}) {
+            var m=new Rac1HydroMotion();
+            for(int i=0;i<33;i++)step(m,input(true,false,false,0,1,30));
+            var vertical=Rac1HydroBoost.ARMED_UP.drive(new Rac1HydroBoost.Controls(true,false,rise,!rise,1,0,0));
+            for(int i=0;i<45;i++)step(m,vertical);
+            assertEquals(Rac1HydroMotion.Stage.DRIFT,m.state().stage());
+            assertEquals(0,Math.hypot(m.velocity().x(),m.velocity().z()),1e-9);
+            assertTrue((rise?1:-1)*m.velocity().y()>1);
+        }
     }
     @Test void riseWinsDiveAndSteeringTurnsRatherThanReverses() {
         var m=new Rac1HydroMotion();
@@ -65,20 +84,29 @@ class Rac1HydroContractTest {
         assertThrows(IllegalStateException.class,m::state);
         m.resolved(new Vector(.001,0,0));
         step(m,Rac1HydroMotion.Input.RELEASED);
+        assertEquals(Vector.ZERO,m.velocity()); // The final zero move clears the published native velocity.
+        step(m,Rac1HydroMotion.Input.RELEASED);
         assertFalse(m.controlled()); // .06 units/s brakes below zero, no requested forward residue.
         assertEquals(0,m.velocity().z(),1e-9);
     }
     @Test void freshSerialOnlyAndRateLimitedReplayCannotStartThrust() {
-        var stream=new Rac1HydroWire.Stream(9);var held=input(true,false,false,0,0,0);
+        var stream=new Rac1HydroWire.Stream(9);var held=keys(true,1);var up=keys(false,1);
         assertFalse(stream.offer(new Rac1HydroWire.Input(8,0,held),1));
         assertTrue(stream.offer(new Rac1HydroWire.Input(9,0,held),1));
-        assertTrue(stream.consume(2).thrust());assertTrue(stream.consume(2).thrust());
-        assertFalse(stream.consume(3).thrust());
+        assertEquals(java.util.List.of(held),stream.consume(2));assertEquals(java.util.List.of(held),stream.consume(2));
+        assertTrue(stream.consume(3).isEmpty());
         assertFalse(stream.offer(new Rac1HydroWire.Input(9,0,held),3));
-        assertTrue(stream.offer(new Rac1HydroWire.Input(9,1,held),3));
+        assertTrue(stream.offer(new Rac1HydroWire.Input(9,1,up),3));
         assertTrue(stream.offer(new Rac1HydroWire.Input(9,2,held),3));
         assertFalse(stream.offer(new Rac1HydroWire.Input(9,3,held),3));
         assertFalse(stream.offer(new Rac1HydroWire.Input(9,3,held),4));
+        var boost=Rac1HydroBoost.BLOCKED;
+        for(var keys:stream.consume(4))boost=boost.sample(keys,true);
+        assertEquals(Rac1HydroBoost.ARMED_DOWN,boost,"Both coalesced physical edges must arrive");
+        assertTrue(stream.live(7));assertFalse(stream.live(8));
+    }
+    private static Rac1HydroBoost.Controls keys(boolean down,double forward) {
+        return new Rac1HydroBoost.Controls(true,down,false,false,0,forward,0);
     }
     @Test void visualLifecycleIsIndependentFromThrustAndRestoresAfterFoldGap() {
         var v=new Rac1HydroVisual();v.target(true);
@@ -95,9 +123,9 @@ class Rac1HydroContractTest {
         var m=new Rac1HydroMotion();step(m,input(true,false,true,0,0,0));
         var s=new Rac1HydroWire.Snapshot(UUID.randomUUID(),1,2,3,0,true,true,true,
                 Rac1ClankEquipment.Module.THRUSTER,Rac1HydroWater.Mode.SUBMERGED,
-                Rac1HydroVisual.Phase.UNFOLD,2,new Vector(1,2,3),m.state());
+                Rac1HydroVisual.Phase.UNFOLD,2,new Vector(1,2,3),m.state(),Rac1HydroBoost.ARMED_UP);
         assertEquals(s,Rac1HydroWire.snapshot(Rac1HydroWire.encode(s)));
-        var i=new Rac1HydroWire.Input(1,2,input(true,true,false,1,1,360));
+        var i=new Rac1HydroWire.Input(1,2,new Rac1HydroBoost.Controls(true,true,true,false,1,1,360));
         assertEquals(i,Rac1HydroWire.input(Rac1HydroWire.encode(i)));
         assertThrows(IOException.class,()->Rac1HydroWire.input(new byte[42]));
         assertThrows(IOException.class,()->Rac1HydroWire.snapshot(new byte[257]));

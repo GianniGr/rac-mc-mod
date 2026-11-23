@@ -5,9 +5,9 @@ import java.nio.file.*;
 import java.util.EnumMap;
 import java.util.Optional;
 
-/** Independent RACS sidecar, schema/converter 3 (adds168/local1); never changes RACM. */
+/** Independent RACS sidecar; P43's physical fourteen-entry profile uses v5, never overwrites v4/RACM. */
 public final class Rac1SoundCache {
-    public static final int VERSION = 3;
+    public static final int VERSION = 5;
     private static final int MAX_FILE = 64 * 1024 * 1024;
     private final Path root;
     public Rac1SoundCache(Path root) { this.root = root.toAbsolutePath().normalize(); }
@@ -42,10 +42,13 @@ public final class Rac1SoundCache {
         var bytes = new ByteArrayOutputStream();
         try (var out = new DataOutputStream(bytes)) {
             out.writeInt(0x52414353); out.writeInt(VERSION); out.writeUTF(hash);
-            out.writeInt(catalog.clips().size());
-            for (var event : Rac1AudioEvent.values()) {
-                var clip = catalog.clips().get(event);
-                if (clip == null) continue;
+            var clips = catalog.clips();
+            if (!clips.keySet().equals(java.util.Set.copyOf(Rac1AudioEvent.IMPORTED))) {
+                throw new IOException("Incomplete or nonphysical sound catalog");
+            }
+            out.writeInt(clips.size());
+            for (var event : Rac1AudioEvent.IMPORTED) {
+                var clip = clips.get(event);
                 out.writeUTF(event.id()); out.writeFloat(clip.rate());
                 out.write(clip.definition()); out.write(clip.cue()); out.write(clip.grain());
                 out.writeUTF(clip.bankHash()); out.writeUTF(clip.adpcmHash()); out.writeInt(clip.cueId());
@@ -67,11 +70,11 @@ public final class Rac1SoundCache {
                 throw new IOException("Sound sidecar identity/version mismatch");
             }
             int count = in.readInt();
-            if (count != Rac1AudioEvent.values().length) throw new IOException("Incomplete sound catalog");
+            if (count != Rac1AudioEvent.IMPORTED.size()) throw new IOException("Incomplete sound catalog");
             var clips = new EnumMap<Rac1AudioEvent, Rac1AudioCatalog.Clip>(Rac1AudioEvent.class);
             for (int n = 0; n < count; n++) {
                 String id = in.readUTF();
-                var event = java.util.Arrays.stream(Rac1AudioEvent.values()).filter(e -> e.id().equals(id))
+                var event = Rac1AudioEvent.IMPORTED.stream().filter(e -> e.id().equals(id))
                         .findFirst().orElseThrow(() -> new IOException("Unknown semantic sound"));
                 float rate = in.readFloat();
                 byte[] definition = in.readNBytes(32), cue = in.readNBytes(12), grain = in.readNBytes(40);

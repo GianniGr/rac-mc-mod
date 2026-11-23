@@ -69,6 +69,7 @@ public final class WrenchOriginalClock {
             double velocity = previousVelocity + (verticalBlocksPerTick - previousVelocity) * fraction;
             double height = previousClearance + (clearance - previousClearance) * fraction;
             boolean sampleActive = false, sampleBody = false, sampleRelease = false;
+            boolean sampleSlamImpact = false;
             updates++;
             double previous = timeline.keyTime(seconds);
             if (!slam && prepareCatch && !caught) {
@@ -106,6 +107,7 @@ public final class WrenchOriginalClock {
                             + (seconds - timeline.indexSeconds(21));
                 }
                 if (slam) {
+                    sampleSlamImpact = crossesSlamImpact(previous, key);
                     sampleActive = updates > 13 && previous <= 28 && key >= 1;
                     sampleBody = key > 23.5 && velocity < 0 && !onGround;
                     active |= sampleActive;
@@ -115,7 +117,8 @@ public final class WrenchOriginalClock {
             boolean done = slam ? (onGround || phase == Phase.RECOVERY)
                     && timeline.keyTime(seconds) >= 30
                     : caught && seconds >= timeline.lastSeconds() - 1.0e-5;
-            sampled.add(result(sampleRelease, sampleActive, sampleBody, done, onGround));
+            sampled.add(result(sampleRelease, sampleActive, sampleBody, done, onGround,
+                    sampleSlamImpact));
         }
         samples = java.util.List.copyOf(sampled);
         previousGrounded = grounded;
@@ -125,21 +128,27 @@ public final class WrenchOriginalClock {
         boolean finished = slam ? (grounded || phase == Phase.RECOVERY)
                 && timeline.keyTime(seconds) >= 30
                 : caught && seconds >= timeline.lastSeconds() - 1.0e-5;
-        last = result(release, active, bodyContact, finished, grounded);
+        // Impact is intentionally substep-only: its position comes from that exact pose.
+        last = result(release, active, bodyContact, finished, grounded, false);
         return last;
     }
 
     private Result result(boolean release, boolean active, boolean bodyContact, boolean finished) {
-        return result(release, active, bodyContact, finished, false);
+        return result(release, active, bodyContact, finished, false, false);
     }
 
     private Result result(boolean release, boolean active, boolean bodyContact, boolean finished,
-            boolean grounded) {
+            boolean grounded, boolean slamImpact) {
         return new Result(new WrenchActionState.ClipFrame(seconds, childSeconds,
                 Math.min(1, updates / (slam ? 11.0 : 10)),
                 slam ? Math.min(1, updates / 13.0) : launchUpdate < 0 ? 1
                         : Math.min(1, (updates - launchUpdate) / 5.0), release,
-                slam && updates > 14, finished), active, bodyContact, grounded);
+                slam && updates > 14, finished, slamImpact), active, bodyContact, grounded);
+    }
+
+    static boolean crossesSlamImpact(double previousKey, double nextKey) {
+        // Retail's window is [end - delta, end): key 27 must be strictly below end.
+        return previousKey <= 27 && nextKey > 27;
     }
 
     public Result initial() { return last; }

@@ -58,7 +58,7 @@ class Rac1SoundPipelineTest {
     }
     static Rac1AudioCatalog catalog() {
         var clips = new EnumMap<Rac1AudioEvent, Rac1AudioCatalog.Clip>(Rac1AudioEvent.class);
-        for (var event : Rac1AudioEvent.values()) {
+        for (var event : Rac1AudioEvent.IMPORTED) {
             byte[] definition = new byte[32], cue = new byte[12], grain = new byte[40];
             SoundBytes.view(definition).putInt(12, 1024); cue[0] = 127; grain[9] = 127;
             clips.put(event, new Rac1AudioCatalog.Clip(new byte[56], 22050, definition, cue, grain,
@@ -69,10 +69,17 @@ class Rac1SoundPipelineTest {
     @Test void sidecarRoundTripIdentityCorruptionAndAtomicStorage() throws Exception {
         var store = new Rac1SoundCache(directory);
         String source = "a".repeat(40);
+        // The previous converter's catalog must not be reused or overwritten.
+        var previous = directory.resolve("sound-" + source + "-v3.racs");
+        Files.write(previous, new byte[]{3});
         assertTrue(store.read(source).isEmpty());
         store.write(source, catalog());
-        assertEquals(Rac1AudioEvent.values().length, store.read(source).orElseThrow().clips().size());
-        try (var files = Files.list(directory)) { assertEquals(1, files.count()); }
+        var imported = store.read(source).orElseThrow();
+        assertEquals(14, imported.clips().size()); // Same physical entries as v5 before the semantic alias.
+        assertSame(imported.clip(Rac1AudioEvent.BLASTER_AMMO_PICKUP),
+                imported.clip(Rac1AudioEvent.BOMB_GLOVE_AMMO_PICKUP));
+        assertArrayEquals(new byte[]{3}, Files.readAllBytes(previous));
+        try (var files = Files.list(directory)) { assertEquals(2, files.count()); }
         assertTrue(store.read("b".repeat(40)).isEmpty());
         byte[] bytes = Rac1SoundCache.encode(source, catalog());
         assertThrows(IOException.class, () -> Rac1SoundCache.decode(bytes, "b".repeat(40)));
@@ -107,6 +114,17 @@ class Rac1SoundPipelineTest {
         assertEquals(1, Rac1AudioEvent.NANOTECH_FIRST_ARRIVAL.slot());
         assertNotEquals(Rac1AudioEvent.HEALTH_CRATE_BREAK, Rac1AudioEvent.NANOTECH_FIRST_ARRIVAL);
         assertFalse(Rac1AudioEvent.NANOTECH_FIRST_ARRIVAL.bolt());
+        var pickup = Rac1AudioEvent.BLASTER_AMMO_PICKUP;
+        assertEquals(213, pickup.classId());
+        assertEquals(0, pickup.slot());
+        assertEquals("blaster.ammo.pickup", pickup.id());
+        assertNull(Rac1AudioEvent.crateBreak(pickup.classId()));
+        var bombPickup = Rac1AudioEvent.BOMB_GLOVE_AMMO_PICKUP;
+        assertEquals(213, bombPickup.classId());
+        assertEquals(0, bombPickup.slot());
+        assertEquals(pickup, bombPickup.sampleSource());
+        assertTrue(bombPickup.ammoPickup());
+        assertNotEquals(pickup.id(), bombPickup.id());
         for (var event : Rac1AudioEvent.values()) assertEquals(1, event.level());
     }
     @Test void beepThresholdsAreDiscreteNoDuplicateTickOrTerminalPlayback() {

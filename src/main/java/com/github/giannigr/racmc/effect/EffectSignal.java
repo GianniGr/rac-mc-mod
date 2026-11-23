@@ -7,7 +7,7 @@ import java.util.UUID;
 public record EffectSignal(Semantic semantic, String dimension, UUID lifecycle, long sequence,
                            long serverTick, long seed, Op op, Point anchor, Impact impact) {
     public enum Semantic { CRATE_TNT_BLAST, BLASTER_SHOT, BLASTER_IMPACT, BLASTER_END,
-        CRATE_BREAK_WOOD, CRATE_BREAK_HEALTH }
+        CRATE_BREAK_WOOD, CRATE_BREAK_HEALTH, BOMB_GLOVE_DRY_BURST }
     public enum Op { START, STOP }
     public record Impact(Point tangent, Point normal) {
         public Impact {
@@ -39,6 +39,7 @@ public record EffectSignal(Semantic semantic, String dimension, UUID lifecycle, 
         if (semantic == null || dimension == null || !dimension.matches("[a-z0-9_.-]+:[a-z0-9/._-]+")
                 || dimension.length() > 128 || lifecycle == null || sequence < 0 || serverTick < 0
                 || op == null || anchor == null
+                || (semantic == Semantic.BOMB_GLOVE_DRY_BURST && (op != Op.START || sequence != 0))
                 || ((semantic == Semantic.BLASTER_IMPACT && op == Op.START) != (impact != null)))
             throw new IllegalArgumentException("Invalid effect signal");
     }

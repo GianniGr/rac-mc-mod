@@ -22,6 +22,58 @@ import java.util.List;
  */
 public final class MobyClassReader {
 
+    /** Raw PS2 material state, including signed untextured/environment selectors. */
+    public record PacketMaterial(int textureSelector, long tex1, long clamp) {}
+
+    /** Source packet identity; metal packets have no normal multiplier stream. */
+    public record PacketMetadata(int packetIndex, boolean metal, int vertexCount,
+                                 byte[] normalMultipliers, List<PacketMaterial> materials) {
+        public PacketMetadata {
+            normalMultipliers = normalMultipliers.clone();
+            materials = List.copyOf(materials);
+        }
+        @Override public byte[] normalMultipliers() { return normalMultipliers.clone(); }
+    }
+
+    /** Raw source words only, not inferred lighting, Minecraft colors or shader behavior. */
+    public record ClassMaterialMetadata(int glowRgba, int mode44, int mode47,
+                                        List<PacketMetadata> packets) {
+        public ClassMaterialMetadata { packets = List.copyOf(packets); }
+    }
+
+    /** Packed metal vertex; count0/1 ignores raw weights, count2/3 uses direct joints and /256. */
+    public record MetalVertex(short x, short y, short z, int normalAzimuth, int normalElevation,
+                              int count, byte[] jointIndices, byte[] weightBytes) {
+        public MetalVertex {
+            if (normalAzimuth < 0 || normalAzimuth > 255 || normalElevation < 0 || normalElevation > 255
+                    || count < 0 || count > 3 || jointIndices.length != 3 || weightBytes.length != 3)
+                throw new IllegalArgumentException("Invalid raw metal vertex");
+            jointIndices = jointIndices.clone(); weightBytes = weightBytes.clone();
+            int sum = 0;
+            for (int i = 0; i < count; i++) sum += weightBytes[i] & 255;
+            if (count >= 2 && sum != 256) throw new IllegalArgumentException("Invalid raw metal weights");
+        }
+        @Override public byte[] jointIndices() { return jointIndices.clone(); }
+        @Override public byte[] weightBytes() { return weightBytes.clone(); }
+    }
+
+    /** Zero-based packet-local corner and original AD-GIF identity, including cross-packet carry. */
+    public record MetalCorner(int vertex, boolean noKick, int materialPacket, int materialBlock) {
+        public MetalCorner {
+            if (vertex < 0 || materialPacket < 0 || materialPacket > 764 || materialBlock < 0 || materialBlock > 63)
+                throw new IllegalArgumentException("Invalid raw metal corner");
+        }
+    }
+
+    /** Raw draw-corner stream without its three pipeline-tail corners; no triangle repair or UVs. */
+    public record MetalPacket(int packetIndex, List<MetalVertex> vertices, List<MetalCorner> corners) {
+        public MetalPacket {
+            if (packetIndex < 0 || packetIndex > 764 || vertices.size() > 255 || corners.size() > 1017)
+                throw new IllegalArgumentException("Invalid raw metal packet");
+            vertices = List.copyOf(vertices); corners = List.copyOf(corners);
+        }
+    }
+
     /** The size of the header of a class in bytes. */
     public static final int HEADER_SIZE = 0x48;
 
@@ -427,6 +479,179 @@ public final class MobyClassReader {
         }
         return new Mesh(toArray(positions), toArray(normals), toArray(uvs), indices,
                 toInts(materials), toInts(joints), toArray(weights));
+    }
+
+    /**
+     * Reads high-LOD normal and separately indexed metal packet metadata without decoding geometry.
+     * Missing per-packet material unpacks are represented by an empty list (source state carry);
+     * multiplier bytes are never fabricated. Low-LOD payloads are not decoded.
+     *
+     * @throws AssetFormatException for malformed or unsupported packet metadata layouts
+     */
+    public ClassMaterialMetadata readMaterialMetadata() throws AssetFormatException {
+        int total = highLodCount + lowLodCount + metalCount;
+        if (packetTable <= 0 || total == 0) {
+            throw new AssetFormatException("The moby class has no material packet table.");
+        }
+        metadataRange(packetTable, (long) total * PACKET_ENTRY_SIZE);
+        if (metalCount > 0 && (metalBegin < highLodCount || metalBegin + metalCount > total)) {
+            throw new AssetFormatException("The metal metadata packet range overlaps or exceeds the packet table.");
+        }
+        List<PacketMetadata> packets = new ArrayList<>();
+        for (int p = 0; p < highLodCount; p++) packets.add(readPacketMetadata(p, false));
+        for (int p = 0; p < metalCount; p++) packets.add(readPacketMetadata(metalBegin + p, true));
+        return new ClassMaterialMetadata(readInt(blob, 0x40), readUnsignedShort(blob, 0x44),
+                readByte(blob, 0x47), packets);
+    }
+
+    private PacketMetadata readPacketMetadata(int packet, boolean metal) throws AssetFormatException {
+        int entry = packetTable + packet * PACKET_ENTRY_SIZE;
+        int list = readInt(blob, entry), listSize = readUnsignedShort(blob, entry + 4);
+        int header = readInt(blob, entry + 8), extent = readByte(blob, entry + 12) * 16;
+        int count = readByte(blob, entry + 15);
+        if (list <= 0 || listSize == 0 || header <= 0 || extent < (metal ? 16 : 32)) {
+            throw new AssetFormatException("A material metadata packet has missing command or vertex data.");
+        }
+        metadataRange(list, (long) listSize * 16);
+        metadataRange(header, extent);
+        byte[] multipliers;
+        if (metal) {
+            if (readInt(blob, header) != count || 16L + count * 16L > extent) {
+                throw new AssetFormatException("A metal metadata packet has inconsistent vertex counts or extent.");
+            }
+            multipliers = new byte[0];
+        } else {
+            int transfers = readInt(blob, header), twoWay = readInt(blob, header + 4);
+            int threeWay = readInt(blob, header + 8), main = readInt(blob, header + 12);
+            int duplicates = readInt(blob, header + 16), transferCount = readInt(blob, header + 20);
+            int vertices = readInt(blob, header + 24), multiplier = readInt(blob, header + 28);
+            long inFile = (long) twoWay + threeWay + main;
+            long duplicatesAt = (32L + transfers * 2L + 7) & ~7L;
+            long trailing = (long) multiplier - vertices - inFile * VERTEX_SIZE;
+            if (transfers < 0 || twoWay < 0 || threeWay < 0 || main < 0 || duplicates < 0
+                    || transferCount != count || inFile + duplicates != count
+                    || vertices < 32 || duplicatesAt + duplicates * 2L > vertices
+                    || multiplier < vertices || trailing < VERTEX_SIZE || trailing > 6L * VERTEX_SIZE
+                    || trailing % VERTEX_SIZE != 0 || multiplier + count * 4L > extent) {
+                throw new AssetFormatException("A normal metadata packet has inconsistent counts or multiplier bounds.");
+            }
+            multipliers = slice(header + multiplier, count * 4);
+        }
+        List<VifCommandList.Command> unpacks = VifCommandList.read(slice(list, listSize * 16)).unpacks();
+        int materialIndex = metal ? 1 : 2;
+        if (unpacks.size() < materialIndex) {
+            throw new AssetFormatException("A material metadata packet is missing required unpacks.");
+        }
+        if (!metal && (unpacks.get(0).components() != 1 || unpacks.get(0).width() != 1
+                || unpacks.get(0).count() != count)) {
+            throw new AssetFormatException("A normal metadata packet has invalid coordinate counts or shape.");
+        }
+        var indices = unpacks.get(materialIndex - 1);
+        if (indices.components() != 3 || indices.width() != 2 || indices.count() < 1
+                || indices.data().length != indices.count() * 4) {
+            throw new AssetFormatException("A material metadata packet has invalid index unpack shape.");
+        }
+        List<PacketMaterial> materials = new ArrayList<>();
+        if (unpacks.size() > materialIndex) {
+            var source = unpacks.get(materialIndex);
+            if (unpacks.size() != materialIndex + 1 || source.components() != 3 || source.width() != 0
+                    || source.count() % 4 != 0 || source.data().length != source.count() * 16) {
+                throw new AssetFormatException("A material metadata packet has incomplete or unsupported material blocks.");
+            }
+            byte[] data = source.data();
+            for (int at = 0; at < data.length; at += 64) {
+                int selector = readInt(data, at + 32);
+                if (metal ? selector != -2 && selector != -3 : selector < -1) {
+                    throw new AssetFormatException("A material metadata packet has an unsupported texture selector.");
+                }
+                long tex1 = Integer.toUnsignedLong(readInt(data, at))
+                        | (long) readInt(data, at + 4) << 32;
+                long clamp = Integer.toUnsignedLong(readInt(data, at + 16))
+                        | (long) readInt(data, at + 20) << 32;
+                materials.add(new PacketMaterial(selector, tex1, clamp));
+            }
+        }
+        return new PacketMetadata(packet, metal, count, multipliers, materials);
+    }
+
+    private void metadataRange(int offset, long length) throws AssetFormatException {
+        if (offset < 0 || length < 0 || offset > blob.length || length > blob.length - offset) {
+            throw new AssetFormatException("A material metadata range lies outside of the moby class.");
+        }
+    }
+
+    /**
+     * Additive raw metal access. Does not alter readMesh, decode UVs/colors, evaluate pose or serialize.
+     * Original material state persists only within this class's metal list; corner history is local.
+     */
+    public List<MetalPacket> readMetalPackets() throws AssetFormatException {
+        if (metalCount == 0) return List.of();
+        int total = highLodCount + lowLodCount + metalCount;
+        if (packetTable <= 0 || metalBegin < highLodCount + lowLodCount
+                || metalBegin + metalCount > total || jointCount < 1 || jointCount > 111)
+            throw new AssetFormatException("Invalid separate metal packet table or joint count");
+        metadataRange(packetTable, (long) total * PACKET_ENTRY_SIZE);
+        List<MetalPacket> packets = new ArrayList<>();
+        int boundPacket = -1, boundBlock = -1;
+        for (int packet = metalBegin; packet < metalBegin + metalCount; packet++) {
+            // Reuse only the approved raw layout validator, never the normal geometry decoder.
+            var metadata = readPacketMetadata(packet, true);
+            int entry = packetTable + packet * PACKET_ENTRY_SIZE, header = readInt(blob, entry + 8);
+            int count = metadata.vertexCount();
+            int positions = (count * 4 + 15) & ~15, colors = positions + ((count * 6 + 15) & ~15);
+            int output = colors + ((count * 4 + 15) & ~15);
+            if (readInt(blob, header + 4) != positions || readInt(blob, header + 8) != colors
+                    || readInt(blob, header + 12) != output)
+                throw new AssetFormatException("Unsupported metal output packing layout");
+            List<MetalVertex> vertices = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                int at = header + 16 + i * 16, influences = readByte(blob, at + 11);
+                if (influences > 3 || readByte(blob, at + 15) != 0)
+                    throw new AssetFormatException("Unsupported metal influence count or padding");
+                byte[] joints = slice(at + 8, 3), weights = slice(at + 12, 3);
+                int sum = 0;
+                for (int k = 0; k < Math.max(1,influences); k++) {
+                    if ((joints[k] & 255) >= jointCount) throw new AssetFormatException("Metal vertex joint outside its local palette");
+                    sum += weights[k] & 255;
+                }
+                if (influences >= 2 && sum != 256) throw new AssetFormatException("Metal weights do not sum to256");
+                vertices.add(new MetalVertex((short)readShort(blob,at),(short)readShort(blob,at+2),
+                        (short)readShort(blob,at+4),readByte(blob,at+6),readByte(blob,at+7),influences,joints,weights));
+            }
+            int list = readInt(blob,entry), listSize = readUnsignedShort(blob,entry+4);
+            var unpacks = VifCommandList.read(slice(list,listSize*16)).unpacks();
+            byte[] indices = unpacks.get(0).data();
+            if (indices[3] != 0) throw new AssetFormatException("Unsupported metal index header padding");
+            byte[] materials = unpacks.size() == 2 ? unpacks.get(1).data() : new byte[0];
+            int blocks = metadata.materials().size(), secret = 0, nextBlock = 0;
+            boolean ended = false;
+            List<MetalCorner> corners = new ArrayList<>();
+            for (int i = 4; i < indices.length; i++) {
+                int value = indices[i] & 255, vertex;
+                boolean noKick;
+                if (value == 0) {
+                    if (secret > blocks) throw new AssetFormatException("Metal stream exhausted secret indices");
+                    int actual = secret == 0 ? indices[2] & 255 : materials[(secret-1)*16+12] & 255;
+                    secret++;
+                    if (actual == 0) { ended = true; break; }
+                    if (nextBlock >= blocks) throw new AssetFormatException("Metal stream switched without an AD-GIF block");
+                    boundPacket = packet; boundBlock = nextBlock++;
+                    vertex = actual & 127; noKick = true;
+                } else {
+                    vertex = value & 127; noKick = (value & 128) != 0;
+                }
+                if (vertex < 1 || vertex > count || boundPacket < 0)
+                    throw new AssetFormatException("Metal corner has invalid vertex or missing initial binding");
+                corners.add(new MetalCorner(vertex-1,noKick,boundPacket,boundBlock));
+            }
+            if (!ended || nextBlock != blocks || corners.size() < 3)
+                throw new AssetFormatException("Metal stream has missing terminator, trailer or unused materials");
+            for (int i = corners.size()-3; i < corners.size(); i++)
+                if (corners.get(i).vertex() != 0 || corners.get(i).noKick())
+                    throw new AssetFormatException("Unsupported metal pipeline trailer");
+            packets.add(new MetalPacket(packet,vertices,corners.subList(0,corners.size()-3)));
+        }
+        return List.copyOf(packets);
     }
 
     /**

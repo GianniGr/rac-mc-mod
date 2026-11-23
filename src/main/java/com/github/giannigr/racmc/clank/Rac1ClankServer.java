@@ -1,6 +1,7 @@
 package com.github.giannigr.racmc.clank;
 
 import com.github.giannigr.racmc.RacMcConstants;
+import com.github.giannigr.racmc.gear.Rac1GearServer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -13,10 +14,7 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-/**
- * Lifecycle/synchronization foundation. Runtime sessions start EMPTY; no grant/load/clone
- * persistence policy is chosen here. Durable save codec is available for later approved wiring.
- */
+/** Effective worn equipment and movement synchronization; not the canonical unlock store. */
 @EventBusSubscriber(modid = RacMcConstants.MOD_ID)
 public final class Rac1ClankServer {
     private static final Map<UUID, Rac1ClankSession> SESSIONS = new HashMap<>();
@@ -59,9 +57,10 @@ public final class Rac1ClankServer {
         else if(held.is(com.github.giannigr.racmc.item.RacMcItems.CLANK_THRUSTER_PACK.get()))
             module=Rac1ClankEquipment.Module.THRUSTER;
         else return false;
-        var current=session(player).equipment();
+        var state=session(player);
+        var current=state.equipment();
         // Repeated native right-click of an already selected pack must not restart an episode.
-        if(current.worn()&&current.selected()==module)return true;
+        if(state.testHydro()&&current.worn()&&current.selected()==module)return true;
         applySessionEquipment(player,module);
         return true;
     }
@@ -69,6 +68,16 @@ public final class Rac1ClankServer {
         Rac1ClankRuntime.invalidate(target);
         var state = session(target);
         state.testEquipment(module);
+        syncEquipmentChange(target, state);
+    }
+    /** Applies only the Back slot already committed by the server-owned Gear path. */
+    public static void applyGearBack(ServerPlayer target) {
+        Rac1ClankRuntime.invalidate(target);
+        var state = session(target);
+        state.gearEquipment(Rac1GearServer.effectiveBack(target));
+        syncEquipmentChange(target, state);
+    }
+    private static void syncEquipmentChange(ServerPlayer target, Rac1ClankSession state) {
         state.invalidate(epoch());
         Rac1HydroRuntime.equipmentChanged(target);
         broadcast(target);
@@ -78,7 +87,7 @@ public final class Rac1ClankServer {
         if (event.getEntity() instanceof ServerPlayer player) {
             Rac1HydroRuntime.forget(player);
             SESSIONS.put(player.getUUID(), new Rac1ClankSession(player.getUUID(), epoch(),
-                    Rac1ClankEquipment.EMPTY));
+                    Rac1GearServer.effectiveBack(player)));
             broadcast(player);
         }
     }
@@ -100,7 +109,7 @@ public final class Rac1ClankServer {
         if (event.getEntity() instanceof ServerPlayer player) {
             Rac1HydroRuntime.forget(player);
             Rac1ClankRuntime.invalidate(player);
-            session(player).testEquipment(Rac1ClankEquipment.Module.NONE);
+            session(player).gearEquipment(Rac1GearServer.effectiveBack(player));
             session(player).invalidate(epoch());
             broadcast(player);
         }
@@ -109,7 +118,7 @@ public final class Rac1ClankServer {
         if (event.getEntity() instanceof ServerPlayer player) {
             Rac1HydroRuntime.forget(player);
             Rac1ClankRuntime.invalidate(player);
-            session(player).testEquipment(Rac1ClankEquipment.Module.NONE);
+            session(player).gearEquipment(Rac1ClankEquipment.EMPTY);
             session(player).invalidate(epoch());
             broadcast(player);
         }

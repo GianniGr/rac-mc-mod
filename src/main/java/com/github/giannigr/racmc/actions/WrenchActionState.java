@@ -30,6 +30,7 @@ public final class WrenchActionState {
     private double spin;
     private ActionRotation rotation = ActionRotation.IDENTITY;
     private boolean nearCatch;
+    private boolean slamImpactObserved;
     private double catchBlend;
     private int cometIdentity = 1;
     private final java.util.List<FlightStep> flightSteps = new java.util.ArrayList<>();
@@ -40,6 +41,8 @@ public final class WrenchActionState {
     private final Set<Long> hitBlocks = new HashSet<>();
 
     public enum Intent { SLAM, THROW }
+    enum AudioKind { SLAM_IMPACT, COMET_RELEASE }
+    record AudioEdge(AudioKind kind, ActionVector position) {}
 
     public boolean canStartAt(long tick) {
         return phase == Phase.IDLE && tick >= nextStartTick;
@@ -89,6 +92,7 @@ public final class WrenchActionState {
         position = hand;
         spin = 0;
         nearCatch = false;
+        slamImpactObserved = false;
         catchBlend = 0;
         speed = deceleration = 0;
         hitTargets.clear();
@@ -113,16 +117,18 @@ public final class WrenchActionState {
         tickSources(tick, validOwner, java.util.List.of(sample, sample, sample), surface);
     }
 
-    public void tickSources(long tick, boolean validOwner, java.util.List<SourceFrame> sources,
+    AudioEdge tickSources(long tick, boolean validOwner,
+            java.util.List<SourceFrame> sources,
             Surface surface) {
-        if (phase == Phase.IDLE || tick <= lastTick) return;
+        if (phase == Phase.IDLE || tick <= lastTick) return null;
         if (sources.size() != 3) throw new IllegalArgumentException("Expected three original substeps");
         lastTick = tick;
         flightSteps.clear();
         if (!validOwner || tick - startTick > 100) {
             cancel();
-            return;
+            return null;
         }
+        AudioEdge audio = null;
         for (int step = 0; step < sources.size(); step++) {
             SourceFrame source = sources.get(step);
             ClipFrame frame = source.frame;
@@ -134,6 +140,7 @@ public final class WrenchActionState {
             bodyBlendWeight = frame.bodyBlendWeight;
             wrenchBlendWeight = frame.wrenchBlendWeight;
             if (phase == Phase.THROW_WINDUP && frame.release) {
+                audio = new AudioEdge(AudioKind.COMET_RELEASE, source.hand);
                 phase = Phase.DETACHED_OUT;
                 position = source.hand;
                 rotation = source.rotation;
@@ -141,6 +148,12 @@ public final class WrenchActionState {
             }
             if (phase == Phase.SLAM_WINDUP && frame.descending) phase = Phase.SLAM_DESCENT;
             if (phase == Phase.SLAM_DESCENT && source.grounded) phase = Phase.RECOVERY;
+            if (frame.slamImpact && !slamImpactObserved
+                    && (phase == Phase.SLAM_WINDUP || phase == Phase.SLAM_DESCENT
+                            || phase == Phase.RECOVERY)) {
+                slamImpactObserved = true;
+                audio = new AudioEdge(AudioKind.SLAM_IMPACT, source.visibleImpactHead);
+            }
             if (phase == Phase.DETACHED_OUT || phase == Phase.DETACHED_BACK) {
                 ActionVector old = position;
                 double oldSpin = spin;
@@ -159,6 +172,7 @@ public final class WrenchActionState {
                 hitCrates.addAll(alreadyHit);
             }
         }
+        return audio;
     }
 
     private ActionVector flightStep(ActionVector hand, ActionRotation handRotation, Surface surface) {
@@ -270,10 +284,17 @@ public final class WrenchActionState {
     }
 
     public record ClipFrame(double seconds, double wrenchSeconds, double bodyBlendWeight,
-            double wrenchBlendWeight, boolean release, boolean descending, boolean finished) {
+            double wrenchBlendWeight, boolean release, boolean descending, boolean finished,
+            boolean slamImpact) {
+        public ClipFrame(double seconds, double wrenchSeconds, double bodyBlendWeight,
+                double wrenchBlendWeight, boolean release, boolean descending, boolean finished) {
+            this(seconds, wrenchSeconds, bodyBlendWeight, wrenchBlendWeight,
+                    release, descending, finished, false);
+        }
+
         /** Convenience for unblended synthetic/static clips; original samplers supply both clocks. */
         public ClipFrame(double seconds, boolean release, boolean descending, boolean finished) {
-            this(seconds, seconds, 1, 1, release, descending, finished);
+            this(seconds, seconds, 1, 1, release, descending, finished, false);
         }
 
         public ClipFrame {
@@ -288,7 +309,12 @@ public final class WrenchActionState {
     }
 
     public record SourceFrame(ClipFrame frame, ActionVector hand, ActionRotation rotation,
-            boolean grounded) {}
+            boolean grounded, ActionVector visibleImpactHead) {
+        public SourceFrame(ClipFrame frame, ActionVector hand, ActionRotation rotation,
+                boolean grounded) {
+            this(frame, hand, rotation, grounded, hand);
+        }
+    }
     public record FlightStep(int substep, ActionVector from, ActionVector to, double fromSpin,
             double toSpin, ActionRotation fromRotation, ActionRotation toRotation, int fromSequence,
             double fromBlend, int sequence, double blend, ActionVector returnOrigin) {}

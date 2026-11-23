@@ -1,5 +1,7 @@
 package com.github.giannigr.racmc.client.clank;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.model.geom.ModelPart;
 import org.joml.Matrix4f;
 
 /** Fixed MC host adapter, not original Ratchet joint5. Consumes an established native body frame. */
@@ -14,5 +16,9 @@ public final class Rac1ClankSteveMount {
     public static Matrix4f local() {
         return new Matrix4f().translation(0, 6f / 16, 2f / 16)
                 .scale(LOCAL_SCALE).mul(axisRotation());
+    }
+    static void attach(PoseStack pose, ModelPart body) {
+        body.translateAndRotate(pose);
+        pose.mulPose(local());
     }
 }

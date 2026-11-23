@@ -7,8 +7,18 @@ import java.util.EnumMap;
 import java.util.Map;
 
 /** Immutable, bounded client-owned generation. No game bytes travel over the network. */
-public record Rac1AudioCatalog(Map<Rac1AudioEvent, Clip> clips) {
+public record Rac1AudioCatalog(Map<Rac1AudioEvent, Clip> clips, Clip dryBomb) {
     public Rac1AudioCatalog { clips = Map.copyOf(clips); }
+    public Rac1AudioCatalog(Map<Rac1AudioEvent, Clip> clips) { this(clips, null); }
+
+    public Clip clip(Rac1AudioEvent event) {
+        return event == Rac1AudioEvent.BOMB_GLOVE_DRY_BURST ? dryBomb : clips.get(event.sampleSource());
+    }
+
+    /** Adds a separately validated local, memory-only cue; never included in clips() or a sidecar. */
+    public Rac1AudioCatalog withDryBomb(Rac1DiscImage verifiedImage) throws Exception {
+        return new Rac1AudioCatalog(clips, Rac1DryBombWave.clip(verifiedImage));
+    }
     public record Clip(byte[] pcm, float rate, byte[] definition, byte[] cue, byte[] grain,
                        String bankHash, String adpcmHash, int cueId, int loopStart, int loopEnd, boolean repeat) {
         public Clip {
@@ -37,14 +47,14 @@ public record Rac1AudioCatalog(Map<Rac1AudioEvent, Clip> clips) {
         var container = Rac1LevelData.read(image, header);
         var bank = new Rac1SoundBank(container.soundBank(image));
         byte[] index = image.readBytes(container.base() + container.coreIndexOffset(), container.coreIndexSize());
-        var assets = Rac1LevelAssets.load(image, 1);
+        var assets = Rac1LevelAssets.loadCore(image, 1, container, index);
         var result = new EnumMap<Rac1AudioEvent, Clip>(Rac1AudioEvent.class);
-        for (var event : Rac1AudioEvent.values()) {
+        for (var event : Rac1AudioEvent.IMPORTED) {
             var entry = assets.coreIndex().mobyClass(event.classId());
             if (entry == null) throw new IOException("Missing reference sound class");
             // Gadget definitions have a class-table row/remap but their blob is in the gadget
             // table; its moby offset is zero. Never treat that as a core-data pointer.
-            byte[] blob = event == Rac1AudioEvent.BLASTER_FIRE_LOOP
+            byte[] blob = event.classId() == 168
                     ? assets.gadgetClass(event.classId()) : assets.classBlob(entry.offset());
             var definition = Rac1SoundMap.resolve(index, blob, event.classId(), event.slot());
             var tone = bank.tone(definition.cue());
