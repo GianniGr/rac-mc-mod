@@ -1,0 +1,8 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.github.giannigr.racmc.worldgen.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["ChunkStructureStartsMixin"],
+  "injectors": { "defaultRequire": 1 }
+}

@@ -47,7 +47,10 @@ projects' code.
   the approximately one-block main enclosure, not its antenna overhang or logo.
   It deliberately rounds the enclosure dimensions below to a normal block.
   The kiosk does not fall,
-  drops nothing when mined, and has metal sound/hardness 2/blast resistance 6.
+  has metal sound/hardness 2/blast resistance 6, and can be recovered as one
+  placeable item with an iron-tier or better pickaxe or a vanilla golden pickaxe.
+  The gold exception applies only to the kiosk. Other tools and bare hands
+  cannot mine it in Survival, and tool-less loot contexts do not drop it.
   These are local defaults, not extracted retail physics.
 - The item draws only the closed body. GUI uses full light; held/ground items
   use supplied world light. All display contexts use the vanilla block-cube

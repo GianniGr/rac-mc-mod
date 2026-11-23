@@ -5,6 +5,7 @@ import com.github.giannigr.racmc.block.RacMcBlocks;
 import com.github.giannigr.racmc.item.RacMcCreativeTabs;
 import com.github.giannigr.racmc.item.RacMcEntities;
 import com.github.giannigr.racmc.item.RacMcItems;
+import com.github.giannigr.racmc.worldgen.StructureSupplies;
 import com.mojang.logging.LogUtils;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -53,6 +54,7 @@ public class RacMcMod {
         RacMcEntities.register(modEventBus);
         // The tab of the creative mode of the mod is registered with the same bus.
         RacMcCreativeTabs.register(modEventBus);
+        StructureSupplies.register(modEventBus);
         com.github.giannigr.racmc.sound.Rac1Sounds.register(modEventBus);
         com.github.giannigr.racmc.item.Rac1WrenchCrateHits.install((player, pos, state) -> {
             com.github.giannigr.racmc.loot.Rac1CrateRewards.destroy(

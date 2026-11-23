@@ -31,6 +31,9 @@ config="racmc.blaster-ammo-pickup.mixins.json"
 [[mixins]]
 config="racmc.bomb-glove.mixins.json"
 
+[[mixins]]
+config="racmc.structure-supplies.mixins.json"
+
 # A list of mods - how many allowed here is determined by the individual mod loader.
 [[mods]] #mandatory
 
