@@ -36,6 +36,16 @@ public final class Rac1BoltLedger extends SavedData {
     public long revision(UUID player) { return revisions.getOrDefault(player, 0L); }
     public Pickup pickup(UUID id) { return pickups.get(id); }
 
+    /** Main server thread only. Administrative credits use the same saved account as pickups. */
+    boolean credit(UUID player, long amount) {
+        long before = balance(player);
+        if (amount <= 0 || before > Long.MAX_VALUE - amount) return false;
+        balances.put(player, before + amount);
+        revisions.merge(player, 1L, Long::sum);
+        setDirty();
+        return true;
+    }
+
     public void reward(UUID incarnation, ServerLevel level, BlockPos pos, int total) {
         rewardOnce(incarnation, level, pos, total);
     }

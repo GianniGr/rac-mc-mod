@@ -1,4 +1,6 @@
 {
+  "commands.racmc.bolts.added": "Added %s bolts to %s. Balance: %s.",
+  "commands.racmc.bolts.overflow": "That would exceed the maximum bolt balance for %s.",
   "itemGroup.racmc": "Ratchet & Clank: Getting Wood",
   "item.racmc.blaster": "Blaster",
   "item.racmc.blaster_ammo": "Blaster Ammo",
