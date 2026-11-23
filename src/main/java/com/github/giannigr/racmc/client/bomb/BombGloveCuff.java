@@ -76,4 +76,16 @@ final class BombGloveCuff {
         }
         return List.of(clipped);
     }
+
+    /** Keep the UV-mapped forearm strip on the wrist side of the eye rig's proximal clip. */
+    static List<Vertex> distalFace(List<Vertex> face, float proximalY) {
+        if (face.isEmpty()) return face;
+        // Reflect Y only for clipping; reflect back before emitting so winding is unchanged.
+        return upperFace(face.stream().map(BombGloveCuff::reflectY).toList(), -proximalY)
+                .stream().map(BombGloveCuff::reflectY).toList();
+    }
+
+    private static Vertex reflectY(Vertex v) {
+        return new Vertex(v.x, -v.y, v.z, v.u, v.v);
+    }
 }

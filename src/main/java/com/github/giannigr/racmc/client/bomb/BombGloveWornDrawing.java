@@ -2,7 +2,9 @@ package com.github.giannigr.racmc.client.bomb;
 
 import com.github.giannigr.racmc.RacMcConstants;
 import com.github.giannigr.racmc.asset.Rac1AnimatedAsset;
+import com.github.giannigr.racmc.asset.Rac1Mesh;
 import com.github.giannigr.racmc.asset.Rac1Texture;
+import com.github.giannigr.racmc.asset.effect.EffectMeshAsset;
 import com.github.giannigr.racmc.client.effect.Rac1EffectClient;
 import com.github.giannigr.racmc.client.render.Rac1ImportedItemDrawing;
 import com.github.giannigr.racmc.client.render.Rac1MeshRenderer;
@@ -11,7 +13,6 @@ import com.github.giannigr.racmc.item.weapon.bomb.BombGloveClientTracking;
 import com.github.giannigr.racmc.item.weapon.bomb.BombGlovePose;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.math.Axis;
 import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
@@ -38,15 +39,18 @@ import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
-/** Steve adaptation. Local first-person is a world pass, so it shares the flight projection. */
+/** A camera-local first-person rig submitted under the same projection as world flight. */
 @EventBusSubscriber(modid = RacMcConstants.MOD_ID, value = Dist.CLIENT)
 public final class BombGloveWornDrawing {
-    private static final float PIXEL = 1f / 16;
     private static final WearTextures LEASES = new WearTextures();
     private static final Map<Boolean, PlayerModel<AbstractClientPlayer>> FIRST_MODELS = new HashMap<>();
     private static long firstEpoch = -1;
     private static Rac1AnimatedAsset fitOwner;
     private static Bounds fitBounds;
+    private static Rac1Mesh rightMesh;
+    private static Rac1Mesh leftMesh;
+    private static EffectMeshAsset radiusOwner;
+    private static float shellClearance;
 
     private BombGloveWornDrawing() {}
 
@@ -62,26 +66,41 @@ public final class BombGloveWornDrawing {
         LEASES.held.clear();
         fitOwner = null;
         fitBounds = null;
+        rightMesh = null;
+        leftMesh = null;
+        radiusOwner = null;
+        shellClearance = 0;
     }
 
     public record Snapshot(Vec3 feet, Vec3 palm, Quaternionf armRotation, boolean right) {}
 
     static Snapshot sample(Vec3 feet, double eyeHeight, float yaw, boolean right) {
+        return sample(feet, eyeHeight, yaw, right, new BombGloveStevePose.Motion(0, 0, 0));
+    }
+
+    static Snapshot sample(Vec3 feet, double eyeHeight, float yaw, boolean right, BombGloveStevePose.Motion motion) {
         var side = right ? HumanoidArm.RIGHT : HumanoidArm.LEFT;
-        var palm = BombGlovePose.palm(feet, eyeHeight, yaw, side);
         var forward = Vec3.directionFromRotation(0, yaw);
+        var bodyRight = new Vec3(-forward.z, 0, forward.x);
+        var release = BombGlovePose.palm(feet, eyeHeight, yaw, side);
         double sign = right ? 1 : -1;
         var shoulder = feet.add(0, eyeHeight - .245, 0)
-                .add(-forward.z * .3125 * sign, 0, forward.x * .3125 * sign);
-        var direction = palm.subtract(shoulder).normalize();
-        var rotation = new Quaternionf().rotateTo(0, 1, 0,
-                (float) direction.x, (float) direction.y, (float) direction.z);
+                .add(bodyRight.scale(.3125 * sign));
+        // Keep native low carry and the original gameplay socket. Apply the
+        // standing throw's low outside sweep and rising inward follow-through.
+        var rest = shoulder.add(forward.scale(.065)).add(0, -.72, 0);
+        var path = BombGloveStevePose.castOffset(motion);
+        var palm = (motion.toRelease() == 1 ? release : rest.lerp(release, motion.toRelease()))
+                .add(forward.scale(path.z)).add(bodyRight.scale(sign * path.x)).add(0, path.y, 0);
+        // Blend from actual vanilla wrist roll at the endpoints; don't impose
+        // the cast wrist orientation at idle.
+        var rotation = BombGloveStevePose.roll(BombGloveStevePose.frame(palm.subtract(shoulder), bodyRight), right, motion);
         return new Snapshot(feet, palm, rotation, right);
     }
 
-    private static Snapshot sample(AbstractClientPlayer player, float partial) {
-        float yaw = Mth.rotLerp(partial, player.yRotO, player.getYRot());
-        return sample(player.getPosition(partial), player.getEyeHeight(), yaw, player.getMainArm() == HumanoidArm.RIGHT);
+    private static BombGloveStevePose.Motion motion(AbstractClientPlayer player, float partial) {
+        return BombGloveStevePose.motion(BombGloveClientTracking.visualPhase(player),
+                player.level().getGameTime(), partial);
     }
 
     public static boolean eligible(AbstractClientPlayer p) {
@@ -91,17 +110,51 @@ public final class BombGloveWornDrawing {
 
     public record Prepared(ModelPart part, ModelPart sleeve, BombGloveArmMask.UpperArm upper,
                            BombGloveArmMask.UpperArm outer, Rac1AnimatedAsset art, Bounds bounds,
-                           BombGloveCuff.ArmFit fit, Snapshot socket, float cuff) {}
+                           BombGloveCuff.ArmFit fit, Snapshot socket, float cuff, float clearance,
+                           boolean nativeIdle) {}
 
-    public static Prepared prepare(PlayerModel<?> model, AbstractClientPlayer player, float partial) {
+    public static Prepared prepare(PlayerModel<?> model, AbstractClientPlayer player, float partial,
+                                   PoseStack poses, Matrix4f entityFrame) {
+        var motion = motion(player, partial);
+        float yaw = Mth.rotLerp(partial, player.yRotO, player.getYRot());
+        var target = sample(player.getPosition(partial), player.getEyeHeight(), yaw,
+                player.getMainArm() == HumanoidArm.RIGHT, motion);
+        var prepared = prepare(model, player, target, motion.idle(), false);
+        if (prepared == null || motion.idle() || motion.stance() >= .25) return prepared;
+        poses.pushPose();
+        try {
+            prepared.part.translateAndRotate(poses);
+            var nativeArm = new Matrix4f(entityFrame).invert().mul(poses.last().pose());
+            var socket = blendCarry(target, nativeArm, prepared.fit.centerX(), prepared.clearance, motion.stance());
+            return new Prepared(prepared.part, prepared.sleeve, prepared.upper, prepared.outer,
+                    prepared.art, prepared.bounds, prepared.fit, socket, prepared.cuff, prepared.clearance, false);
+        } finally {
+            poses.popPose();
+        }
+    }
+
+    static Snapshot blendCarry(Snapshot target, Matrix4f nativeArm, float centerX, float clearance, double stance) {
+        if (stance >= .25) return target;
+        var grip = nativeArm.transformPosition(BombGloveStevePose.armOrigin(centerX, clearance).negate());
+        var rest = target.feet.add(grip.x, grip.y, grip.z);
+        float t = (float) (4 * stance);
+        float weight = t * t * (3 - 2 * t);
+        var rotation = nativeArm.getUnnormalizedRotation(new Quaternionf()).normalize()
+                .slerp(target.armRotation, weight);
+        return new Snapshot(target.feet, rest.lerp(target.palm, weight), rotation, target.right);
+    }
+
+    private static Prepared prepare(PlayerModel<?> model, AbstractClientPlayer player, Snapshot socket,
+                                    boolean nativeIdle, boolean firstPerson) {
         var art = Rac1EffectClient.bombGlove();
         if (!eligible(player) || art == null) return null;
         if (fitOwner != art) {
             fitOwner = art;
             fitBounds = Bounds.of(art.mesh().positions());
+            rightMesh = BombGloveStevePose.mesh(art.mesh(), true);
+            leftMesh = BombGloveStevePose.mesh(art.mesh(), false);
         }
         if (fitBounds == null) return null;
-        var socket = sample(player, partial);
         boolean slim = player.getSkin().model() == PlayerSkin.Model.SLIM;
         var fit = slim ? (socket.right ? BombGloveCuff.ArmFit.SLIM_RIGHT : BombGloveCuff.ArmFit.SLIM_LEFT)
                 : (socket.right ? BombGloveCuff.ArmFit.STANDARD_RIGHT : BombGloveCuff.ArmFit.STANDARD_LEFT);
@@ -109,10 +162,16 @@ public final class BombGloveWornDrawing {
         ModelPart sleeve = socket.right ? model.rightSleeve : model.leftSleeve;
         // Steve fit uses measured source dimensions and the *inflated* vanilla sleeve cross section.
         float cuff = fitBounds.cuff(fit.width);
-        var upper = BombGloveArmMask.prepare(arm, fit, false, cuff);
-        var outer = BombGloveArmMask.prepare(sleeve, fit, true, cuff);
+        var upper = BombGloveArmMask.prepare(arm, fit, false, cuff, firstPerson);
+        var outer = BombGloveArmMask.prepare(sleeve, fit, true, cuff, firstPerson);
         if (upper.isEmpty() || outer.isEmpty() || upper.get().faces().isEmpty()) return null;
-        return new Prepared(arm, sleeve, upper.get(), outer.get(), art, fitBounds, fit, socket, cuff);
+        var bomb = Rac1EffectClient.bomb();
+        if (bomb != radiusOwner) {
+            radiusOwner = bomb;
+            shellClearance = bomb == null ? 0 : BombGloveStevePose.shellClearance(bomb.mesh().positions());
+        }
+        return new Prepared(arm, sleeve, upper.get(), outer.get(), art, fitBounds, fit, socket, cuff,
+                shellClearance, nativeIdle);
     }
 
     /** Draw inputs are entity-relative, not a camera-offset palm. */
@@ -123,25 +182,46 @@ public final class BombGloveWornDrawing {
         try {
             poses.translate(palm.x, palm.y, palm.z);
             poses.mulPose(p.socket.armRotation);
-            poses.translate(-p.fit.centerX() * PIXEL, -10 * PIXEL, 0);
-            p.upper.drawLocal(poses, skin, light, overlay, color);
-            if (sleeve != null) p.outer.drawLocal(poses, sleeve, light, overlay, color);
-            var bounds = p.bounds;
-            var asset = p.art;
-            // Source long axis is imported +Z (cuff end). In the Steve arm frame +Y goes
-            // toward the hand. Fit the two cross sections independently; mirror X only on left.
-            poses.translate(p.fit.centerX() * PIXEL, p.cuff * PIXEL, 0);
-            poses.scale((p.socket.right ? 1 : -1) * (p.fit.width + .5f) * PIXEL / bounds.width(),
-                    (10 - p.cuff) * PIXEL / bounds.length(), 4.5f * PIXEL / bounds.depth());
-            poses.mulPose(Axis.XP.rotationDegrees(90));
-            poses.translate(-bounds.centerX(), -bounds.centerY(), -bounds.maxZ);
-            var textures = LEASES.glove.get(asset, Rac1ImportedItemDrawing.epoch(), asset.textures())
-                    .toArray(ResourceLocation[]::new);
-            var mesh = asset.mesh();
-            Rac1MeshRenderer.render(poses, buffers, mesh, mesh.positions(), mesh.normals(), textures, light, false);
+            var armOrigin = BombGloveStevePose.armOrigin(p.fit.centerX(), p.clearance);
+            poses.translate(armOrigin.x, armOrigin.y, armOrigin.z);
+            drawInArm(p, poses, buffers, skin, sleeve, light, overlay, color);
         } finally {
             poses.popPose();
         }
+    }
+
+    private static void drawInArm(Prepared p, PoseStack poses, MultiBufferSource buffers,
+                                  VertexConsumer skin, VertexConsumer sleeve, int light, int overlay, int color) {
+        p.upper.drawLocal(poses, skin, light, overlay, color);
+        if (sleeve != null) p.outer.drawLocal(poses, sleeve, light, overlay, color);
+        poses.pushPose();
+        try {
+            poses.mulPose(BombGloveStevePose.fittedShell(p.bounds, p.fit, p.cuff, p.socket.right));
+            var textures = LEASES.glove.get(p.art, Rac1ImportedItemDrawing.epoch(), p.art.textures())
+                    .toArray(ResourceLocation[]::new);
+            Rac1MeshRenderer.render(poses, buffers, p.socket.right ? rightMesh : leftMesh, textures, light, false);
+        } finally {
+            poses.popPose();
+        }
+    }
+
+    public static void drawNativeCarry(Prepared p, PoseStack poses, MultiBufferSource buffers,
+                                      VertexConsumer skin, int light, int overlay, int color, boolean held) {
+        poses.pushPose();
+        try {
+            p.part.translateAndRotate(poses);
+            drawInArm(p, poses, buffers, skin, skin, light, overlay, color);
+            if (held) {
+                var origin = BombGloveStevePose.armOrigin(p.fit.centerX(), p.clearance);
+                drawHeld(poses, buffers, new Vec3(-origin.x, -origin.y, -origin.z), light);
+            }
+        } finally {
+            poses.popPose();
+        }
+    }
+
+    public static void drawFromSharedSocket(Prepared p, PoseStack poses, MultiBufferSource buffers, int light) {
+        drawHeld(poses, buffers, p.socket.palm.subtract(p.socket.feet), light);
     }
 
     @SubscribeEvent
@@ -155,29 +235,14 @@ public final class BombGloveWornDrawing {
         float partial = event.getPartialTick().getGameTimeDeltaPartialTick(false);
         boolean first = mc.options.getCameraType().isFirstPerson() && mc.getCameraEntity() == mc.player;
         if (first && !mc.options.hideGui && eligible(mc.player)) {
-            drawFirst(mc.player, partial, camera, poses, buffers);
+            drawFirst(mc.player, partial, camera, event.getCamera().rotation(),
+                    BombGloveFirstPersonFrame.Lens.of(event.getProjectionMatrix()), poses, buffers);
         }
-        var bomb = Rac1EffectClient.bomb();
-        if (bomb == null || Rac1EffectClient.bombGlove() == null) return;
-        var texture = LEASES.held.get(bomb, Rac1ImportedItemDrawing.epoch(),
-                bomb.textures().toArray(Rac1Texture[]::new)).toArray(ResourceLocation[]::new);
-        for (var player : mc.level.players()) {
-            if (!eligible(player) || (first && player == mc.player && mc.options.hideGui)) continue;
-            var held = BombGloveClientTracking.heldBomb(player);
-            if (held == null || event.getCamera().getPosition().distanceToSqr(player.position()) > 64 * 64) continue;
-            var socket = sample(player, partial);
-            var relative = socket.palm.subtract(camera);
-            poses.pushPose();
-            try {
-                poses.translate(relative.x, relative.y, relative.z);
-                Rac1MeshRenderer.render(poses, buffers, bomb.mesh(), texture, light(player, socket.palm), false);
-            } finally {
-                poses.popPose();
-            }
-        }
+        // Third-person held art is submitted by the scoped player draw with that arm.
     }
 
     private static void drawFirst(AbstractClientPlayer player, float partial, Vec3 camera,
+                                  Quaternionf cameraToWorld, BombGloveFirstPersonFrame.Lens lens,
                                   PoseStack poses, MultiBufferSource buffers) {
         long epoch = Rac1ImportedItemDrawing.epoch();
         if (firstEpoch != epoch) {
@@ -187,18 +252,42 @@ public final class BombGloveWornDrawing {
         boolean slim = player.getSkin().model() == PlayerSkin.Model.SLIM;
         var model = FIRST_MODELS.computeIfAbsent(slim, s -> new PlayerModel<>(
                 Minecraft.getInstance().getEntityModels().bakeLayer(s ? ModelLayers.PLAYER_SLIM : ModelLayers.PLAYER), s));
-        var prep = prepare(model, player, partial);
+        var m = motion(player, partial);
+        boolean right = player.getMainArm() == HumanoidArm.RIGHT;
+        float yaw = Mth.rotLerp(partial, player.yRotO, player.getYRot());
+        Vec3 release = BombGlovePose.palm(player.getPosition(partial), player.getEyeHeight(), yaw, player.getMainArm());
+        Vec3 physical = BombGloveStevePose.cameraLocal(release.subtract(camera), cameraToWorld);
+        var frame = BombGloveFirstPersonFrame.sample(lens, right, physical, m);
+        Vec3 palm = frame.palm();
+        var prep = prepare(model, player, new Snapshot(Vec3.ZERO, palm, frame.rotation(), right), false, true);
         if (prep == null) return;
-        var relative = prep.socket.feet.subtract(camera);
         var skinId = player.getSkin().texture();
         poses.pushPose();
         try {
-            poses.translate(relative.x, relative.y, relative.z);
+            // Anchor is camera-local, then converted to the same camera-relative world
+            // pass as flight. No second hand FOV, world yaw, or view roll is applied.
+            poses.mulPose(new Quaternionf(cameraToWorld));
             var skin = buffers.getBuffer(RenderType.entityTranslucent(skinId));
             boolean sleeveOn = player.isModelPartShown(prep.socket.right ? PlayerModelPart.RIGHT_SLEEVE : PlayerModelPart.LEFT_SLEEVE);
             // Both top layers use the same entity render type to avoid invalidating a queued consumer.
             var sleeve = sleeveOn ? skin : null;
-            draw(prep, poses, buffers, skin, sleeve, light(player, prep.socket.palm), OverlayTexture.NO_OVERLAY, -1);
+            int light = light(player, release);
+            draw(prep, poses, buffers, skin, sleeve, light, OverlayTexture.NO_OVERLAY, -1);
+            if (BombGloveClientTracking.heldBomb(player) != null) drawHeld(poses, buffers, palm, light);
+        } finally {
+            poses.popPose();
+        }
+    }
+
+    private static void drawHeld(PoseStack poses, MultiBufferSource buffers, Vec3 point, int light) {
+        var bomb = Rac1EffectClient.bomb();
+        if (bomb == null) return;
+        var textures = LEASES.held.get(bomb, Rac1ImportedItemDrawing.epoch(),
+                bomb.textures().toArray(Rac1Texture[]::new)).toArray(ResourceLocation[]::new);
+        poses.pushPose();
+        try {
+            poses.translate(point.x, point.y, point.z);
+            Rac1MeshRenderer.render(poses, buffers, bomb.mesh(), textures, light, false);
         } finally {
             poses.popPose();
         }
@@ -216,7 +305,10 @@ public final class BombGloveWornDrawing {
         float centerY() { return (minY + maxY) / 2; }
 
         float cuff(int armWidth) {
-            return 10 - Math.clamp(length() * Math.max((armWidth + .5f) / width(), 4.5f / depth()), 4, 8);
+            // Extend the proximal casing from the fixed wrist; never translate
+            // the fingers or shift the palm to make the glove look larger.
+            float body = Math.min((armWidth + 2.25f) / width(), BombGloveStevePose.shellDepth() / depth());
+            return BombGloveStevePose.WRIST_Y - Math.clamp(length() * body * .83f, 6.5f, 7.75f);
         }
 
         static Bounds of(float[] points) {
@@ -238,7 +330,7 @@ public final class BombGloveWornDrawing {
         var arm = new Matrix4f(poses.last().pose()).invert().mul(entityFrame)
                 .translate((float) palm.x, (float) palm.y, (float) palm.z)
                 .rotate(p.socket.armRotation)
-                .translate(-p.fit.centerX() * PIXEL, -10 * PIXEL, 0);
+                .translate(BombGloveStevePose.armOrigin(p.fit.centerX(), p.clearance));
         var pivot = arm.getTranslation(new Vector3f()).mul(16);
         var angles = arm.getUnnormalizedRotation(new Quaternionf()).getEulerAnglesZYX(new Vector3f());
         p.part.setPos(pivot.x, pivot.y, pivot.z);

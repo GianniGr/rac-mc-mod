@@ -29,6 +29,9 @@ public final class Rac1EffectTriggers {
     public static void blast(ServerLevel level, Vec3 position) {
         emit(level, UUID.randomUUID(), EffectSignal.Semantic.CRATE_TNT_BLAST, 0, position, null);
     }
+    static void bombGloveDryBurst(ServerLevel level, UUID lifecycle, Vec3 position) {
+        emit(level, lifecycle, EffectSignal.Semantic.BOMB_GLOVE_DRY_BURST, 0, position, null);
+    }
     public static void crateBreak(ServerLevel level, UUID id, Vec3 position, int sourceClass) {
         var semantic = sourceClass == 501 ? EffectSignal.Semantic.CRATE_BREAK_HEALTH
                 : sourceClass == 500 || sourceClass == 511 ? EffectSignal.Semantic.CRATE_BREAK_WOOD : null;

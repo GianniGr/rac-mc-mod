@@ -63,6 +63,9 @@ public final class BombGloveTracking {
         }
     }
 
+    /** Pose only: not permission to draw a held bomb or to release anything. */
+    public record VisualPhase(Phase phase, long tick) {}
+
     /** One reducer per observed ClientLevel identity. Never derives a release from native use. */
     public static final class View {
         private static final int MAX_OWNERS = 2048;
@@ -72,7 +75,8 @@ public final class BombGloveTracking {
 
         private static final class Observation {
             Held held;
-            final Map<UUID, Long> committed = new HashMap<>();
+            Held terminal;
+            final Map<UUID, Commit> committed = new HashMap<>();
             boolean overflow;
         }
 
@@ -91,8 +95,12 @@ public final class BombGloveTracking {
         public void held(Held snapshot) {
             var seen = observation(snapshot.key());
             if (seen == null) return;
-            if (seen.held == null || snapshot.revision() > seen.held.revision())
+            if (seen.held == null || snapshot.revision() > seen.held.revision()) {
                 seen.held = snapshot;
+                if (snapshot.phase() == Phase.RELEASED || snapshot.phase() == Phase.ABORTED) {
+                    seen.terminal = snapshot;
+                }
+            }
         }
 
         public void committed(Commit commit) {
@@ -103,7 +111,8 @@ public final class BombGloveTracking {
                 seen.overflow = true;
                 return; // fail closed for held rendering; never evict a live suppression record
             }
-            seen.committed.merge(key.epoch(), key.throwId(), Math::max);
+            seen.committed.merge(key.epoch(), commit,
+                    (a, b) -> a.key().throwId() >= b.key().throwId() ? a : b);
         }
 
         public @Nullable Held heldBomb(UUID owner, int actorId) {
@@ -112,7 +121,21 @@ public final class BombGloveTracking {
             var held = seen.held;
             if (held == null || held.actorId() != actorId || !held.phase().drawsHeld()) return null;
             var key = held.key();
-            return seen.committed.getOrDefault(key.epoch(), 0L) < key.throwId() ? held : null;
+            var commit = seen.committed.get(key.epoch());
+            return commit == null || commit.key().throwId() < key.throwId() ? held : null;
+        }
+
+        public @Nullable VisualPhase visualPhase(UUID owner, int actorId) {
+            var seen = observations.get(owner);
+            if (seen == null || seen.held == null || seen.held.actorId() != actorId) return null;
+            var held = seen.held;
+            if (held.phase() == Phase.HIDDEN && seen.terminal != null && seen.terminal.actorId() == actorId
+                    && seen.terminal.key().epoch().equals(held.key().epoch())) held = seen.terminal;
+            var commit = seen.committed.get(held.key().epoch());
+            if (held.phase().drawsHeld() && commit != null && commit.key().equals(held.key())) {
+                return new VisualPhase(Phase.RELEASED, commit.releaseTick());
+            }
+            return new VisualPhase(held.phase(), held.phaseTick());
         }
     }
 }

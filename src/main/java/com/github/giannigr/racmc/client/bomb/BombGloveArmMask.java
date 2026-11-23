@@ -52,6 +52,10 @@ final class BombGloveArmMask {
      * the specific vanilla skin part is already hidden (e.g. sleeve disabled).
      */
     static Optional<UpperArm> prepare(ModelPart part, ArmFit fit, boolean sleeve, float cuffY) {
+        return prepare(part, fit, sleeve, cuffY, false);
+    }
+
+    static Optional<UpperArm> prepare(ModelPart part, ArmFit fit, boolean sleeve, float cuffY, boolean view) {
         if (!part.visible || part.skipDraw) return Optional.of(new UpperArm(List.of()));
         var parts = part.getAllParts().limit(2).toList();
         if (parts.size() != 1) return Optional.empty();
@@ -76,6 +80,7 @@ final class BombGloveArmMask {
                         || (v.z() != -2 - growth && v.z() != 2 + growth)) return Optional.empty();
             }
             var faceAboveCuff = BombGloveCuff.upperFace(face.vertices(), cuffY);
+            if (view) faceAboveCuff = BombGloveCuff.distalFace(faceAboveCuff, cuffY - 1.75f);
             if (!faceAboveCuff.isEmpty()) clipped.add(new Face(faceAboveCuff, face.nx(), face.ny(), face.nz()));
         }
         return Optional.of(new UpperArm(List.copyOf(clipped)));

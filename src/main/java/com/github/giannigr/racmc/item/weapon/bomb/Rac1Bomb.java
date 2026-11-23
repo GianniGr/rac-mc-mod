@@ -75,6 +75,8 @@ public final class Rac1Bomb extends Projectile {
 
     public Phase phase() { return Phase.values()[entityData.get(PHASE)]; }
     public int blastStep() { return entityData.get(WAVE_STEP); }
+    /** Read-only presentation fact, including a shallow-water finish that has BLAST phase. */
+    public boolean enteredWater() { return waterTicks > 0; }
     public double blastRadius() {
         return phase() == Phase.BLAST ? BombBallistics.radius(blastStep()) : 0;
     }

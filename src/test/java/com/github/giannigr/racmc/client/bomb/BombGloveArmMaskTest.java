@@ -40,6 +40,22 @@ class BombGloveArmMaskTest {
         assertFalse(part.visible);
     }
 
+    @Test void cameraDrawKeepsOnlyDistalVanillaSkinAndSleeveUvs() {
+        for (var fit : ArmFit.values()) for (boolean sleeve : new boolean[]{false, true}) {
+            var part = part(fit, sleeve);
+            var strip = BombGloveArmMask.prepare(part, fit, sleeve, 2.5f, true).orElseThrow();
+            assertEquals(4, strip.faces().size()); // no shoulder end-cap
+            for (var face : strip.faces()) {
+                assertEquals(0, Math.abs(face.ny()));
+                assertTrue(face.vertices().stream().anyMatch(v -> v.y() == .75f));
+                assertTrue(face.vertices().stream().anyMatch(v -> v.y() == 2.5f));
+                assertTrue(face.vertices().stream().map(BombGloveCuff.Vertex::v).distinct().count() >= 2);
+            }
+            part.visible = false;
+            assertTrue(BombGloveArmMask.prepare(part, fit, sleeve, 2.5f, true).orElseThrow().faces().isEmpty());
+        }
+    }
+
     private static ModelPart part(ArmFit fit, boolean sleeve) {
         float grow = sleeve ? .25f : 0;
         var cube = new ModelPart.Cube(40, 16, fit.minX, -2, -2, fit.width, 12, 4,

@@ -35,14 +35,32 @@ public final class Rac1EffectNetwork {
         };
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
+    /** Optional distinct channel: older observers cannot decode the new semantic on effect_signal. */
+    public record DryBurstPacket(EffectSignal signal) implements CustomPacketPayload {
+        public DryBurstPacket {
+            if (signal.semantic() != EffectSignal.Semantic.BOMB_GLOVE_DRY_BURST)
+                throw new IllegalArgumentException("Expected dry Bomb Glove burst");
+        }
+        public static final Type<DryBurstPacket> TYPE = new Type<>(
+                ResourceLocation.fromNamespaceAndPath(RacMcConstants.MOD_ID, "bomb_glove_dry_burst"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, DryBurstPacket> CODEC =
+                Packet.CODEC.map(packet -> new DryBurstPacket(packet.signal()), packet -> new Packet(packet.signal()));
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
     @SubscribeEvent public static void register(RegisterPayloadHandlersEvent event) {
-        event.registrar("1").optional().playToClient(Packet.TYPE, Packet.CODEC, (packet, context) ->
+        var registrar = event.registrar("1").optional();
+        registrar.playToClient(Packet.TYPE, Packet.CODEC, (packet, context) ->
+                context.enqueueWork(() -> receiver.accept(packet.signal())));
+        registrar.playToClient(DryBurstPacket.TYPE, DryBurstPacket.CODEC, (packet, context) ->
                 context.enqueueWork(() -> receiver.accept(packet.signal())));
     }
     public static void send(ServerLevel level, EffectSignal signal) {
         if (!level.dimension().location().toString().equals(signal.dimension())) return;
+        CustomPacketPayload packet = signal.semantic() == EffectSignal.Semantic.BOMB_GLOVE_DRY_BURST
+                ? new DryBurstPacket(signal) : new Packet(signal);
         for (var player : level.players())
-            if (player.distanceToSqr(signal.anchor().x(), signal.anchor().y(), signal.anchor().z()) <= 128 * 128)
-                PacketDistributor.sendToPlayer(player, new Packet(signal));
+            if (player.distanceToSqr(signal.anchor().x(), signal.anchor().y(), signal.anchor().z()) <= 128 * 128
+                    && (!(packet instanceof DryBurstPacket) || player.connection.hasChannel(DryBurstPacket.TYPE)))
+                PacketDistributor.sendToPlayer(player, packet);
     }
 }

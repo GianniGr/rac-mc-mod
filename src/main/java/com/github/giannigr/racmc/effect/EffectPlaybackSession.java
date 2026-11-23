@@ -16,12 +16,14 @@ public final class EffectPlaybackSession {
     private final Map<UUID, Long> births = new HashMap<>();
     private long generation;
     private Rac1ProceduralEffects procedural;
+    private boolean bombFlashReady;
     private long lastBlast = Long.MIN_VALUE / 2;
     public EffectPlaybackSession(String sha1, EffectClock.Profile profile, int capacity) {
         this.sha1 = sha1;
         runtime = new EffectRuntime(profile, capacity);
     }
     public EffectRuntime runtime() { return runtime; }
+    public void bombFlashReady(boolean ready) { bombFlashReady = ready; }
     public void blastTables(com.github.giannigr.racmc.asset.effect.Rac1BlastTables tables) {
         if (procedural != null) procedural.clear();
         procedural = new Rac1ProceduralEffects(runtime, sha1, tables);
@@ -72,6 +74,11 @@ public final class EffectPlaybackSession {
             return true;
         }
         switch (signal.semantic()) {
+            case BOMB_GLOVE_DRY_BURST -> {
+                if (late || !bombFlashReady) return false;
+                BombGloveDryVisuals.emit(runtime, sha1, signal.lifecycle(),
+                        signal.anchor(), camera, signal.seed());
+            }
             case CRATE_TNT_BLAST -> {
                 if (late) return false;
                 long originalUpdate = tick * runtime.profile().hz() / 20;

@@ -60,6 +60,12 @@ public final class BombGloveClientTracking {
                 ? null : current.heldBomb(player.getUUID(), player.getId());
     }
 
+    /** Server-observed phase/tick for client choreography; never a replacement for heldBomb(). */
+    public static @Nullable BombGloveTracking.VisualPhase visualPhase(Player player) {
+        var current = view(player.level());
+        return current == null ? null : current.visualPhase(player.getUUID(), player.getId());
+    }
+
     /** Null means this native projectile is not a drawable committed flight. */
     public static @Nullable BombGloveTracking.Commit flight(Rac1Bomb bomb) {
         var current = view(bomb.level());

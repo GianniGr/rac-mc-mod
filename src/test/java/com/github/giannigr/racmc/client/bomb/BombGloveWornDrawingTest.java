@@ -11,7 +11,8 @@ class BombGloveWornDrawingTest {
         var feet = new Vec3(-109.5, 64.75, 280.125);
         for (var side : HumanoidArm.values()) {
             for (float yaw : new float[]{0, 90, 180, -45}) {
-                var snapshot = BombGloveWornDrawing.sample(feet, 1.27, yaw, side == HumanoidArm.RIGHT);
+                var snapshot = BombGloveWornDrawing.sample(feet, 1.27, yaw, side == HumanoidArm.RIGHT,
+                        new BombGloveStevePose.Motion(0, 0, 1));
                 assertEquals(BombGlovePose.palm(feet, 1.27, yaw, side), snapshot.palm());
                 assertEquals(feet, snapshot.feet());
                 assertEquals(1, snapshot.armRotation().lengthSquared(), 1e-5);

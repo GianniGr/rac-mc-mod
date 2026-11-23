@@ -102,6 +102,8 @@ public final class Rac1EffectClient {
                 bomb = cpu.bomb();
                 bombAmmo = cpu.bombAmmo();
                 session = new EffectPlaybackSession(cpu.sha1(), cpu.profile(), 2048);
+                session.bombFlashReady(cpu.meshes().stream()
+                        .anyMatch(mesh -> mesh.source().sourceId() == BombGloveDryVisuals.FLASH_CLASS));
                 if (cpu.blast() != null) session.blastTables(cpu.blast());
                 if (minecraft.level != null)
                     session.beginWorld(minecraft.level.dimension().location().toString(), generation);
@@ -134,6 +136,8 @@ public final class Rac1EffectClient {
             List<EffectMeshAsset> meshes = new ArrayList<>();
             for (int id : new int[]{112, 348, 349, 357, 358, 363, 364})
                 meshes.add(Rac1EffectMeshImporter.read(assets, sha1, id));
+            var bombFlash = optionalBombArt(BombGloveDryVisuals.FLASH_CLASS, () -> verifiedBombFlash(assets, sha1));
+            if (bombFlash != null) meshes.add(bombFlash);
             NanotechTables tables = null;
             try { tables = Rac1NanotechImporter.read(image); }
             catch (Exception unavailable) {
@@ -155,6 +159,26 @@ public final class Rac1EffectClient {
                     optionalBombArt(121, () -> BombGloveArt.bomb(assets, sha1)),
                     optionalBombArt(226, () -> BombGloveArt.ammo(assets, sha1)));
         } catch (Exception failure) { throw new CompletionException(failure); }
+    }
+    private static EffectMeshAsset verifiedBombFlash(Rac1LevelAssets assets, String sha1)
+            throws com.github.giannigr.racmc.asset.AssetFormatException {
+        var row = assets.coreIndex().mobyClass(BombGloveDryVisuals.FLASH_CLASS);
+        if (assets.level() != 1 || row == null || row.textureCount() != 1
+                || (row.textureSlots()[0] & 255) != 211) {
+            throw new com.github.giannigr.racmc.asset.AssetFormatException("Unverified Novalis class-1192 texture binding");
+        }
+        var flash = Rac1EffectMeshImporter.read(assets, sha1, BombGloveDryVisuals.FLASH_CLASS);
+        if (flash.mesh().triangleCount() != 320 || flash.textures().size() != 1
+                || Arrays.stream(flash.mesh().materials()).anyMatch(slot -> slot != 0)) {
+            throw new com.github.giannigr.racmc.asset.AssetFormatException("Unverified Novalis class-1192 material or mesh");
+        }
+        byte[] argb = flash.textures().getFirst().pixels();
+        for (int i = 0; i < argb.length; i += 4) {
+            if ((argb[i] & 255) != 255) {
+                throw new com.github.giannigr.racmc.asset.AssetFormatException("Unexpected class-1192 texture alpha");
+            }
+        }
+        return flash;
     }
     private static <T> T optionalBombArt(int id, Callable<T> load) {
         try {
