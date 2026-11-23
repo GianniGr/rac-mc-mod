@@ -37,6 +37,9 @@ config="racmc.bomb-glove.mixins.json"
 [[mixins]]
 config="racmc.structure-supplies.mixins.json"
 
+[[mixins]]
+config="racmc.clank-escrow.mixins.json"
+
 # A list of mods - how many allowed here is determined by the individual mod loader.
 [[mods]] #mandatory
 

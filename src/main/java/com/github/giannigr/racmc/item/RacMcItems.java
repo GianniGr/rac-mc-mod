@@ -49,6 +49,10 @@ public final class RacMcItems {
 
     public static final DeferredItem<Rac1WrenchItem> OMNIWRENCH =
             ITEMS.registerItem("omniwrench", Rac1WrenchItem::new, new Item.Properties());
+    public static final DeferredItem<Rac1ClankItem> CLANK =
+            ITEMS.registerItem("clank", Rac1ClankItem::new, new Item.Properties().stacksTo(1));
+    public static final DeferredItem<Item> BOLT_GRABBER =
+            ITEMS.registerItem("bolt_grabber", Rac1BeltTestItem::new, new Item.Properties().stacksTo(1));
     public static final DeferredItem<Rac1ClankPackItem> CLANK_HELI_PACK =
             ITEMS.registerItem("clank_heli_pack", properties -> new Rac1ClankPackItem(properties,
                     com.github.giannigr.racmc.clank.Rac1ClankEquipment.Module.HELI));
@@ -109,5 +113,6 @@ public final class RacMcItems {
      */
     public static void register(IEventBus modEventBus) {
         ITEMS.register(modEventBus);
+        Rac1ClankItem.register(modEventBus);
     }
 }

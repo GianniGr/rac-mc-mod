@@ -27,6 +27,7 @@ public final class Rac1ClankSession {
     private long epoch, revision, lastSerial = -1;
     private long actionSerial, actionStartTick;
     private Rac1ClankEquipment equipment;
+    private boolean testHydro;
     private final Rac1ClankMotion motion = new Rac1ClankMotion(Rac1ClankClock.Profile.ORIGINAL_60);
     public Rac1ClankSession(UUID player, long epoch, Rac1ClankEquipment saved) {
         if (player == null || epoch < 0 || saved == null) throw new IllegalArgumentException("Invalid session");
@@ -59,6 +60,7 @@ public final class Rac1ClankSession {
     public long lastSerial() { return lastSerial; }
     long epoch() { return epoch; }
     Rac1ClankEquipment equipment() { return equipment; }
+    boolean testHydro() { return testHydro; }
     Rac1ClankMotion motion() { return motion; }
     void actionStarted(long tick) {
         actionSerial=Math.incrementExact(actionSerial); actionStartTick=tick;
@@ -67,13 +69,24 @@ public final class Rac1ClankSession {
 
     /** Package-local explicit operator fixture only; never called from a client equip packet. */
     void testEquipment(Rac1ClankEquipment.Module module) {
-        motion.cancel(); // Preserve this controller's airborne jump budget across equipment changes.
-        equipment = switch (module) {
+        testHydro = module != Rac1ClankEquipment.Module.NONE;
+        replaceEquipment(switch (module) {
             case NONE -> Rac1ClankEquipment.EMPTY;
             case HELI -> new Rac1ClankEquipment(true, true, false, true, module);
             // Original Thruster glide also requires the separately owned Heli upgrade.
             case THRUSTER -> new Rac1ClankEquipment(true, true, true, true, module);
-        };
+        });
+    }
+
+    /** Project the server's durable Back slot without importing any fixture capabilities. */
+    void gearEquipment(Rac1ClankEquipment back) {
+        testHydro = false;
+        replaceEquipment(back);
+    }
+
+    private void replaceEquipment(Rac1ClankEquipment next) {
+        motion.cancel(); // Preserve this controller's airborne jump budget across equipment changes.
+        equipment = next;
         revision = Math.incrementExact(revision);
     }
 }

@@ -97,6 +97,14 @@ class RacMcCreativeTabTest {
                 s.is(RacMcItems.CLANK_HELI_PACK.get())||s.is(RacMcItems.CLANK_THRUSTER_PACK.get())));
     }
 
+    @Test void boltGrabberFixtureIsOneNonStackingEntryInTheModTabOnly() {
+        var gadget = RacMcItems.BOLT_GRABBER.get();
+        assertEquals("racmc:bolt_grabber", BuiltInRegistries.ITEM.getKey(gadget).toString());
+        assertEquals(1, new ItemStack(gadget).getMaxStackSize());
+        assertEquals(1, tab.getDisplayItems().stream().filter(stack -> stack.is(gadget)).count());
+        assertFalse(combat.getDisplayItems().stream().anyMatch(stack -> stack.is(gadget)));
+    }
+
     @Test
     @DisplayName("The tab is named after the mod")
     void tabIsNamedAfterTheMod() {

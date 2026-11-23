@@ -1,0 +1,10 @@
+// Explicit opt-in; use integration.init.gradle for a claimed private native runtime.
+allprojects {
+    afterEvaluate {
+        if (!project.hasProperty('integrationDirectory')) {
+            throw new GradleException('Supply -PintegrationDirectory=<absolute claimed private directory>')
+        }
+        layout.buildDirectory = new File(file(project.property('integrationDirectory')), 'build')
+        sourceSets.main.java.srcDir(new File(project.projectDir, 'src/test/fixtures/gear-escrow/java'))
+    }
+}

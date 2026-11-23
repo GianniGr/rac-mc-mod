@@ -11,7 +11,7 @@ import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-/** Worn-Clank test default + optional session suppression; never writes durable equipment/entitlement. */
+/** Hydro defaults on only for worn test fixtures; never writes durable equipment/entitlement. */
 public final class Rac1HydroRuntime {
     private static final Map<UUID,Control> CONTROLS=new HashMap<>();
     private static long nextEpoch;
@@ -36,14 +36,13 @@ public final class Rac1HydroRuntime {
             input=new Rac1HydroWire.Stream(epoch);motion.restore(new Rac1HydroMotion().state());visual.clear();
         }
     }
-    private static boolean wornSession(ServerPlayer p) {
+    private static boolean testAccess(ServerPlayer p) {
         return p.isAlive()&&!p.isRemoved()&&p.connection.isAcceptingMessages()
-                &&Rac1ClankServer.session(p).equipment().worn();
+                &&Rac1ClankServer.session(p).testHydro()&&Rac1ClankServer.session(p).equipment().worn();
     }
-    private static boolean accessValid(Control c) {return !c.disabled&&wornSession(c.player);}
-    /** Both existing equip paths call equipmentChanged; tick fallback covers already-worn sessions. */
+    private static boolean accessValid(Control c) {return !c.disabled&&testAccess(c.player);}
     private static Control control(ServerPlayer player) {
-        if(!wornSession(player)){forget(player);return null;}
+        if(!testAccess(player)){forget(player);return null;}
         var c=CONTROLS.get(player.getUUID());
         if(c==null||c.player!=player) {
             c=new Control(player);CONTROLS.put(player.getUUID(),c);
@@ -66,8 +65,7 @@ public final class Rac1HydroRuntime {
         if(c!=null&&c.player==player){c.reset();broadcast(player);}
     }
     public static void equipmentChanged(ServerPlayer player) {
-        if(!Rac1ClankServer.session(player).equipment().worn())forget(player);
-        else {var c=control(player);if(c!=null){c.reset();broadcast(player);}}
+        var c=control(player);if(c!=null){c.reset();broadcast(player);}
     }
     public static void forget(ServerPlayer player) {
         var removed=CONTROLS.remove(player.getUUID());

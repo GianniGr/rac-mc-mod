@@ -276,7 +276,27 @@ public final class Rac1AssetExtractor {
                     + definition.classNumber() + ".");
         }
         MobyClassReader reader = MobyClassReader.of(classBlob(assets, entry));
-        MobyClassReader.Mesh mesh = reader.readMesh();
+        Rac1Mesh mesh = convertStaticMobyMesh(reader.readMesh());
+        Rac1Texture[] textures = textures(assets, entry, index.mobyTextures(), entry.textureCount());
+        return new Rac1CrateAsset(definition.key(), definition.classNumber(), mesh, textures);
+    }
+
+    /** Pickups may move as whole entities but have no skeletal rig. Do not synthesize one. */
+    public static Rac1StaticAsset readJointlessMoby(Rac1LevelAssets assets, int classNumber)
+            throws AssetFormatException {
+        var index = assets.coreIndex();
+        var entry = index.mobyClass(classNumber);
+        if (entry == null || entry.offset() <= 0)
+            throw new AssetFormatException("Missing jointless moby class " + classNumber);
+        var reader = MobyClassReader.of(classBlob(assets, entry));
+        if (reader.jointCount() != 0)
+            throw new AssetFormatException("Expected jointless moby class " + classNumber);
+        var mesh = convertStaticMobyMesh(reader.readMesh());
+        var textures = textures(assets, entry, index.mobyTextures(), entry.textureCount());
+        return new Rac1StaticAsset(classNumber, "moby_" + classNumber, mesh, textures);
+    }
+
+    private static Rac1Mesh convertStaticMobyMesh(MobyClassReader.Mesh mesh) {
         Rac1CoordinateTransform transform = new Rac1CoordinateTransform(UNIT_SCALE);
         int vertexCount = mesh.vertexCount();
         float[] positions = new float[vertexCount * 3];
@@ -293,11 +313,8 @@ public final class Rac1AssetExtractor {
             normals[vertex * 3 + 1] = normal[1];
             normals[vertex * 3 + 2] = normal[2];
         }
-        Rac1Texture[] textures = textures(assets, entry, index.mobyTextures(),
-                entry.textureCount());
-        Rac1Mesh converted = new Rac1Mesh(positions, normals, mesh.uvs(), mesh.indices(),
+        return new Rac1Mesh(positions, normals, mesh.uvs(), mesh.indices(),
                 mesh.materials());
-        return new Rac1CrateAsset(definition.key(), definition.classNumber(), converted, textures);
     }
 
     /**
