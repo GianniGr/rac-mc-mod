@@ -4,7 +4,7 @@ A community-made Minecraft Java Edition mod project inspired by **Ratchet & Clan
 
 ## Project status
 
-See the [v0.1.0-beta scope and playtest checklist](docs/beta-scope.md) for included features,
+See the [beta scope and playtest checklist](docs/beta-scope.md) for included features,
 known limitations, and checks that still need live playtesting. The first milestone (M1) covers
 the asset import pipeline and the first rendering of original assets. The local disc importer reads and
 verifies a validated disc image, and the game keeps the disc image mandatory and asks for it in
@@ -37,7 +37,8 @@ original payout rules, cosmetic items, persistence policy and pending verificati
 The [original bolt HUD](docs/hud-assets.md) is imported from the disc into the local cache too.
 
 Gadgetron vendors (`racmc:gadgetron_vendor`) open a shop on interaction. They sell the
-Blaster and ammo refills and offer a one-time free Bomb Glove claim with ten bombs.
+Blaster, the Bomb Glove, and ammo refills. The Bomb Glove costs 1,000 bolts (a Minecraft
+adaptation) and tops the buyer up to ten bombs.
 The handheld PDA is ammo-only. Purchases require explicit confirmation.
 
 ## Vision
