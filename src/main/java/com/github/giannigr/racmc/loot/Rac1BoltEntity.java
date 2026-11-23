@@ -1,6 +1,11 @@
 package com.github.giannigr.racmc.loot;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
+import java.util.UUID;
+import com.github.giannigr.racmc.gear.Rac1BeltGadget;
+import com.github.giannigr.racmc.gear.Rac1BeltServer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.*;
@@ -71,25 +76,20 @@ public final class Rac1BoltEntity extends Entity {
         }
         var collision = new Rac1BoltWorldCollision(level, this);
         for (int frame = 0; frame < Rac1BoltMotion.SUBSTEPS; frame++) {
-            ServerPlayer player = motion.target() == null ? null
-                    : level.getServer().getPlayerList().getPlayer(motion.target());
-            if (!eligible(player, level)) player = null;
-            if (player == null) {
-                player = level.players().stream().filter(p -> eligible(p, level))
-                        .min(Comparator.comparingInt((ServerPlayer p) ->
-                                Rac1BoltMotion.inRange(motion.position(), new V(p.getX(), p.getY(), p.getZ())) ? 0 : 1)
-                                .thenComparingDouble(p -> distanceToSqr(p))
-                                .thenComparing(p -> p.getUUID().toString())).orElse(null);
-            }
-            Hero hero = player == null ? null : new Hero(player.getUUID(),
-                    new V(player.getX(), player.getY(), player.getZ()),
-                    new V(player.getX(), player.getY() + player.getBbHeight() * .5, player.getZ()));
-            var step = Rac1BoltMotion.step(motion, value(), collision, hero, random::nextDouble);
-            if (motion.target() == null && step.state().target() != null) {
-                com.github.giannigr.racmc.sound.Rac1AudioSignal.emit(level, position(),
+            // Only new admissions consult Belt state. A committed flight keeps its target.
+            ServerPlayer player = lockedPlayer(level, motion.target());
+            var step = motion.phase() == Phase.ATTRACTING
+                    ? Rac1BoltMotion.step(motion, value(), collision,
+                            player == null ? null : hero(player, false), random::nextDouble)
+                    : Rac1BoltMotion.stepCandidates(motion, value(), collision,
+                            () -> ordinaryCandidates(level), random::nextDouble);
+            boolean admitted = motion.target() == null && step.state().target() != null;
+            Vec3 cueOrigin = position();
+            restoreMotion(step.state());
+            if (admitted) {
+                com.github.giannigr.racmc.sound.Rac1AudioSignal.emit(level, cueOrigin,
                         com.github.giannigr.racmc.sound.Rac1AudioEvent.attraction(value()));
             }
-            restoreMotion(step.state());
             if (step.collect() && player != null && ledger.collect(getUUID(), player)) {
                 discard();
                 return;
@@ -102,6 +102,27 @@ public final class Rac1BoltEntity extends Entity {
             restoreMotion(motion);
         }
         ledger.move(getUUID(), motion);
+    }
+
+    private static List<Hero> ordinaryCandidates(ServerLevel level) {
+        var heroes = new ArrayList<Hero>();
+        for (ServerPlayer player : level.players()) {
+            if (eligible(player, level)) {
+                heroes.add(hero(player, Rac1BeltServer.isEquipped(player, Rac1BeltGadget.BOLT_GRABBER)));
+            }
+        }
+        return heroes;
+    }
+
+    private static Hero hero(ServerPlayer player, boolean boltGrabber) {
+        return new Hero(player.getUUID(), new V(player.getX(), player.getY(), player.getZ()),
+                new V(player.getX(), player.getY() + player.getBbHeight() * .5, player.getZ()), boltGrabber);
+    }
+
+    private static ServerPlayer lockedPlayer(ServerLevel level, UUID target) {
+        if (target == null) return null;
+        ServerPlayer player = level.getServer().getPlayerList().getPlayer(target);
+        return eligible(player, level) ? player : null;
     }
 
     /** At most one existing bolt per return substep; credit is still only on body arrival. */
