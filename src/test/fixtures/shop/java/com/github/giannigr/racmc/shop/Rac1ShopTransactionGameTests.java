@@ -291,6 +291,10 @@ public final class Rac1ShopTransactionGameTests {
         var channels=new HashMap<net.minecraft.resources.ResourceLocation,net.neoforged.neoforge.network.registration.NetworkChannel>();
         var bolts=com.github.giannigr.racmc.loot.Rac1BoltNetwork.Balance.TYPE.id();
         channels.put(bolts,new net.neoforged.neoforge.network.registration.NetworkChannel(bolts,"1"));
+        var belt=com.github.giannigr.racmc.gear.Rac1BeltNetwork.Snapshot.TYPE.id();
+        channels.put(belt,new net.neoforged.neoforge.network.registration.NetworkChannel(belt,"belt-1"));
+        var gear=com.github.giannigr.racmc.gear.Rac1GearNetwork.Snapshot.TYPE.id();
+        channels.put(gear,new net.neoforged.neoforge.network.registration.NetworkChannel(gear,"gear-2"));
         // Current-main login/tick listeners send these even to a shopper with no Clank equipped.
         for (var id:List.of(com.github.giannigr.racmc.clank.Rac1ClankNetwork.Snapshot.TYPE.id(),
                 com.github.giannigr.racmc.clank.Rac1ClankNetwork.Correction.TYPE.id()))

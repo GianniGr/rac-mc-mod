@@ -4,9 +4,9 @@ A community-made Minecraft Java Edition mod project inspired by **Ratchet & Clan
 
 ## Project status
 
-**Foundation, disc importer, graphical user interface rendering and the first weapon.** The
-Minecraft mod project is set up and buildable, and the first milestone (M1) covers the asset
-import pipeline and the first rendering of original assets. The local disc importer reads and
+See the [v0.1.0-beta scope and playtest checklist](docs/beta-scope.md) for included features,
+known limitations, and checks that still need live playtesting. The first milestone (M1) covers
+the asset import pipeline and the first rendering of original assets. The local disc importer reads and
 verifies a validated disc image, and the game keeps the disc image mandatory and asks for it in
 the main menu. The assets of the first level are converted out of the image and kept in a local
 cache, and the graphical user interface draws them with the renderer of the game: the static piece
@@ -16,8 +16,8 @@ original animation.
 The Blaster of the game is now an item of the game as well: it has a tab of the creative mode of
 its own, it is drawn with the imported geometry, the imported textures and the imported
 animations of the weapon, and it fires server-owned arrow-based projectiles with imported
-Blaster effects while the trigger is held. Ordinary arrows remain its temporary Survival/
-Adventure ammunition, not a universal original-ammo contract. The shared-ranged candidate
+Blaster effects while the trigger is held. It consumes dedicated Blaster Ammo in Survival
+and Adventure, not ordinary Minecraft arrows. The shared-ranged candidate
 still needs independent live transform/audio/network acceptance. The
 corrective pose/skin candidate does not waive original-grip or owner visual approval. The
 details, the rules of the weapon and the way the weapon is measured are described in
@@ -30,30 +30,24 @@ proportions they have in the game and fit into one block. Wooden and explosive c
 bolt currency when destroyed; explosive crates detonate and chain-arm nearby explosives.
 Health crates now release eight-orb nanotech clusters healing one scaled original
 HP (5 Minecraft HP/2.5 hearts per cluster); independent verification is pending.
-Ammunition rewards remain unimplemented. See [`docs/nanotech.md`](docs/nanotech.md)
-and [`docs/integration.md`](docs/integration.md)
+Ammo crates supply dedicated Blaster or Bomb Glove ammunition. See
+[`docs/nanotech.md`](docs/nanotech.md) and [`docs/integration.md`](docs/integration.md)
 for this combined candidate's verification limits and [`docs/bolt-currency.md`](docs/bolt-currency.md) for
 original payout rules, cosmetic items, persistence policy and pending verification.
 The [original bolt HUD](docs/hud-assets.md) is imported from the disc into the local cache too.
 
-## Vision
+Gadgetron vendors (`racmc:gadgetron_vendor`) open a shop on interaction. They sell the
+Blaster and ammo refills and offer a one-time free Bomb Glove claim with ten bombs.
+The handheld PDA is ammo-only. Purchases require explicit confirmation.
 
-The original Gadgetron vendor is also a Creative block (`racmc:gadgetron_vendor`).
-Its world model uses a uniform 2× enlargement: the antenna-free enclosure is about
-one block wide, while the antenna tips span two. Items use a separate main-body
-fit so the kiosk is block-sized in the hand and recognizable in its GUI slot,
-without clipping the antenna tips. Approaching players trigger
-the growing, counter-spinning hologram; the body stays closed. It has no shop or
-right-click action. Chrome and callback beam/glow effects are not reproduced;
-see [`docs/vendor.md`](docs/vendor.md) for defaults, limitations and verification scope.
+## Vision
 
 Build a Minecraft experience featuring Ratchet & Clank-inspired gameplay, with a focus on importing
 original game assets from a player's legally obtained game disc image rather than distributing
 those assets in the mod.
 
-The planned development roadmap includes an asset-import pipeline, weapons and crates, a Gadgetron
-vendor, flyable spaceships, enemies, planetary exploration, and eventually spaceflight within the
-Solana Galaxy.
+Longer-term goals include enemies, planetary exploration, and travel between planets
+in the Solana Galaxy.
 
 ## Technical stack
 
@@ -158,6 +152,36 @@ are ignored by Git.
 
 See [`docs/development.md`](docs/development.md) for the full task list, the project layout,
 the description of the disc importer and the details of every verified command.
+
+### Commerce restart fixture (development only)
+
+Run this only in a coordinated headless test slot, with fresh private writer and reader
+directories outside all worktrees. Never use an existing Minecraft world. The two opt-in
+init scripts add the Gadgetron/PDA/Bomb commerce GameTests, set the `p35shop` namespace,
+and isolate each stage's build and runtime. The synthetic login declares registered
+channels but does not perform a real client handshake.
+
+1. Set `$writer` and `$reader` to separate absolute private directory paths. Create their
+   `runtime` directories and configure each one's `server.properties` with
+   `server-ip=127.0.0.1` and a distinct, unused `server-port`. If the test runner
+   requires EULA acceptance, do so only in these private runtimes and only if you agree.
+2. Run the writer and wait for normal shutdown. Require all 12 GameTests to pass,
+   `R19 NATIVE CLAIM WRITE PASS`, and the fixture's player save under
+   `$writer\runtime\world\playerdata\f30c0828-6775-4113-93a1-2b380e08f766.dat`.
+3. Copy the entire saved `$writer\runtime\world` directory to
+   `$reader\runtime\world` (which must not already exist). Preserve the writer.
+   Run the reader in a fresh process and require all 12 tests to pass and
+   `R19 NATIVE CLAIM READ PASS`. A process exit code alone is not a pass.
+
+From the project root (PowerShell):
+
+```powershell
+$shop = 'src/test/fixtures/shop'
+.\gradlew.bat --no-daemon --no-configuration-cache --init-script "$shop/shop.init.gradle" --init-script "$shop/r19-native.init.gradle" "-Pr19NativeDirectory=$writer" -Pr19NativeStage=write runGameTestServer
+# Check writer results, then copy the saved world before starting the reader.
+Copy-Item -LiteralPath "$writer/runtime/world" -Destination "$reader/runtime/world" -Recurse
+.\gradlew.bat --no-daemon --no-configuration-cache --init-script "$shop/shop.init.gradle" --init-script "$shop/r19-native.init.gradle" "-Pr19NativeDirectory=$reader" -Pr19NativeStage=read runGameTestServer
+```
 
 ## Workflow
 
