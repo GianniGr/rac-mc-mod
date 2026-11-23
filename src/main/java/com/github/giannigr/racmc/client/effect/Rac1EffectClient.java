@@ -33,7 +33,28 @@ public final class Rac1EffectClient {
     private record Cpu(String sha1, EffectClock.Profile profile, List<EffectGpuCatalog.CpuTexture> textures,
                        List<EffectMeshAsset> meshes, NanotechTables nanotech, Rac1BlastTables blast,
                        EffectMeshAsset ammoPickup, Rac1AnimatedAsset bombGlove,
-                       EffectMeshAsset bomb, EffectMeshAsset bombAmmo) {}
+                       EffectMeshAsset bomb, EffectMeshAsset bombAmmo, ParticleFrameLists definitions) {}
+    /** Read-only local presentation capability; generation invalidates every consumer handle. */
+    public record LocalPresentation(long generation,String sha1,ParticleFrameLists definitions,EffectClock.Profile profile) {
+        public EffectAssetRef particle(int type) {
+            if(type<0||type>=definitions.count())return null;
+            byte[] bytes=definitions.bytes();int at=16+type*4;
+            if((bytes[at]|bytes[at+1]|bytes[at+2]|bytes[at+3])==0)return null;
+            byte[] span=definitions.storedSpan(type);
+            return span.length==0?null:new EffectAssetRef(sha1,1,EffectAssetRef.Bank.PARTICLE,span[0]&255);
+        }
+        public EffectAssetRef fx(int id){return new EffectAssetRef(sha1,1,EffectAssetRef.Bank.FX,id);}
+    }
+    private static LocalPresentation local;
+    public static LocalPresentation localPresentation(){return local;}
+    public static net.minecraft.client.renderer.RenderType localType(long token,EffectAssetRef ref,EffectMaterial material) {
+        return catalog==null||token!=generation?null:catalog.type(ref,material);
+    }
+    public static void renderLocal(long token,PoseStack pose,java.util.List<EffectRuntime.Draw> draws,
+            EffectSignal.Point camera,org.joml.Quaternionf orientation) {
+        if(catalog!=null&&token==generation)
+            EffectWorldRenderer.render(pose,Minecraft.getInstance().renderBuffers().bufferSource(),catalog,draws,camera,orientation);
+    }
     private static CompletableFuture<Cpu> loading;
     private static Path selected;
     private static long generation;
@@ -101,6 +122,7 @@ public final class Rac1EffectClient {
                 bombGlove = cpu.bombGlove();
                 bomb = cpu.bomb();
                 bombAmmo = cpu.bombAmmo();
+                local=new LocalPresentation(generation,cpu.sha1(),cpu.definitions(),cpu.profile());
                 session = new EffectPlaybackSession(cpu.sha1(), cpu.profile(), 2048);
                 session.bombFlashReady(cpu.meshes().stream()
                         .anyMatch(mesh -> mesh.source().sourceId() == BombGloveDryVisuals.FLASH_CLASS));
@@ -157,7 +179,7 @@ public final class Rac1EffectClient {
                     EffectGpuCatalog.decode(banks), List.copyOf(meshes), tables, blast, pickup,
                     optionalBombArt(192, () -> BombGloveArt.glove(assets)),
                     optionalBombArt(121, () -> BombGloveArt.bomb(assets, sha1)),
-                    optionalBombArt(226, () -> BombGloveArt.ammo(assets, sha1)));
+                    optionalBombArt(226, () -> BombGloveArt.ammo(assets, sha1)), banks.definitions());
         } catch (Exception failure) { throw new CompletionException(failure); }
     }
     private static EffectMeshAsset verifiedBombFlash(Rac1LevelAssets assets, String sha1)
@@ -190,6 +212,7 @@ public final class Rac1EffectClient {
     }
     private static void invalidate() {
         generation++;
+        local=null;
         if (session != null) session.clear();
         session = null;
         if (catalog != null) catalog.close();

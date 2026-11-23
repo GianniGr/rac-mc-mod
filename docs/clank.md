@@ -296,6 +296,47 @@ Format/behavior facts: independently inspected supported retail discs and R13's
 Implementation and tests are independent MIT project code, not copied upstream
 implementation. No GPL dependency/code or proprietary game assets are included.
 
+### Main-based rate-only checkpoint (2026-11-23, `09b34db`)
+
+The reviewed partial AV patch is ported alone onto merged main
+`d6dd262aec76d7fe9a197c331318a6907af8fd2c`; its old gameplay/shop ancestors are
+not imported. This does not supersede the frozen movement review target above.
+
+Negative center notes now have a verified fixed-note60/fine0 rate path, independently
+implemented from the integer lookup facts in pinned ReRAC
+[`vag.rs`](https://github.com/re-rac/rerac/blob/ae1e3432a0d5e21bd08d3872d3b04afef98be666/crates/rc-formats/src/vag.rs)
+(ISC, Copyright (c) 2026 ReRAC contributors), cross-checked against OpenGOAL
+[`util.cpp`](https://github.com/open-goal/jak-project/blob/4172dfe7ab66cefb22218cc0da92b23c0342fa98/game/sound/989snd/util.cpp).
+The negative sign selects SPU2 48 kHz and the absolute center note. Quantized
+pitch words, not a smooth guessed exponential, determine the PCM rates:
+
+| Verified metadata | SPU pitch word | PCM rate |
+| --- | ---: | ---: |
+| Heli note−80/fine124 | 1364 | 15984.375 Hz |
+| Thruster note−74/fine65 | 1879 | 22019.53125 Hz |
+| Hydro tone note−74/fine66, **without script bend** | 1880 | 22031.25 Hz |
+
+The existing positive-note approximation remains bit-identical, including Blaster.
+No catalog event, cache schema, PCM streamer or Blaster binding changes here.
+These are rate tests, **not audible acceptance or an actor-loop binding**.
+Clank's runtime backend still returns no voice; its warning now distinguishes
+missing import/binding from missing signed-rate support.
+
+Hydro cue37 remains refused as a multi-grain program. Its retained metadata and
+the pinned public grain interpreter establish PB−126, register0=−63, a looping
+tone, increment/add-PB2/test/loop control with a one-tick test delay, then opcode43
+and a nonlooping tone. **The name `ON_STOP_MARKER` does not prove a release-tail
+dispatch.** Both pinned ReRAC `Snd989::stop_sound` and OpenGOAL
+`BlockSoundHandler::Stop` key voices off; neither executes the post-marker tone.
+The exact RAC1 release behavior remains unverified. Do not select either Hydro
+tone as a fallback or infer that its base rate implements the program.
+
+Finishing Hydro needs a bounded timed-voice/bend/release design beyond the current
+single-clip API and evidence resolving that stop path. The original Thruster cone
+still needs its overlay mesh/ST/color/quad/UV tables; no new retail reads were
+performed or authorized by this continuation. PAL aerial equivalence and rendered
+alignment remain unaccepted.
+
 ## Later Hydro test follow-on (not the frozen aerial review target)
 
 **Already-worn Clank automatically supplies Hydro in this temporary test build**,
@@ -348,11 +389,13 @@ The same physical-held path handles Hydro Jump/Sneak, including Toggle Sneak.
 Key symbols, mouse buttons and native scan-code bindings resolve without a fixed
 Ctrl dependency; native conflict/modifier context still applies. UI or lost window
 focus supplies released input. No global mapping/options/click state is modified;
-vanilla toggle behavior outside Hydro remains intact. Release may coast/drift,
-but no fresh powered-thrust sample is generated from a latched toggle alone.
+vanilla behavior outside Hydro remains intact. In eligible water, a fresh press
+of configured Sprint (Left Ctrl by default) toggles Hydro boost; release and
+repeat do not toggle it. The latch starts disarmed and requires a release
+sample after entering eligibility before a press can arm it. Leaving eligible
+water, unequipping, or losing the session resets it.
 Configured Jump pitches up; Sneak pitches down; Jump wins both. Direction keys
-request yaw-relative heading (back turns, not reverse gear); normalized diagonals,
-positive facing speed and no added vertical impulse. During **held underwater
+steer yaw-relative heading while forward is held. During **armed forward
 thrust only**, native player look pitch is a finite-clamped ±78° pitch target
 through the existing spring/rate limit. Jump/Sneak override that camera target;
 Jump wins both. Existing low-air/initial dive-in priority remains. Looking around
@@ -363,18 +406,20 @@ uses the same bound and retains local look targets for bounded checkpoint replay
 resolved pitch/rate already travel in the existing authoritative Hydro snapshot.
 
 Independent source60 controller: three bounded native-collision substeps per MC
-tick, 1 source unit mapped to 1 block, target7 units/s, accel13/brake8 units/s²,
-yaw spring .007/.08 capped300°/s; pitch .015/.2, ±78°, capped70°/s. Ordinary
-stroke-to-thrust waits strict >20 source steps; an idle start does not. Surface
-dive entry can use the strict >40-step initial dive window. Released thrust yields
-to native directional swimming, or collision-resolved linear8-units/s² drift.
+tick, 1 source unit mapped to 1 block, target7 units/s, accel13 units/s²,
+yaw spring .007/.08 capped300°/s; pitch .015/.2, ±78°, capped70°/s. W release
+stops powered effects immediately and brakes collision-resolved Hydro horizontal
+carry at 48 units/s²: three normal ticks and less than half a block at full
+speed in still water. The toggle stays armed for the next W. Jump/Sneak can
+continue vertical control during this handoff without new horizontal boost.
 Digital keys use full pressure; exact original nonpressure/PAL trajectories are
 not certified. Native ordinary swim pulses/surface movement are not replaced.
 
 Aerial water cancellation runs first. Hydro owns native travel only after actual
 server-authoritative collision movement; the existing connection adapter ignores
-client position during those ticks. Input is epoch/serial/rate bounded; stale
-samples cannot sustain thrust. Native oxygen, drowning, damage and collision
+client position during those ticks. Input is epoch/serial/rate bounded; no
+missing sample supplies thrust, and four ticks of receipt grace cover isolated
+packet gaps before the toggle resets. Native oxygen, drowning, damage and collision
 remain active. Hydro grants **no Heli fall grace, flight flags or hazard immunity**.
 
 Propulsion yields to vehicles, spectators, flight/elytra, sleeping/spin/climbing,
@@ -389,7 +434,7 @@ parity, and enhanced-swim composition remains a future product choice.
 ### Semantic visuals and limits
 
 A separate bounded Hydro protocol carries access/effective wet category, prior dry
-selection, action/collision checkpoint and source-timed put-away/gap/unfold/fold
+selection, transient boost latch, action/collision checkpoint and source-timed put-away/gap/unfold/fold
 phases to self and late observers. No proprietary data or private path crosses it.
 The existing torso layer/mount/native skin/armor/cape stays intact. Optional local
 609 uses the existing validated media path/extractor and shared texture/mesh APIs;
@@ -414,3 +459,167 @@ build: **855 passed,51 skipped,0 failures/errors** from181 suites/906 tests;
 **28/28 native tests** pass, retaining all21 aerial/Creative regressions.
 Native hold/toggle mappings are regression-tested against detached device states;
 actual remapped physical release, focus/UI and two-client checks remain T22 work.
+
+## Separate Clank audiovisual follow-on (partial; gameplay unchanged)
+
+Client-only Clank controllers reuse the bounded original-effect pool, current
+local particle definitions, texture generation and world renderer. They never
+step movement, inspect physical controls, grant access or alter vanilla bubbles.
+Jets follow the **same blended animated attachment chains and native back mount**
+as the rendered pack: Hydro609 lists0/1, Thruster608 pairs2/3 and0/1. Missing
+attachments/assets fail closed, never become fixed mouth/hand/torso emitters.
+
+Hydro's accepted submerged THRUST state emits four type34 outlet bubbles per
+timer fire, alternating0/1 twice. Cadence uses retained timer and latest
+authoritative speed: trunc((1-speed/7)*5), bounded at0; full speed fires each
+source60 update. Ordinary surface, idle and drift do not emit outlet bubbles.
+New bubbles start at each terminal outlet joint's local origin in the current
+render frame. First person samples the same native body mount at the frame's
+interpolation time without drawing a player or pack. See the
+[nozzle alignment retest](clank-hydro-nozzle-alignment.md).
+Already emitted bubbles buoy, wobble, grow/fade and pop against the native water
+surface if the bounded32-block fluid query found one. An unknown surface
+disables only surface pop, not emission. No breath/hand/wade/splash
+or vanilla-particle replacement is included.
+
+NTSC-backed Thruster windows are ascending/non-descending HIGH, LONG source
+phase<44, and GLIDE. Two nozzle controllers wait, grow2 updates, burn, then
+shrink8; repress during shrink does not instantly restart burn. Burn emits
+type21 orange→white splitting sparks and blended type23 smoke (first puff,
+then4 per nozzle/update;2 in glide). Source-confirmed crossed additive FX12
+quads and FX11 glow are drawn. There is no point light or plume-owned sound.
+**The original196-vertex scrolling cone is unavailable**: its overlay tables
+were not covered by the approved audio-only read. No replacement cone is invented.
+PAL aerial plumes remain fail-closed pending equivalent callback/FX evidence;
+sampled static mesh identity is not procedural-region proof. Hover/ledge/stomp
+actions are not implemented, so no corresponding effect or ledge one-shot is added.
+
+Presentation uses the project's source60 host clock, independent of render FPS
+and viewer region. Positions/speeds are held from latest20Hz snapshots; RNG,
+particle update order, camera-facing wobble/glow and batching are documented MC
+adaptations, not bit-exact retail simulation. A separate2048-particle pool and
+nearest16 wearers within48 blocks bound load without stealing Blaster capacity.
+Rendered layer anchors expire after2 ticks; culled/missing/first-person-only
+pack poses suppress nozzle effects rather than guessing a pose. Actor-loop
+requests do **not** depend on render/pack presence. World/resource/logout/stall
+invalidation clears cosmetic state without affecting gameplay.
+
+### Verified audio identity and optional Heli/Thruster wiring
+
+Owner-approved read-only verification used the existing supported NTSC-U1.00 and
+PAL2.00 media paths, **level1 class0 local2/18/19 only**. No playback or original
+bank/PCM files were written. Both sampled revisions resolve:
+
+| Source request | Local→bank cue | Program / loop metadata | Current binding |
+|---|---|---|---|
+| Heli GLIDE, hero slot3 | 2→24 | one tone; signed note−80/fine124; loop[28,20440), repeat | optional actor loop at15984.375 Hz; audible acceptance pending |
+| Thruster GLIDE/hover, hero slot4 | 18→36 | one tone; signed note−74/fine65; loop[168,13468), repeat | optional GLIDE actor loop at22019.53125 Hz; no distinct hover action exists |
+| Hydro underwater THRUST, hero slot5 | 19→37 | ten scripted grains, two tone references | unavailable: cue program unsupported |
+
+Matching sampled mappings/metadata are not audible output, mixer/envelope/rate
+or whole-bank/regional equivalence. Bank hashes differ. Hydro's two referenced
+waveforms have loop[28,7420)/repeat and no-loop8988 samples respectively; **neither
+may be selected as a first-tone fallback for the script**.
+
+The owner-approved audio follow-on wires **only accepted Heli/Thruster GLIDE**.
+Current gameplay has no distinct hover action; none is invented. No high/long
+jump, landing, idle, raw-key-release or Heli landing-grace audio is bound.
+Source handler ownership slots3/4 are **not** definition entries2/18.
+
+`Rac1ClankAudioCatalog` imports only those two cues, checking each against retained
+waveform identity, note/fine, tone flags and loop extents. Each optional failure
+is isolated. Its separate, fenced generation is **volatile memory only**: no
+new sound sidecar, shared cache version, shared event enum/catalog or Blaster
+import/binding changes. Resource reload retains ready immutable PCM but retires
+voices and fences stale work. Missing/corrupt optional input never blocks play.
+
+`Rac1ClankAudioClient` is independent of nozzle captures, sprites, rendering and
+VFX import availability. At most **two nearest valid supported actors within32
+blocks** own voices. A sustained voice uses the existing `Rac1PcmStream`, with
+the intro once and the original marked suffix repeated. Positions follow the
+actor; accepted action serial/equipment epoch/cue changes retire the old voice.
+Unrelated dry Hydro epochs do not restart it. Action end, stale/untracked state,
+death/spectator/removal, range/budget displacement, disconnect/world/media change
+and resource reload stop **only Clank-owned handles**, never shared/Blaster
+voices. Asynchronous channel startup gets5 ticks grace; dropped voices close
+and wait20 ticks before retry. This is a two-handle budget, not a reservation or
+an audible guarantee under native channel/device pressure.
+
+No fresh ISO or retained proprietary audio payload was read during this coding/
+synthetic-test continuation. Future runtime importing needs normal configured-
+image validation (including hashing), level1 bank/index and compressed core data
+for hero class0 entries2/18, then volatile decode of cues24/36. It reads no GS RAM,
+textures or cone overlay. The old metadata-only permission is **not** permission
+for a media-backed decode/playback retest; obtain explicit clearance for that
+scope and the live slot first. No original audio is distributed in the mod.
+
+**Implemented wiring is not verified audible output.** Host spatialization/mixer,
+the existing ADPCM decoder, immediate owned-voice shutdown and lack of SPU ADSR/
+reverb emulation remain project adaptations. Hydro's scripted API/release path
+and the original cone remain separate unresolved work; Hydro stays silent.
+
+CPU/native regression evidence cannot certify GPU nozzle alignment, first-person
+coverage, original particle/material fidelity, real audio output or two-client
+presentation. These remain a separate T22/owner AV handoff after runtime clearance;
+the exact `f0dad42` movement verification remains independent.
+
+Historical legacy-tree partial-AV full build: **866 passed,51 skipped,0 failures/errors**,
+184 suites/917 tests. Native gameplay regression: **28/28 passed**. This does
+not certify actual GPU effects or audible Clank loops.
+
+### Post-owner glide check: bounded NTSC plume correction
+
+The owner reports audible glide shutdown on landing for the `23f64ad` line.
+That is a narrow owner observation, not certification of all two-client/audio
+lifecycle cases. The glide importer, loops, budget and ownership are unchanged.
+
+The pinned ISC ReRAC `thruster_render.rs` callback establishes that quad jitter
+is subtracted **after** table scaling, and that glow size is fixed at table×0.1,
+not multiplied by flame grow/shrink. The renderer now observes those facts.
+Glow facing uses the nozzle point-to-viewer/gravity basis rather than camera
+roll. Degenerate bases collapse as in the reference, without a guessed socket
+or alternate orientation. Existing sprite materials, windows, nozzle poses,
+source60 host timing and the NTSC-only aerial gate remain unchanged. No new
+jump/ledge/stomp/hover trigger or PAL equivalence is introduced.
+
+The original cone and Hydro scripted audio remain fail-closed pending the
+precise media/release evidence scopes described in the continuation handoff.
+
+### R15-backed native body trails and conservative touchdown motes
+
+Pinned NTSC facts in `afterimage.rs`, `hero/packs.rs`, `hero/pose.rs` and
+`particles/type28.rs` now drive additional client-only presentation:
+
+- Thruster high jump: current native player skin/body at older roots, source
+  alphas40/20 and lags3/5. Long jump: alphas40/20/10 and lags2/4/6. The ring holds8
+  placements; lag counts the newest as1. Alpha drops2 per source update after
+  phase12. Action/serial/epoch change, teleport/stall, stale/untracked or invalid
+  wearer clears history. These are body ghosts, not particles or screen blur.
+  Heli and glide get no ghosts. No new sound is dispatched.
+- Ghosts reuse the existing native player-model hook and **current** pose/skin,
+  not Ratchet clips, old poses, armor/cape/equipment or recursive player layers.
+  Roots are sampled/interpolated on a bounded source60 host clock; this is a
+  Steve/native-render adaptation, not original Ratchet pose/placement playback.
+- Imported `def[28][0]` motes use actual rendered native leg-end transforms and
+  the existing bounded `EffectRuntime` sprite backend. Their source pulse,
+  fade, drift, spin, size and random-colour rules are independent of nozzle
+  smoke. Missing sprite/feet means silence visually—no vanilla dust fallback.
+- A contiguous, fresh accepted-action descent followed by native ground contact,
+  same equipment epoch/serial/module, and passed native takeoff guard is needed.
+  Spawn/equip/raw ground/jump input, ordinary walking, teleport, wet/dead/
+  spectator/hidden/riding/flight/slippery controls do not create a landing burst.
+  Supported high jumps and Thruster long jump get an **initial one-update**
+  two-per-foot pulse. Stationary glide gets the evidenced non-oriented LAND
+  five-update pulse. New airborne/wet/invalid state cancels pending emission.
+
+There is no exposed original post-land group/skid latch in the current native
+snapshot. Accordingly **Heli-long skid, continuing post-land refresh, running
+glide LAND_ROWS, and other slippery/wading landing branches remain omitted**,
+not inferred from a generic onGround packet. Original dry-body animation sound
+trigger words remain unavailable, so no jump/effort/landing sound is invented.
+
+Body ghosts and touchdown motes are **NTSC-only** until PAL counterparts are
+separately evidenced. Source60 from20Hz semantics, bounded render-root
+interpolation, native contact/feet/body/skin, Java RNG and conservative omissions
+are explicit host adaptations. They require isolated GPU/owner retest; CPU and
+native gameplay regressions do not certify appearance.

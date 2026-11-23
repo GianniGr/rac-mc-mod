@@ -44,10 +44,24 @@ public final class Rac1SoundBank {
         public Tone { rawCue = rawCue.clone(); rawGrain = rawGrain.clone(); }
         @Override public byte[] rawCue() { return rawCue.clone(); }
         @Override public byte[] rawGrain() { return rawGrain.clone(); }
-        /** Version-1 approximation; SPU2 48k/negative-note encoding is deliberately unsupported. */
+        /** Preserve the v1 positive-note path; negative notes use the 989snd SPU2 pitch lookup. */
         public float sampleRate() throws IOException {
-            if (centerNote < 0 || centerNote > 127 || fine < 0 || fine > 127) {
+            if (centerNote < -128 || centerNote > 127 || fine < 0 || fine > 127) {
                 throw new IOException("Unverified note encoding");
+            }
+            if (centerNote < 0) {
+                // Independent fixed note=60/fine=0 specialization of the public libsd facts:
+                // ReRAC ae1e343, rc-formats/src/vag.rs; see docs/clank.md for provenance.
+                // The sign selects 48 kHz, NOT an unsigned MIDI note or a negative frequency.
+                int difference = 60 + centerNote;
+                int octave = Math.floorDiv(difference, 12);
+                int semitone = Math.floorMod(difference, 12);
+                long coarse = (long) (32768 * StrictMath.pow(2, semitone / 12.0));
+                long fractional = (long) (32768 * StrictMath.pow(2, fine / 1536.0));
+                long pitch = coarse * fractional / 65536;
+                int shift = 2 - octave;
+                if (shift > 0) pitch = (pitch + (1L << (shift - 1))) >> shift;
+                return 48000f * pitch / 4096;
             }
             return (float) (44100.0 * Math.pow(2.0, (60 - centerNote - fine / 128.0) / 12.0));
         }

@@ -36,4 +36,8 @@ public final class Rac1HydroPlayback {
     }
     public static void forget(UUID player){CHANNELS.keySet().removeIf(k->k.player().equals(player));}
     public static void clear(){CHANNELS.clear();}
+    public static float[] chain(UUID player,Rac1AnimatedAsset model) {
+        var channel=CHANNELS.get(new Key(player,model.classNumber()));
+        return channel==null||channel.model!=model?null:Rac1ClankPoseBlend.chain(model,channel.last);
+    }
 }

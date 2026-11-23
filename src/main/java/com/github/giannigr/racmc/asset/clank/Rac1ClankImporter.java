@@ -6,6 +6,7 @@ import com.github.giannigr.racmc.cache.Rac1DiscIdentity;
 import com.github.giannigr.racmc.disc.DiscFormatException;
 import com.github.giannigr.racmc.disc.Rac1LevelAssets;
 import com.github.giannigr.racmc.iso.Rac1DiscValidator;
+import com.github.giannigr.racmc.iso.Rac1MediaLease;
 import com.github.giannigr.racmc.wad.WadFormatException;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -40,5 +41,17 @@ public final class Rac1ClankImporter {
                     Rac1AssetExtractor.readAnimatedAsset(level, 607),
                     Rac1AssetExtractor.readAnimatedAsset(level, 608));
         }
+    }
+    /** Existing Clank scope under P35's already fully verified read-only capability. */
+    public static Rac1ClankAssets read(Rac1MediaLease image)
+            throws IOException,DiscFormatException,WadFormatException,AssetFormatException {
+        image.checkValid();
+        var level=Rac1LevelAssets.load(image,1);
+        var assets=new Rac1ClankAssets(image.discKey(),
+                Rac1AssetExtractor.readAnimatedAsset(level,601),
+                Rac1AssetExtractor.readAnimatedAsset(level,607),
+                Rac1AssetExtractor.readAnimatedAsset(level,608));
+        image.checkValid();
+        return assets;
     }
 }

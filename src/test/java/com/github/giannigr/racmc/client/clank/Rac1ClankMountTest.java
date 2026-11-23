@@ -100,7 +100,7 @@ class Rac1ClankMountTest {
         Path root = Path.of(System.getProperty("racmc.projectDir"));
         String layer = Files.readString(root.resolve(
                 "src/main/java/com/github/giannigr/racmc/client/clank/Rac1ClankLayer.java"));
-        assertEquals(1, layer.split("body\\.translateAndRotate\\(pose\\)", -1).length - 1);
+        assertEquals(1, layer.split("Rac1ClankSteveMount\\.attach\\(", -1).length - 1);
         assertTrue(layer.contains("finally"));
         assertTrue(layer.contains("pose.popPose()"));
         assertFalse(layer.contains("applyModelRoot"));

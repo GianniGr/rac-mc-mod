@@ -1,8 +1,7 @@
 package com.github.giannigr.racmc.client.clank;
 
 import static org.junit.jupiter.api.Assertions.*;
-import com.github.giannigr.racmc.clank.Rac1ClankMotion.Vector;
-import com.github.giannigr.racmc.clank.Rac1HydroMotion;
+import com.github.giannigr.racmc.clank.Rac1HydroBoost;
 import com.mojang.blaze3d.platform.InputConstants;
 import java.util.HashSet;
 import java.util.Set;
@@ -15,7 +14,7 @@ class Rac1HydroHeldKeysTest {
     private static ToggleKeyMapping mapping(boolean toggle) {
         return new ToggleKeyMapping("racmc.hydro.test."+UUID.randomUUID(),73,"racmc.test",()->toggle);
     }
-    @Test void actualNativeHoldAndToggleMappingsBothStopHydroOnPhysicalReleaseWithoutChangingVanillaLatch() {
+    @Test void actualNativeHoldAndToggleMappingsExposePhysicalReleaseWithoutChangingVanillaLatch() {
         for(boolean toggle:new boolean[]{false,true}) {
             var binding=mapping(toggle);Set<InputConstants.Key> physical=new HashSet<>();
             physical.add(binding.getKey());binding.setDown(true);
@@ -49,20 +48,37 @@ class Rac1HydroHeldKeysTest {
         binding.setKey(InputConstants.Type.KEYSYM.getOrCreate(75));
         assertFalse(Rac1HydroHeldKeys.down(binding,true,key->key.getValue()==73));
     }
-    @Test void releasedToggleThrustCoastsRatherThanStaysPoweredAndSneakReleaseIsNotLatched() {
-        var sprint=mapping(true);var sneak=mapping(true);sprint.setDown(true);sneak.setDown(true);
-        var m=new Rac1HydroMotion();
-        for(int i=0;i<33;i++) {
-            var s=m.step(new Rac1HydroMotion.Input(Rac1HydroHeldKeys.down(sprint,true,key->true),
-                    false,false,0,0,0),Vector.ZERO,false,false);
-            m.resolved(s.displacement());
+    private static Rac1HydroBoost sample(Rac1HydroBoost state,Rac1HydroHeldKeys.Sample sample) {
+        return state.sample(new Rac1HydroBoost.Controls(sample!=Rac1HydroHeldKeys.Sample.UNAVAILABLE,
+                sample==Rac1HydroHeldKeys.Sample.DOWN,false,false,0,1,0),true);
+    }
+    @Test void nativeSprintMappingTogglesOncePerFreshPressNotReleaseOrRepeat() {
+        for(boolean toggle:new boolean[]{false,true}) {
+            var mapping=mapping(toggle);var binding=new Rac1HydroHeldKeys.Sprint();mapping.setDown(true);
+            var state=sample(Rac1HydroBoost.BLOCKED,binding.sample(mapping,true,key->true));
+            assertFalse(state.armed(),"Held across entry must not engage");
+            state=sample(state,binding.sample(mapping,true,key->false));
+            state=sample(state,binding.sample(mapping,true,key->true));
+            assertTrue(state.armed());
+            for(int i=0;i<10;i++)state=sample(state,binding.sample(mapping,true,key->true));
+            assertTrue(state.armed(),"Repeat/hold toggled off");
+            state=sample(state,binding.sample(mapping,true,key->false));
+            assertTrue(state.armed(),"Physical release disarmed");
+            state=sample(state,binding.sample(mapping,true,key->true));
+            assertFalse(state.armed(),"Second physical press failed to disarm");
+            assertTrue(mapping.isDown(),"Hydro must leave the native latch alone");
         }
-        sprint.setDown(false);sneak.setDown(false);
-        var release=new Rac1HydroMotion.Input(Rac1HydroHeldKeys.down(sprint,true,key->false),false,
-                Rac1HydroHeldKeys.down(sneak,true,key->false),0,0,0);
-        var s=m.step(release,Vector.ZERO,false,false);m.resolved(s.displacement());
-        assertEquals(Rac1HydroMotion.Stage.DRIFT,m.state().stage());
-        assertEquals(7-8.0/60,m.velocity().length(),1e-9);
-        assertTrue(sprint.isDown()&&sneak.isDown(),"Vanilla toggle behavior must remain unchanged");
+    }
+    @Test void reopeningGameplayAndRemappingWhileHeldRequireReleaseBeforeNewPress() {
+        var mapping=mapping(true);var binding=new Rac1HydroHeldKeys.Sprint();
+        var state=sample(Rac1HydroBoost.BLOCKED,binding.sample(mapping,true,key->false));
+        state=sample(state,binding.sample(mapping,false,key->{fail("No device poll out of gameplay");return true;}));
+        assertFalse(sample(state,binding.sample(mapping,true,key->true)).armed());
+        state=sample(state,binding.sample(mapping,true,key->false));
+        mapping.setKey(InputConstants.Type.MOUSE.getOrCreate(1));
+        state=sample(state,binding.sample(mapping,true,key->{fail("Remap is not a press");return true;}));
+        assertFalse(sample(state,binding.sample(mapping,true,key->true)).armed());
+        state=sample(state,binding.sample(mapping,true,key->false));
+        assertTrue(sample(state,binding.sample(mapping,true,key->true)).armed());
     }
 }

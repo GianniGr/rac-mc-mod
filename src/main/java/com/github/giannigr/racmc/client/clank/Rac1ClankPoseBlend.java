@@ -55,4 +55,15 @@ public final class Rac1ClankPoseBlend {
         }
         return skin;
     }
+    /** Attachment chains from the exact blended local poses, excluding joint-only post scale. */
+    public static float[] chain(Rac1AnimatedAsset model,Bone[] bones) {
+        if(bones==null)return null;
+        Matrix4f[] chain=new Matrix4f[bones.length];float[] palette=new float[bones.length*16];
+        for(int i=0;i<bones.length;i++) {
+            var b=bones[i];var local=new Matrix4f().translationRotateScale(b.translation(),b.rotation(),b.scale());
+            int parent=model.skeleton().parents()[i];
+            chain[i]=parent<0?local:new Matrix4f(chain[parent]).mul(local);chain[i].get(palette,i*16);
+        }
+        return palette;
+    }
 }
