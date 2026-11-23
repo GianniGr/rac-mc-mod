@@ -35,11 +35,12 @@ public final class ShipDedicatedProbe {
             if (ship == null && server.getTickCount() < 200) return;
             var point = new Vec3(Double.parseDouble(saved.get(1)), Double.parseDouble(saved.get(2)),
                     Double.parseDouble(saved.get(3)));
+            var profile = ShipCockpitRefit.activeProfile();
             if (!(ship instanceof Rac1TravelShip craft) || !craft.position().equals(point) || craft.getYRot() != 43
                     || craft.isVehicle() || craft.isBoosted() || craft.seatSession() != 0
-                    || !craft.accessSnapshot().seatLocal().equals(ShipCockpitProfile.CURRENT.seatLocal())
-                    || craft.getBbWidth() != ShipCockpitProfile.CURRENT.width()
-                    || craft.getBbHeight() != ShipCockpitProfile.CURRENT.height()
+                    || !craft.accessSnapshot().seatLocal().equals(profile.seatLocal())
+                    || craft.getBbWidth() != profile.width()
+                    || craft.getBbHeight() != profile.height()
                     || craft.accessPhase() != Rac1TravelShip.AccessPhase.PARKED
                     || !craft.getDeltaMovement().equals(Vec3.ZERO)) {
                 throw new AssertionError("Ship failed dedicated identity/transform/clean-state restart: " + ship);
