@@ -22,9 +22,9 @@ public final class Rac1BeltWaist {
 
     /** A proper rotation for the renderer's posed body (local +Y down, -Z front). */
     private static Matrix4f axes() {
-        // Imported (x,y,z) -> body (x,-y,-z), determinant +1. Class 618's
-        // measured long X dimension lies across the waist, not into the torso.
-        return new Matrix4f().scaling(1f, -1f, -1f);
+        // Turn the worn model outward by 180 degrees around body up.
+        // Keep its long X axis across the waist and preserve handedness.
+        return new Matrix4f().scaling(-1f, -1f, 1f);
     }
 
     public record Fit(float x, float y, float backZ, float scale) {
@@ -48,6 +48,6 @@ public final class Rac1BeltWaist {
         float scale = Math.min(MAX_WIDTH / width, Math.min(MAX_HEIGHT / height, MAX_DEPTH / depth));
         if (!Float.isFinite(scale) || scale <= 0)
             throw new IllegalArgumentException("Invalid worn mesh scale");
-        return new Fit((box[0] + box[3]) / 2, -(box[1] + box[4]) / 2, -box[2], scale);
+        return new Fit(-(box[0] + box[3]) / 2, -(box[1] + box[4]) / 2, box[5], scale);
     }
 }
