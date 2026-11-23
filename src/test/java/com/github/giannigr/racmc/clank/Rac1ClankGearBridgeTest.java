@@ -26,4 +26,22 @@ class Rac1ClankGearBridgeTest {
         assertEquals(Rac1ClankEquipment.EMPTY, session.equipment());
         assertFalse(session.testHydro());
     }
+
+    @Test void creativePhysicalBackAdmitsHydroWithoutChangingSurvivalOrTheDurableProjection() {
+        var back = new Rac1ClankEquipment(true, true, false, true, Rac1ClankEquipment.Module.HELI);
+        var session = new Rac1ClankSession(UUID.randomUUID(), 1, back);
+        assertFalse(session.testHydro(), "The released fixture-only gate rejected this worn Creative Back");
+        assertFalse(session.hydroAvailable(false));
+        assertTrue(session.hydroAvailable(true));
+        assertEquals(Rac1ClankEquipment.Module.NONE, session.fixture());
+        session.testEquipment(Rac1ClankEquipment.Module.THRUSTER);
+        assertEquals(Rac1ClankEquipment.Module.THRUSTER, session.fixture());
+        assertTrue(session.hydroAvailable(false), "Existing explicit test sessions still work");
+        session.gearEquipment(back);
+        assertEquals(back, session.equipment(), "Dismissing an overlay restores the same physical Back");
+        assertEquals(Rac1ClankEquipment.Module.NONE, session.fixture());
+        assertFalse(session.hydroAvailable(false));
+        session.gearEquipment(new Rac1ClankEquipment(true, true, false, false, Rac1ClankEquipment.Module.HELI));
+        assertFalse(session.hydroAvailable(true));
+    }
 }

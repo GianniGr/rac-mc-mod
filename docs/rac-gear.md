@@ -83,6 +83,14 @@ Creative catalog; use a real container or the in-world drop key to transfer
 it in Creative. The Creative catalog's client-authored slot edits and clone
 gestures cannot move or copy a legitimate reward.
 
+Right-click a Creative Heli or Thruster test item to wear that temporary pack.
+RaC Gear shows the selected test pack, and **Unequip Clank** dismisses only
+the test session. If a physical Clank was already in Back, it remains there
+and resumes as the worn pack; dismissing the fixture never returns or creates
+an item. A separate Unequip action then follows the normal physical return rules.
+A physical Back item admits temporary Hydro testing while the wearer is in
+Creative, not a Hydro unlock in Survival.
+
 Clients see their own Gear snapshot only. A pod treats missing state as not
 ready and hides its occupant once that player's unlock is known; existing
 Clank tracking shows only the effective worn projection to others. The item

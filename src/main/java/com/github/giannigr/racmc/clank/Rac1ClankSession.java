@@ -61,6 +61,12 @@ public final class Rac1ClankSession {
     long epoch() { return epoch; }
     Rac1ClankEquipment equipment() { return equipment; }
     boolean testHydro() { return testHydro; }
+    Rac1ClankEquipment.Module fixture() {
+        return testHydro ? equipment.selected() : Rac1ClankEquipment.Module.NONE;
+    }
+    boolean hydroAvailable(boolean creative) {
+        return equipment.worn() && (testHydro || creative);
+    }
     Rac1ClankMotion motion() { return motion; }
     void actionStarted(long tick) {
         actionSerial=Math.incrementExact(actionSerial); actionStartTick=tick;

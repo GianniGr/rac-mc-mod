@@ -43,8 +43,19 @@ public final class Rac1ClankServer {
     public static boolean configureTest(CommandSourceStack source, ServerPlayer target,
             Rac1ClankEquipment.Module module) {
         if (!source.hasPermission(2) || !target.isAlive() || target.isRemoved()) return false;
-        applySessionEquipment(target,module);
+        if (module == Rac1ClankEquipment.Module.NONE) clearFixture(target);
+        else applySessionEquipment(target,module);
         return true;
+    }
+    public static Rac1ClankEquipment.Module fixture(ServerPlayer target) {
+        var state = SESSIONS.get(target.getUUID());
+        return state == null ? Rac1ClankEquipment.Module.NONE : state.fixture();
+    }
+    /** Dismiss only a current temporary fixture; restore the already committed physical projection. */
+    public static void clearFixture(ServerPlayer target) {
+        if (fixture(target) == Rac1ClankEquipment.Module.NONE) return;
+        applyGearBack(target);
+        Rac1GearServer.fixtureChanged(target);
     }
     /** Native item-use path derives the module from the actual server-held registered item only. */
     public static boolean equipCreative(ServerPlayer player,net.minecraft.world.InteractionHand hand) {
@@ -69,6 +80,7 @@ public final class Rac1ClankServer {
         var state = session(target);
         state.testEquipment(module);
         syncEquipmentChange(target, state);
+        Rac1GearServer.fixtureChanged(target);
     }
     /** Applies only the Back slot already committed by the server-owned Gear path. */
     public static void applyGearBack(ServerPlayer target) {

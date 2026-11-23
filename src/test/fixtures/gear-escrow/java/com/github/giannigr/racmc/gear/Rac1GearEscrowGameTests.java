@@ -1,5 +1,8 @@
 package com.github.giannigr.racmc.gear;
 
+import com.github.giannigr.racmc.clank.Rac1ClankEquipment.Module;
+import com.github.giannigr.racmc.clank.Rac1ClankServer;
+import com.github.giannigr.racmc.clank.Rac1HydroRuntime;
 import com.github.giannigr.racmc.item.Rac1ClankItem;
 import com.github.giannigr.racmc.item.RacMcItems;
 import com.github.giannigr.racmc.rescue.Rac1PodFootprint;
@@ -130,6 +133,61 @@ public final class Rac1GearEscrowGameTests {
                 index.remove(player.getUUID());
                 player.discard();
             }
+        }
+        test.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void creativeFixtureDismissDoesNotReturnOverlaidBackOrGrantGear(GameTestHelper test) throws Exception {
+        var level = test.getLevel();
+        var index = playerIndex(level);
+        var player = player(test, index, "clank-fixture", GameType.CREATIVE);
+        var sink = (Sink) player.connection;
+        try {
+            var pack = new ItemStack(RacMcItems.CLANK_THRUSTER_PACK.get());
+            player.setItemInHand(InteractionHand.MAIN_HAND, pack);
+            var used = player.gameMode.useItem(player, level, pack, InteractionHand.MAIN_HAND);
+            var fixture = sink.last;
+            test.assertTrue(used.consumesAction() && fixture.fixture() == Module.THRUSTER
+                    && !fixture.clankUnlocked() && !fixture.back().worn() && player.getMainHandItem().is(pack.getItem()),
+                    "Right-click fixture did not publish temporary wear without taking the item");
+            Rac1GearServer.equipBack(player, new Rac1GearNetwork.EquipBack(fixture.epoch(), fixture.revision(), false));
+            test.assertTrue(sink.last.fixture() == Module.NONE && !sink.last.clankUnlocked(),
+                    "Dismiss left a fixture or granted permanent Gear");
+
+            player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+            test.assertTrue(Rac1GearServer.rescueClank(player, () -> {}) == Rac1GearServer.RescueResult.NEWLY_UNLOCKED,
+                    "Could not set up a genuine Back token");
+            var issued = Rac1ClankItem.rewardId(player.getMainHandItem());
+            test.assertTrue(issued != null && Rac1GearServer.useClank(player, InteractionHand.MAIN_HAND)
+                    && sink.last.back().worn() && Rac1HydroRuntime.snapshot(player).access(),
+                    "Worn physical Back did not admit Creative Hydro");
+            player.setItemInHand(InteractionHand.MAIN_HAND, pack);
+            player.gameMode.useItem(player, level, pack, InteractionHand.MAIN_HAND);
+            fixture = sink.last;
+            test.assertTrue(fixture.fixture() == Module.THRUSTER && fixture.back().worn(), "Overlay lost physical Back");
+            var dismiss = new Rac1GearNetwork.EquipBack(fixture.epoch(), fixture.revision(), false);
+            Rac1GearServer.equipBack(player, dismiss);
+            Rac1GearServer.equipBack(player, dismiss);
+            var restored = sink.last;
+            test.assertTrue(restored.fixture() == Module.NONE && restored.back().worn() && !restored.clankInInventory(),
+                    "Dismissing or replaying the fixture request touched physical escrow");
+
+            player.setGameMode(GameType.SURVIVAL);
+            Rac1HydroRuntime.stepTick(player);
+            test.assertTrue(!Rac1HydroRuntime.snapshot(player).access() && sink.last.back().worn(),
+                    "Physical Back retained Creative Hydro in Survival");
+            player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+            Rac1GearServer.equipBack(player, new Rac1GearNetwork.EquipBack(restored.epoch(), restored.revision(), false));
+            var returned = Rac1ClankItem.rewardId(player.getMainHandItem());
+            test.assertTrue(returned != null && returned.token().equals(issued.token()) && !sink.last.back().worn(),
+                    "A separate physical Unequip did not return the same logical token");
+        } finally {
+            var logout = new PlayerEvent.PlayerLoggedOutEvent(player);
+            Rac1GearServer.logout(logout);
+            Rac1ClankServer.logout(logout);
+            index.remove(player.getUUID());
+            player.discard();
         }
         test.succeed();
     }

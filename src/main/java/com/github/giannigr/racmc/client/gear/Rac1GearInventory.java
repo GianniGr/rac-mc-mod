@@ -176,14 +176,24 @@ public final class Rac1GearInventory {
 
     static Component backStatus(Rac1GearState state) {
         if (state == null) return text("waiting");
+        switch (state.fixture()) {
+            case HELI -> {
+                return Component.translatableWithFallback("screen.racmc.gear.test_worn", "%s (temporary test pack)",
+                        Component.translatable("item.racmc.clank_heli_pack"));
+            }
+            case THRUSTER -> {
+                return Component.translatableWithFallback("screen.racmc.gear.test_worn", "%s (temporary test pack)",
+                        Component.translatable("item.racmc.clank_thruster_pack"));
+            }
+            case NONE -> {}
+        }
         if (!state.clankUnlocked()) return text("locked");
         return text(state.back().worn() ? "worn" : state.returnPending() ? "return_pending"
                 : state.clankInInventory() ? "available" : state.rewardPending() ? "reward_pending" : "missing_clank");
     }
 
     static boolean backEnabled(Rac1GearState state, boolean eligiblePlayer) {
-        return eligiblePlayer && state != null && state.clankUnlocked()
-                && (state.back().worn() || (state.clankInInventory() && !state.returnPending()));
+        return eligiblePlayer && state != null && state.allowsBackRequest(!state.wearingClank());
     }
 
     private static final class Panel {
@@ -208,7 +218,7 @@ public final class Rac1GearInventory {
         final Button inventoryTab = Button.builder(text("inventory"), button -> open = false)
                 .bounds(0, 0, TAB_WIDTH, 20).build();
         final Button back = Button.builder(text("equip"), button -> {
-            if (state != null) Rac1GearClient.requestBack(!state.back().worn());
+            if (state != null) Rac1GearClient.requestBack(state, !state.wearingClank());
         }).bounds(0, 0, 144, 20).build();
         final Button boltGrabber = Button.builder(beltText("waiting"), button ->
                 Rac1BeltClient.request(Rac1BeltGadget.BOLT_GRABBER, boltAvailability == Availability.READY))
@@ -242,12 +252,11 @@ public final class Rac1GearInventory {
 
             state = Rac1GearClient.selfState().orElse(null);
             status = backStatus(state);
-            boolean unlocked = state != null && state.clankUnlocked();
             var minecraft = Minecraft.getInstance();
             var player = minecraft.player;
             boolean eligible = player != null && player.isAlive() && !player.isSpectator();
             back.active = backEnabled(state, eligible);
-            back.setMessage(text(unlocked && state.back().worn() ? "unequip" : "equip"));
+            back.setMessage(text(state != null && state.wearingClank() ? "unequip" : "equip"));
             var belt = Rac1BeltClient.selfState();
             boltAvailability = belt == null ? null : belt.boltGrabber().availability();
             boltGrabber.active = eligible && (boltAvailability == Availability.READY

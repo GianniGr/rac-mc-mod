@@ -2,6 +2,7 @@ package com.github.giannigr.racmc.client.clank;
 
 import static org.junit.jupiter.api.Assertions.*;
 import com.github.giannigr.racmc.clank.Rac1HydroBoost;
+import com.github.giannigr.racmc.clank.Rac1HydroWire;
 import com.mojang.blaze3d.platform.InputConstants;
 import java.util.HashSet;
 import java.util.Set;
@@ -80,5 +81,32 @@ class Rac1HydroHeldKeysTest {
         assertFalse(sample(state,binding.sample(mapping,true,key->true)).armed());
         state=sample(state,binding.sample(mapping,true,key->false));
         assertTrue(sample(state,binding.sample(mapping,true,key->true)).armed());
+    }
+    @Test void configuredControlThroughTheWireArmsThrustAndKeepsArmedOnForwardRelease() throws Exception {
+        for (boolean toggle : new boolean[]{false, true}) {
+            var mapping = mapping(toggle);
+            mapping.setKey(InputConstants.Type.KEYSYM.getOrCreate(341)); // Default Left Ctrl.
+            var sprint = new Rac1HydroHeldKeys.Sprint();
+            var stream = new Rac1HydroWire.Stream(3);
+            var boost = Rac1HydroBoost.BLOCKED;
+            boolean[] down = {true, false, true, false, false, false, true, false, true};
+            boolean[] forward = {true, true, true, true, false, true, true, true, true};
+            boolean[] wet = {true, true, true, true, true, true, false, true, true};
+            boolean[] armed = {false, false, true, true, true, true, false, false, true};
+            for (int i = 0; i < down.length; i++) {
+                boolean pressed = down[i];
+                mapping.setDown(pressed);
+                boolean vanilla = mapping.isDown();
+                var sample = sprint.sample(mapping, wet[i], key -> pressed && key.getValue() == 341);
+                var keys = new Rac1HydroBoost.Controls(sample != Rac1HydroHeldKeys.Sample.UNAVAILABLE,
+                        sample == Rac1HydroHeldKeys.Sample.DOWN, false, false, 0, forward[i] ? 1 : 0, 0);
+                var wire = Rac1HydroWire.input(Rac1HydroWire.encode(new Rac1HydroWire.Input(3, i, keys)));
+                assertTrue(stream.offer(wire, i));
+                for (var received : stream.consume(i)) boost = boost.sample(received, wet[i]);
+                assertEquals(armed[i], boost.armed(), "sample " + i);
+                assertEquals(armed[i] && forward[i], boost.drive(keys).thrust(), "sample " + i);
+                assertEquals(vanilla, mapping.isDown(), "Hydro changed the vanilla binding");
+            }
+        }
     }
 }
