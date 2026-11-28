@@ -3,6 +3,7 @@ package com.github.giannigr.racmc.client.screen;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /** Game-thread input boundary. Non-selections never reach the media manager. */
@@ -26,9 +27,41 @@ final class Rac1IsoInput {
 
     private long serial, pending;
     private Status status=Status.NONE;
+    private long focusIntent;
+    private boolean dispatchingClick;
+    private Runnable focusAfterClick;
 
     Status status() { return status; }
     boolean enabled(boolean checking) { return pending==0 && !checking; }
+
+    long focusIntent() { return focusIntent; }
+
+    void noteFocusInput() { focusIntent++; }
+
+    boolean dispatchClick(BooleanSupplier vanillaClick) {
+        noteFocusInput();
+        dispatchingClick = true;
+        try {
+            boolean handled = vanillaClick.getAsBoolean();
+            // The container assigns focus to the clicked widget after its onPress callback.
+            if (focusAfterClick != null) focusAfterClick.run();
+            return handled;
+        } finally {
+            dispatchingClick = false;
+            focusAfterClick = null;
+        }
+    }
+
+    void focusFallback(long intent, Runnable focus) {
+        Runnable ifCurrent = () -> {
+            if (intent == focusIntent) focus.run();
+        };
+        if (dispatchingClick) {
+            focusAfterClick = ifCurrent;
+        } else {
+            ifCurrent.run();
+        }
+    }
 
     static boolean submitsPath(boolean fieldFocused,int keyCode) {
         return fieldFocused && (keyCode==org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
@@ -51,6 +84,8 @@ final class Rac1IsoInput {
     }
 
     void close() {
+        noteFocusInput();
+        focusAfterClick = null;
         if (pending!=0) status=Status.NONE;
         pending=0;
     }

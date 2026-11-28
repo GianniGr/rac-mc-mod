@@ -86,4 +86,40 @@ class Rac1IsoInputTest {
         for (int key:new int[]{GLFW.GLFW_KEY_TAB,GLFW.GLFW_KEY_V,GLFW.GLFW_KEY_ESCAPE})
             assertFalse(Rac1IsoInput.submitsPath(true,key));
     }
+
+    @Test void inlineUnavailableFocusRunsAfterVanillaAssignsClickFocus() {
+        var input = new Rac1IsoInput();
+        var focusChanges = new ArrayList<String>();
+        assertTrue(input.dispatchClick(() -> {
+            long ticket = input.begin(false);
+            assertTrue(input.finish(ticket, Rac1IsoInput.Result.of(UNAVAILABLE), true, false,
+                    path -> fail("Unavailable must not submit")));
+            input.focusFallback(input.focusIntent(), () -> focusChanges.add("path field"));
+            assertTrue(focusChanges.isEmpty());
+            focusChanges.add("clicked picker"); // ContainerEventHandler.setFocused after onPress.
+            return true;
+        }));
+        assertEquals(List.of("clicked picker", "path field"), focusChanges);
+    }
+
+    @Test void newerInputAndCloseInvalidateFocusButKeyboardNeedsNoClickHandoff() {
+        var input = new Rac1IsoInput();
+        input.noteFocusInput(); // Keyboard activation.
+        long keyboardIntent = input.focusIntent();
+        var focusChanges = new ArrayList<String>();
+        input.focusFallback(keyboardIntent, () -> focusChanges.add("keyboard fallback"));
+        assertEquals(List.of("keyboard fallback"), focusChanges);
+
+        assertFalse(input.dispatchClick(() -> false)); // New mouse input.
+        input.focusFallback(keyboardIntent, () -> fail("Newer input must win"));
+        assertTrue(input.dispatchClick(() -> {
+            input.focusFallback(input.focusIntent(), () -> fail("Closed screen must not gain focus"));
+            input.close();
+            return true;
+        }));
+        long beforeClose = input.focusIntent();
+        input.close();
+        input.focusFallback(beforeClose, () -> fail("Delayed focus after close"));
+        assertEquals(List.of("keyboard fallback"), focusChanges);
+    }
 }

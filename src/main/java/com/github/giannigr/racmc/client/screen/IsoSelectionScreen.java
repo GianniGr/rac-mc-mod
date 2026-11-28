@@ -328,7 +328,13 @@ public class IsoSelectionScreen extends Screen {
     }
 
     @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        return input.dispatchClick(() -> super.mouseClicked(mouseX, mouseY, button));
+    }
+
+    @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        input.noteFocusInput();
         if (this.mandatory && keyCode == GLFW.GLFW_KEY_ESCAPE) {
             // The escape key cannot leave the screen while no verified disc image is configured.
             RacMcMod.LOGGER.info("The disc image picker ignored the escape key.");
@@ -369,6 +375,8 @@ public class IsoSelectionScreen extends Screen {
         var media = RacMcClient.media();
         long ticket = input.begin(media.isChecking());
         if (ticket == 0) return;
+        long focusIntent = input.focusIntent();
+        Button activatingPicker = this.pickButton;
         reportScroll = 0;
         updateInput();
         Rac1IsoChooser.open(Component.translatable("screen.racmc.iso_selection.pick").getString(),
@@ -381,7 +389,14 @@ public class IsoSelectionScreen extends Screen {
                     reportScroll = 0;
                     updateInput();
                     if (input.status() == Rac1IsoInput.Status.UNAVAILABLE
-                            || input.status() == Rac1IsoInput.Status.FAILED) setInitialFocus(pathField);
+                            || input.status() == Rac1IsoInput.Status.FAILED) {
+                        input.focusFallback(focusIntent, () -> {
+                            if (client.screen == this && this.pickButton == activatingPicker
+                                    && getFocused() == activatingPicker) {
+                                setInitialFocus(pathField);
+                            }
+                        });
+                    }
                 }));
     }
 
