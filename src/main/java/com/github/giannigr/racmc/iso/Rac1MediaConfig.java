@@ -1,7 +1,6 @@
 package com.github.giannigr.racmc.iso;
 
 import java.io.IOException;
-import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -65,7 +64,10 @@ public record Rac1MediaConfig(Path path,
             return null;
         }
         Properties properties = new Properties();
-        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+        try (var reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            // Properties.load(Reader) treats a leading UTF-8 BOM as part of the first key.
+            reader.mark(1);
+            if (reader.read() != '\uFEFF') reader.reset();
             properties.load(reader);
         }
         String path = properties.getProperty("path");

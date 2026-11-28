@@ -60,6 +60,7 @@ public final class Rac1ScreenLayout {
 
     /** The room that is kept between the buttons and the panel of the report. */
     public static final int PROGRESS_ROOM = 26;
+    private static final int CHECK_BUTTON_WIDTH = 76;
 
     private Rac1ScreenLayout() {
     }
@@ -108,6 +109,17 @@ public final class Rac1ScreenLayout {
     public static int reportTop(int buttonsBottom, boolean progressActive) {
         return buttonsBottom + BUTTON_GAP + (progressActive ? PROGRESS_ROOM : 0);
     }
+
+    /** Manual input remains on the same compact row in both picker modes. */
+    public static PathRow pathRow(int screenWidth, int buttonsBottom) {
+        int left=contentLeft(screenWidth), right=left+contentWidth(screenWidth);
+        int top=buttonsBottom+BUTTON_GAP, bottom=top+BUTTON_HEIGHT;
+        int checkLeft=right-CHECK_BUTTON_WIDTH;
+        return new PathRow(new Area(left,top,checkLeft-BUTTON_GAP,bottom),
+                new Area(checkLeft,top,right,bottom));
+    }
+
+    public record PathRow(Area field, Area check) {}
 
     /**
      * The top of the button of the mod in the main menu.

@@ -19,6 +19,24 @@ import org.junit.jupiter.api.Test;
  * usual window.
  */
 class Rac1ScreenLayoutTest {
+    @Test void pathAndCheckFitAboveProgressAndScrollableReportAtMinimum() {
+        // Budget four wrapped header lines and both rows in mandatory mode.
+        int navigationBottom=6+12+4*Rac1ScreenLayout.LINE_HEIGHT+2+6
+                +2*Rac1ScreenLayout.BUTTON_HEIGHT+Rac1ScreenLayout.BUTTON_GAP;
+        for (int[] window:new int[][]{{320,240},{304,201},{854,480}}) {
+            var row=Rac1ScreenLayout.pathRow(window[0],navigationBottom);
+            assertEquals(navigationBottom+Rac1ScreenLayout.BUTTON_GAP,row.field().top());
+            assertTrue(row.field().left()>=0 && row.check().right()<=window[0]);
+            assertTrue(row.field().width()>=140);
+            assertTrue(row.field().right()<row.check().left());
+            assertEquals(row.field().bottom(),row.check().bottom());
+            int reportTop=Rac1ScreenLayout.reportTop(row.check().bottom(),true);
+            var layout=Rac1ScreenLayout.layout(window[0],window[1],reportTop,64,false);
+            assertTrue(layout.report().height()>=2*Rac1ScreenLayout.PADDING+2*Rac1ScreenLayout.LINE_HEIGHT);
+            assertTrue(layout.report().bottom()<=window[1]);
+            assertTrue(layout.visibleLines()>0 && layout.maxScroll()>0);
+        }
+    }
 
     /** The width of the narrowest window of the game. */
     private static final int MIN_WIDTH = 320;

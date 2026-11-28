@@ -26,6 +26,34 @@ class Rac1MediaManagerTest {
     Path tempDir;
 
     @Test
+    void bomPathOnlyConfigStartsVerificationButDoesNotTrustAnInvalidImage() throws Exception {
+        SyntheticDisc disc=SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00,PAL_PRODUCT_CODE,SyntheticIso.elf(1024));
+        Path image=writeImage("disc é.iso",disc.image());
+        Path config=configFile();
+        Files.createDirectories(config.getParent());
+        String entry="\uFEFFpath="+image.toString().replace("\\","/")+"\n";
+        Files.writeString(config,entry,StandardCharsets.UTF_8);
+        var oldReader=new java.util.Properties();
+        try (var raw=Files.newBufferedReader(config,StandardCharsets.UTF_8)) { oldReader.load(raw); }
+        assertFalse(oldReader.containsKey("path"),"The legacy reader silently sees a different key");
+        assertTrue(oldReader.containsKey("\uFEFFpath"));
+        assertEquals(image,Rac1MediaConfig.read(config).path());
+        try (var manager=newManager(disc)) {
+            awaitVerification(manager,manager::start);
+            assertTrue(manager.isReady());
+            assertEquals(image,manager.configuredPath().orElseThrow());
+        }
+        Files.write(image,new byte[disc.image().length]);
+        Files.writeString(config,entry,StandardCharsets.UTF_8);
+        try (var manager=newManager(disc)) {
+            awaitVerification(manager,manager::start);
+            assertFalse(manager.isReady());
+            assertEquals(Rac1MediaState.INVALID,manager.state());
+            assertEquals(entry,Files.readString(config,StandardCharsets.UTF_8));
+        }
+    }
+
+    @Test
     @DisplayName("Without a configured image the game stays closed")
     void withoutMediaTheGameStaysClosed() {
         SyntheticDisc disc = SyntheticDisc.create(Rac1DiscRevision.PAL_V2_00, PAL_PRODUCT_CODE,

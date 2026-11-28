@@ -90,10 +90,12 @@ the game asks for the image in the main menu. The image is remembered by its pat
 asked for once; the file is verified again on every start of the game, and the game asks again when
 the file is missing or was changed.
 
-To point the mod at your disc image, press the **Disc image** button in the lower left corner of
-the main menu, enter the path of the ISO file of your disc and let the mod check it. The check
-reads the image in the background and shows how far it has come, so the game stays usable while it
-runs. The button stands above the lines of the version of the game, so that they stay readable.
+Open **Disc image** in the lower left corner of the main menu, or use the setup screen
+shown on first launch. Type or paste the **absolute path** to your local ISO, then
+press **Enter** or choose **Check image**. Windows **Copy as path** quotes are accepted.
+**Pick disc image** is optional: if the system file chooser is unavailable or fails,
+the in-game field remains usable. Cancelling the chooser does not change your selection.
+Either input method sends a selected file for the same background verification.
 The screen of the disc image keeps its report - the path of the image, the outcome of the check and
 the state of the cache - in a panel under its buttons; a report that does not fit into the panel is
 scrolled with the mouse wheel instead of being cut off, so that every line of it can be read.
