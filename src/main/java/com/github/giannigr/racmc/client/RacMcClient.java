@@ -71,16 +71,6 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 @EventBusSubscriber(modid = RacMcConstants.MOD_ID, value = Dist.CLIENT)
 public final class RacMcClient {
 
-    static {
-        // The selection screen uses the file chooser of the system, which needs a graphical user
-        // interface. The game itself does not need one and turns it off in its entry point with
-        // "java.awt.headless=true". The Java runtime reads the property when it is asked for the
-        // first time, so it is turned back on here, before the first use of the file chooser.
-        if ("true".equals(System.getProperty("java.awt.headless"))) {
-            System.setProperty("java.awt.headless", "false");
-        }
-    }
-
     /** The class name of the main menu of the game. */
     private static final String TITLE_SCREEN = "net.minecraft.client.gui.screens.TitleScreen";
 

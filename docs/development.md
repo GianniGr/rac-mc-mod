@@ -265,10 +265,14 @@ configured, and the selection screen belongs to the main menu:
   configuration after the image was verified completely, and a failed attempt leaves the previous,
   valid image in place.
 
-The selection screen lets the player pick the disc image with the file chooser of the system. As
-soon as a file is picked, the check of that file starts on a worker thread; the screen shows how far
-the reading of the image has come and reports the outcome. There is no separate button that starts
-the check.
+Type or paste the absolute path into the in-game ISO path field, then press **Enter**
+while the field is focused or click **Check image**. A path copied with Windows
+**Copy as path** may include surrounding double quotes. Empty and malformed or relative
+paths are reported locally; missing files and invalid images are reported by verification.
+Alternatively, **Pick disc image** opens the system file chooser when available. Selecting
+a file there starts the same check immediately; cancelling does not submit. The screen
+distinguishes selected, cancelled, unavailable, and failed. On unavailable or failed,
+it focuses the in-game path field. Neither path bypasses validation.
 
 The screen keeps its report - the path of the disc image, the outcome of its check and the state of
 the cache of the assets - in a panel that fills the room under its buttons. A report that is longer
@@ -283,16 +287,19 @@ the loader that the main menu writes into its lower left corner. The drawing of 
 assets is left out when the window is too small to hold it beside the report; the screen of the
 demo of the Blaster is not affected by that.
 
-The game itself turns the graphical user interface of Java off in its entry point with
-`java.awt.headless=true`, because the game does not need one. The file chooser does need one, so the
-mod turns it back on before the chooser is used for the first time. The Java runtime reads the
-property when it is asked for the first time, so the change has to happen early, which it does in
-the static initialiser of `RacMcClient`.
+The former `RacMcClient` static initializer set the `java.awt.headless` property string to
+`false`. AWT can already have cached its effective headless state by then: the isolated
+Java test measures `false/true` (property/effective state) when changed after AWT's first
+query, versus `false/false` when changed before it. A graphical Minecraft window does not
+imply AWT availability. The reported CurseForge log establishes that AWT was effectively
+headless, not which launcher or JVM component initialized it first. The mod no longer
+changes the process-wide setting or assumes that the desktop chooser can open.
 
 `Rac1MediaManager` holds the state of the media and does all of its work on a worker thread, so
 neither the verification of a 4.2 GB image nor the reading of its digest blocks the screen. The
-file chooser of the system runs on the thread of the user interface toolkit of Java and hands the
-chosen file back to the thread of the game.
+file chooser of the system runs on the Java event thread when available and hands the
+outcome back to the game thread. Duplicate launches are blocked; a callback for a departed
+screen does not submit a new verification.
 
 The path of the verified image and a few facts about it - the revision, the size, the digest and
 the time the file was changed - are written to `config/racmc/racmc-media.properties`, in the
@@ -303,6 +310,14 @@ pick the image again. The screen says that the configured image is being verifie
 the reading has come. The game stays closed until the check is over, and it stays closed for good
 when the file is missing or was changed - the path in the configuration is kept, so that the player
 can replace it with a valid image.
+
+Prefer the in-game field over editing the config. A path-only properties file is a
+startup input, not a verified configuration: the ISO is still checked. One UTF-8 BOM at
+the start of the file is accepted; plain `Properties.load(Reader)` previously treated it
+as part of the first key. If a path-only file is not seen in a launcher test, verify the
+active instance directory, exact `.properties` extension and readability. A report of
+**No disc image is configured yet** after a manual edit does not establish ISO rejection
+or prove the file contained a BOM.
 
 Everything under `com.github.giannigr.racmc.client` is client only: the event subscribers are
 registered with `Dist.CLIENT` and the screen is never referenced from common code, so a dedicated

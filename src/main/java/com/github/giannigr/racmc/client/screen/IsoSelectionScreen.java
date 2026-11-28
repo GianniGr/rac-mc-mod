@@ -8,31 +8,24 @@ import com.github.giannigr.racmc.client.RacMcClient;
 import com.github.giannigr.racmc.client.render.Rac1AssetPreview;
 import com.github.giannigr.racmc.iso.IsoValidationResult;
 import com.github.giannigr.racmc.iso.Rac1MediaManager;
-import java.awt.Frame;
-import java.awt.GraphicsEnvironment;
-import java.io.File;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
-import javax.swing.JDialog;
-import javax.swing.JFileChooser;
-import javax.swing.SwingUtilities;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.options.OptionsScreen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * The screen where the player points the mod at the disc image of their game.
  *
  * <p>The screen belongs to the main menu. It lets the player pick the disc image with a file
- * chooser and shows what the check of that file found. The check of the image reads the whole file
+ * chooser or enter its path and shows what the check of that file found. The check reads the whole file
  * and runs on a worker thread, so the screen stays usable and shows how far the reading has come.
  *
  * <p>The screen has two modes. In the mandatory mode - which is the mode it is opened in while no
@@ -62,7 +55,10 @@ public class IsoSelectionScreen extends Screen {
 
     private final boolean mandatory;
 
-    private Component status = Component.empty();
+    private final Rac1IsoInput input = new Rac1IsoInput();
+    private String pathText;
+    private EditBox pathField;
+    private Button checkButton;
     private IsoValidationResult reportedResult;
     private Button pickButton;
     private Button retryButton;
@@ -133,8 +129,10 @@ public class IsoSelectionScreen extends Screen {
                 * Rac1ScreenLayout.LINE_HEIGHT;
         y += 2;
         this.mandatoryTop = y;
-        y += linesOf(Component.translatable("screen.racmc.iso_selection.mandatory"))
-                * Rac1ScreenLayout.LINE_HEIGHT;
+        if (this.mandatory) {
+            y += linesOf(Component.translatable("screen.racmc.iso_selection.mandatory"))
+                    * Rac1ScreenLayout.LINE_HEIGHT;
+        }
         y += 6;
 
         int row = y;
@@ -208,7 +206,7 @@ public class IsoSelectionScreen extends Screen {
                         .bounds(sideX, row, Rac1ScreenLayout.SIDE_BUTTON_WIDTH,
                                 Rac1ScreenLayout.BUTTON_HEIGHT)
                         .build());
-                row += Rac1ScreenLayout.BUTTON_HEIGHT + Rac1ScreenLayout.BUTTON_GAP;
+                row += Rac1ScreenLayout.BUTTON_HEIGHT;
             } else {
                 row += Rac1ScreenLayout.BUTTON_HEIGHT + Rac1ScreenLayout.BUTTON_GAP;
                 addRenderableWidget(Button.builder(Component.translatable("gui.back"),
@@ -219,7 +217,23 @@ public class IsoSelectionScreen extends Screen {
                 row += Rac1ScreenLayout.BUTTON_HEIGHT;
             }
         }
-        this.buttonsBottom = row;
+        var pathRow = Rac1ScreenLayout.pathRow(this.width, row);
+        var field = pathRow.field();
+        this.pathField = addRenderableWidget(new EditBox(this.font, field.left(), field.top(),
+                field.width(), field.height(), Component.translatable("screen.racmc.iso_selection.path")));
+        this.pathField.setMaxLength(32767);
+        this.pathField.setHint(Component.translatable("screen.racmc.iso_selection.path_hint"));
+        if (this.pathText == null) {
+            this.pathText = RacMcClient.media().configuredPath().map(Object::toString).orElse("");
+        }
+        this.pathField.setValue(this.pathText);
+        this.pathField.setResponder(text -> this.pathText = text);
+        var check = pathRow.check();
+        this.checkButton = addRenderableWidget(Button.builder(
+                        Component.translatable("screen.racmc.iso_selection.check"), button -> submitPath())
+                .bounds(check.left(), check.top(), check.width(), check.height()).build());
+        this.buttonsBottom = check.bottom();
+        updateInput();
     }
 
     @Override
@@ -231,7 +245,11 @@ public class IsoSelectionScreen extends Screen {
         // before that would end up in the blur and would not be readable.
         super.render(graphics, mouseX, mouseY, partialTick);
 
-        List<FormattedCharSequence> report = this.font.split(describeState(), reportWidth());
+        var status = input.status();
+        Component reportText = status == Rac1IsoInput.Status.NONE ? describeState()
+                : Component.translatable("screen.racmc.iso_selection.status." + status.key)
+                        .append("\n").append(describeState());
+        List<FormattedCharSequence> report = this.font.split(reportText, reportWidth());
         boolean progress = progressActive();
         int reportTop = Rac1ScreenLayout.reportTop(this.buttonsBottom, progress);
         this.layout = Rac1ScreenLayout.layout(this.width, this.height, reportTop,
@@ -271,10 +289,7 @@ public class IsoSelectionScreen extends Screen {
         // the hero runs at the same speed whatever the number of pictures per second is.
         this.previewTime += 0.05f;
         reportResult();
-        if (this.pickButton != null) {
-            // Only one check runs at a time.
-            this.pickButton.active = !RacMcClient.media().isChecking();
-        }
+        updateInput();
         if (this.retryButton != null) {
             // The button is only there when the cache could not be built.
             this.retryButton.visible = RacMcClient.assets().state() == Rac1CacheState.FAILED;
@@ -314,9 +329,13 @@ public class IsoSelectionScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (this.mandatory && keyCode == 256) {
+        if (this.mandatory && keyCode == GLFW.GLFW_KEY_ESCAPE) {
             // The escape key cannot leave the screen while no verified disc image is configured.
             RacMcMod.LOGGER.info("The disc image picker ignored the escape key.");
+            return true;
+        }
+        if (this.pathField != null && Rac1IsoInput.submitsPath(this.pathField.isFocused(), keyCode)) {
+            submitPath();
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
@@ -337,73 +356,49 @@ public class IsoSelectionScreen extends Screen {
 
     @Override
     public void removed() {
+        input.close();
         // The textures of the preview are images in the memory of the texture manager of the game,
         // so they have to be released when the screen is closed.
         this.preview.release();
         super.removed();
     }
 
-    /**
-     * Opens a file chooser and checks the file the player picks.
-     *
-     * <p>The chooser runs on the thread of the user interface toolkit of Java, the check runs on a
-     * worker thread of the media manager. Both hand their result back to the thread of the game.
-     */
     private void pickImage() {
-        RacMcMod.LOGGER.info("The disc image picker opens the file chooser.");
         Minecraft client = this.minecraft;
-        SwingUtilities.invokeLater(() -> {
-            RacMcMod.LOGGER.info("The file chooser thread starts, headless={}",
-                    GraphicsEnvironment.isHeadless());
-            Path chosen = showChooser();
-            RacMcMod.LOGGER.info("The file chooser returned.");
-            if (chosen != null) {
-                client.execute(() -> {
-                    RacMcClient.media().select(chosen);
-                });
-            }
-        });
+        if (client == null || client.screen != this) return;
+        var media = RacMcClient.media();
+        long ticket = input.begin(media.isChecking());
+        if (ticket == 0) return;
+        reportScroll = 0;
+        updateInput();
+        Rac1IsoChooser.open(Component.translatable("screen.racmc.iso_selection.pick").getString(),
+                Component.translatable("screen.racmc.iso_selection.filter").getString(),
+                result -> client.execute(() -> {
+                    if (!input.finish(ticket, result, client.screen == this, media.isChecking(), path -> {
+                        pathField.setValue(path.toString());
+                        media.select(path);
+                    })) return;
+                    reportScroll = 0;
+                    updateInput();
+                    if (input.status() == Rac1IsoInput.Status.UNAVAILABLE
+                            || input.status() == Rac1IsoInput.Status.FAILED) setInitialFocus(pathField);
+                }));
     }
 
-    /**
-     * Shows the file chooser of the system.
-     *
-     * @return the file the player picked, or {@code null} when the chooser was cancelled
-     */
-    private static Path showChooser() {
-        if (GraphicsEnvironment.isHeadless()) {
-            RacMcMod.LOGGER.warn("The system has no graphical user interface, so no file chooser "
-                    + "can be opened.");
-            return null;
-        }
-        try {
-            JFileChooser chooser = new JFileChooser();
-            chooser.setDialogTitle(Component.translatable("screen.racmc.iso_selection.pick")
-                    .getString());
-            chooser.setFileFilter(new FileNameExtensionFilter(
-                    Component.translatable("screen.racmc.iso_selection.filter").getString(), "iso"));
-            chooser.setAcceptAllFileFilterUsed(true);
-            RacMcMod.LOGGER.info("The file chooser of the system is opened.");
-            int result;
-            // The chooser gets its own window that stays in front of the game, so that it is not
-            // hidden behind it.
-            JDialog dialog = new JDialog((Frame) null,
-                    Component.translatable("screen.racmc.iso_selection.pick").getString(), true);
-            dialog.setAlwaysOnTop(true);
-            try {
-                result = chooser.showOpenDialog(dialog);
-            } finally {
-                dialog.dispose();
-            }
-            RacMcMod.LOGGER.info("The file chooser of the system was closed with {}.", result);
-            if (result == JFileChooser.APPROVE_OPTION) {
-                File file = chooser.getSelectedFile();
-                return file == null ? null : file.toPath();
-            }
-        } catch (RuntimeException | Error exception) {
-            RacMcMod.LOGGER.warn("The file chooser of the system could not be opened.", exception);
-        }
-        return null;
+    private void submitPath() {
+        if (this.minecraft == null || this.minecraft.screen != this) return;
+        var media = RacMcClient.media();
+        input.manual(pathField.getValue(), media.isChecking(), media::select);
+        reportScroll = 0;
+        updateInput();
+    }
+
+    private void updateInput() {
+        if (pathField == null) return;
+        boolean enabled = input.enabled(RacMcClient.media().isChecking());
+        pickButton.active = enabled;
+        checkButton.active = enabled;
+        pathField.setEditable(enabled);
     }
 
     /**
@@ -421,7 +416,7 @@ public class IsoSelectionScreen extends Screen {
         if (media.isChecking()) {
             // A configured image is verified again after a start of the game. The player does not
             // have to pick it again, so the screen says that the image is being verified.
-            Component headline = media.configuredPath().isPresent()
+            Component headline = media.configuredPath().equals(media.attemptPath()) && media.configuredPath().isPresent()
                     ? Component.translatable("screen.racmc.iso_selection.status.revalidating")
                     : Component.translatable("screen.racmc.iso_selection.status.checking");
             return Component.empty().append(configured).append("\n").append(headline);
@@ -468,8 +463,10 @@ public class IsoSelectionScreen extends Screen {
         graphics.drawCenteredString(this.font, this.title, this.width / 2, this.titleTop, 0xFFFFFF);
         drawWrapped(graphics, Component.translatable("screen.racmc.iso_selection.hint"),
                 this.contentLeft, this.hintTop, this.contentWidth, 0xA0A0A0);
-        drawWrapped(graphics, Component.translatable("screen.racmc.iso_selection.mandatory"),
-                this.contentLeft, this.mandatoryTop, this.contentWidth, 0xFFAA00);
+        if (this.mandatory) {
+            drawWrapped(graphics, Component.translatable("screen.racmc.iso_selection.mandatory"),
+                    this.contentLeft, this.mandatoryTop, this.contentWidth, 0xFFAA00);
+        }
     }
 
     /**
